@@ -87,6 +87,16 @@ type RefreshToken struct {
 	CreatedAt time.Time  `json:"created_at"`
 }
 
+type SeedRegion struct {
+	TileX       int32      `json:"tile_x"`
+	TileY       int32      `json:"tile_y"`
+	Status      string     `json:"status"`
+	CourtsFound *int32     `json:"courts_found"`
+	SeededAt    *time.Time `json:"seeded_at"`
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
+}
+
 type User struct {
 	ID           uuid.UUID `json:"id"`
 	Email        string    `json:"email"`

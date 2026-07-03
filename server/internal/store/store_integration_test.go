@@ -36,7 +36,7 @@ func testStore(t *testing.T) *store.Store {
 	}
 	// Isolate each run.
 	if _, err := st.Pool.Exec(ctx,
-		"TRUNCATE users, refresh_tokens, courts, check_ins, crowd_reports, court_votes, court_photos, flags CASCADE"); err != nil {
+		"TRUNCATE users, refresh_tokens, courts, check_ins, crowd_reports, court_votes, court_photos, flags, seed_regions CASCADE"); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 	return st
@@ -284,6 +284,48 @@ func TestOSMUpsertIdempotent(t *testing.T) {
 	}
 	if court.Status != "verified" {
 		t.Errorf("re-import clobbered status: %q, want verified", court.Status)
+	}
+}
+
+func TestSeedTileClaimSemantics(t *testing.T) {
+	st := testStore(t)
+	ctx := context.Background()
+	params := gen.ClaimSeedTileParams{TileX: -296, TileY: 163}
+
+	// First claim wins.
+	if _, err := st.Queries.ClaimSeedTile(ctx, params); err != nil {
+		t.Fatalf("first claim: %v", err)
+	}
+	// Second claim while importing (fresh) must lose.
+	if _, err := st.Queries.ClaimSeedTile(ctx, params); err != pgx.ErrNoRows {
+		t.Fatalf("concurrent claim should return ErrNoRows, got %v", err)
+	}
+	// Done tiles are never re-claimed.
+	found := int32(12)
+	if err := st.Queries.MarkSeedTile(ctx, gen.MarkSeedTileParams{
+		TileX: params.TileX, TileY: params.TileY, Status: "done", CourtsFound: &found,
+	}); err != nil {
+		t.Fatalf("mark done: %v", err)
+	}
+	if _, err := st.Queries.ClaimSeedTile(ctx, params); err != pgx.ErrNoRows {
+		t.Fatalf("done tile should not be reclaimable, got %v", err)
+	}
+	// Failed tiles become reclaimable after the 24h backoff.
+	if err := st.Queries.MarkSeedTile(ctx, gen.MarkSeedTileParams{
+		TileX: params.TileX, TileY: params.TileY, Status: "failed",
+	}); err != nil {
+		t.Fatalf("mark failed: %v", err)
+	}
+	if _, err := st.Queries.ClaimSeedTile(ctx, params); err != pgx.ErrNoRows {
+		t.Fatalf("failed tile inside backoff should not be reclaimable, got %v", err)
+	}
+	if _, err := st.Pool.Exec(ctx,
+		"UPDATE seed_regions SET updated_at = now() - interval '25 hours' WHERE tile_x = $1 AND tile_y = $2",
+		params.TileX, params.TileY); err != nil {
+		t.Fatalf("age tile: %v", err)
+	}
+	if _, err := st.Queries.ClaimSeedTile(ctx, params); err != nil {
+		t.Fatalf("stale failed tile should be reclaimable: %v", err)
 	}
 }
 
