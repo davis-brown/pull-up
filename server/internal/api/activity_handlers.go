@@ -175,6 +175,13 @@ func (s *Server) handleCourtActivity(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, "list reports", err)
 		return
 	}
+	// Empty results must serialize as [], not null — clients iterate these.
+	if checkIns == nil {
+		checkIns = []gen.ListActiveCheckInsRow{}
+	}
+	if reports == nil {
+		reports = []gen.ListRecentReportsRow{}
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"active_count": len(checkIns),
 		"check_ins":    checkIns,
