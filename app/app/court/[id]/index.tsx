@@ -120,7 +120,7 @@ export default function CourtDetailScreen() {
               ? `🏀 ${activity?.active_count ?? court.active_count} checked in right now`
               : "Quiet — no one checked in"}
           </Text>
-          {activity?.check_ins.map((ci) => (
+          {activity?.check_ins?.map((ci) => (
             <Text key={ci.id} style={styles.playerRow}>
               {ci.display_name} · since{" "}
               {new Date(ci.created_at).toLocaleTimeString([], {
@@ -152,10 +152,10 @@ export default function CourtDetailScreen() {
           />
         </View>
 
-        {activity && activity.reports.length > 0 && (
+        {(activity?.reports?.length ?? 0) > 0 && (
           <View style={styles.card}>
             <Text style={styles.sectionTitle}>Recent reports</Text>
-            {activity.reports.map((r) => (
+            {activity!.reports.map((r) => (
               <View key={r.id} style={styles.reportRow}>
                 <Text style={styles.reportText}>
                   {r.run_quality ? runQualityLabel[r.run_quality] : ""}
