@@ -42,6 +42,37 @@ and, for native builds, `MAPBOX_DOWNLOAD_TOKEN` (secret `sk.` token) — see
   geofences for nearby courts and either prompts ("Looks like you're at Rucker
   Park — check in?") or checks in automatically, per user setting.
 
+## Deploying (Cloudflare)
+
+- **Web app** → Cloudflare Workers static assets (`app/wrangler.jsonc`), free.
+- **Go API** → Cloudflare Containers (`deploy/api/`): a tiny Worker proxies
+  into the container built from `server/Dockerfile`. Requires the **Workers
+  Paid** plan and, for local deploys, a running Docker daemon (CI deploys via
+  `.github/workflows/deploy.yml` avoid that).
+- **Database** → Cloudflare has no Postgres; use [Neon](https://neon.tech)
+  (free tier, PostGIS supported): create a project, then
+  `CREATE EXTENSION postgis;` runs automatically via our migrations on API
+  startup.
+
+One-time setup:
+
+```sh
+npx wrangler login
+cd deploy/api && npm install
+npx wrangler secret put DATABASE_URL   # Neon connection string (pooled)
+npx wrangler secret put JWT_SECRET     # openssl rand -hex 32
+```
+
+Then, from the repo root:
+
+```sh
+make deploy-api                                    # needs Docker locally
+make deploy-web API_URL=https://pull-up-api.<your-subdomain>.workers.dev
+```
+
+Or push to `main` with the `CLOUDFLARE_API_TOKEN`, `EXPO_PUBLIC_API_URL`, and
+`EXPO_PUBLIC_MAPBOX_TOKEN` repo secrets set and let GitHub Actions deploy both.
+
 ## Court data & attribution
 
 Courts are crowd-sourced (submissions land as `pending` and get verified by

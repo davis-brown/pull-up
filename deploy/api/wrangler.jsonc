@@ -1,0 +1,38 @@
+// Cloudflare Containers deployment for the Go API.
+// The Worker in src/index.ts proxies every request into the container,
+// which runs the image built from server/Dockerfile.
+//
+// Requires the Workers Paid plan (Containers). Secrets (set once):
+//   npx wrangler secret put DATABASE_URL   # Neon Postgres w/ PostGIS
+//   npx wrangler secret put JWT_SECRET     # e.g. openssl rand -hex 32
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "pull-up-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-06-01",
+  "containers": [
+    {
+      "class_name": "ApiContainer",
+      "image": "../../server/Dockerfile",
+      "image_build_context": "../../server",
+      "max_instances": 1
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "API_CONTAINER",
+        "class_name": "ApiContainer"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["ApiContainer"]
+    }
+  ],
+  "observability": {
+    "enabled": true
+  }
+}

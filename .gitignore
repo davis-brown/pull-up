@@ -9,6 +9,9 @@ dist/
 web-build/
 *.tsbuildinfo
 
+# Wrangler
+.wrangler/
+
 # EAS / native builds
 app/ios/
 app/android/

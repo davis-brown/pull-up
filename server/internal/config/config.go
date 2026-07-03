@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -12,6 +13,9 @@ type Config struct {
 	JWTSecret       []byte
 	AccessTokenTTL  time.Duration
 	RefreshTokenTTL time.Duration
+	// CORSOrigins is a comma-separated allowlist; "*" (default) allows all,
+	// which is acceptable because auth is Bearer-token, not cookie, based.
+	CORSOrigins []string
 }
 
 func Load() (*Config, error) {
@@ -21,6 +25,7 @@ func Load() (*Config, error) {
 		JWTSecret:       []byte(getenv("JWT_SECRET", "")),
 		AccessTokenTTL:  15 * time.Minute,
 		RefreshTokenTTL: 30 * 24 * time.Hour,
+		CORSOrigins:     strings.Split(getenv("CORS_ORIGINS", "*"), ","),
 	}
 	if c.DatabaseURL == "" {
 		return nil, fmt.Errorf("DATABASE_URL is required")
