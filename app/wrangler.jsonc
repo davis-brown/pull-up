@@ -1,7 +1,6 @@
 // Cloudflare Workers static-assets hosting for the Expo web build.
 // Build first (dist/ is the export output), then deploy:
 //   EXPO_PUBLIC_API_URL=https://pull-up-api.<subdomain>.workers.dev \
-//   EXPO_PUBLIC_MAPBOX_TOKEN=pk.… \
 //     npx expo export --platform web
 //   npx wrangler deploy
 {
