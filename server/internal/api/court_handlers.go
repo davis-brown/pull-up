@@ -2,6 +2,7 @@ package api
 
 import (
 	"errors"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -89,6 +90,10 @@ func (s *Server) handleListCourts(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, "courts nearby", err)
 		return
 	}
+	// Approximate the search circle as a bbox for the auto-seeder.
+	dLat := radius / 111_320
+	dLng := radius / (111_320 * math.Max(0.1, math.Cos(lat*math.Pi/180)))
+	s.requestSeeding(lng-dLng, lat-dLat, lng+dLng, lat+dLat)
 	out := make([]courtSummary, 0, len(rows))
 	for _, c := range rows {
 		d := c.DistanceM
@@ -125,6 +130,7 @@ func (s *Server) listCourtsInBBox(w http.ResponseWriter, r *http.Request, bbox s
 		s.internalError(w, "courts in bbox", err)
 		return
 	}
+	s.requestSeeding(vals[0], vals[1], vals[2], vals[3])
 	out := make([]courtSummary, 0, len(rows))
 	for _, c := range rows {
 		out = append(out, courtSummary{

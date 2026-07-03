@@ -12,6 +12,7 @@ import (
 
 	"github.com/davisbrown/pull-up/server/internal/auth"
 	"github.com/davisbrown/pull-up/server/internal/config"
+	"github.com/davisbrown/pull-up/server/internal/seeder"
 	"github.com/davisbrown/pull-up/server/internal/store"
 )
 
@@ -20,14 +21,24 @@ type Server struct {
 	store  *store.Store
 	issuer *auth.Issuer
 	log    *slog.Logger
+	seeder *seeder.Seeder // nil when auto-seeding is disabled
 }
 
-func NewServer(cfg *config.Config, st *store.Store, log *slog.Logger) *Server {
+func NewServer(cfg *config.Config, st *store.Store, log *slog.Logger, sd *seeder.Seeder) *Server {
 	return &Server{
 		cfg:    cfg,
 		store:  st,
 		issuer: auth.NewIssuer(cfg.JWTSecret, cfg.AccessTokenTTL),
 		log:    log,
+		seeder: sd,
+	}
+}
+
+// requestSeeding kicks off background OSM imports for any never-seeded tiles
+// in the viewport. Non-blocking; no-op when auto-seeding is off.
+func (s *Server) requestSeeding(minLng, minLat, maxLng, maxLat float64) {
+	if s.seeder != nil {
+		s.seeder.Request(minLng, minLat, maxLng, maxLat)
 	}
 }
 

@@ -17,25 +17,19 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io"
 	"log"
-	"net/http"
-	"net/url"
 	"os"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/davisbrown/pull-up/server/internal/osm"
 	"github.com/davisbrown/pull-up/server/internal/store"
 	"github.com/davisbrown/pull-up/server/internal/store/gen"
 )
 
-const overpassURL = "https://overpass-api.de/api/interpreter"
-
 func main() {
 	bboxFlag := flag.String("bbox", "", "bounding box: south,west,north,east (required)")
-	endpoint := flag.String("endpoint", overpassURL, "Overpass API endpoint")
+	endpoint := flag.String("endpoint", osm.DefaultOverpassEndpoint, "Overpass API endpoint")
 	flag.Parse()
 
 	bbox, err := parseBBox(*bboxFlag)
@@ -58,14 +52,9 @@ func main() {
 	}
 
 	log.Printf("querying Overpass for basketball courts in bbox %s ...", *bboxFlag)
-	body, err := queryOverpass(ctx, *endpoint, bbox)
+	courts, err := osm.FetchCourts(ctx, *endpoint, bbox)
 	if err != nil {
 		log.Fatalf("overpass query: %v", err)
-	}
-
-	courts, err := osm.ParseCourts(body)
-	if err != nil {
-		log.Fatalf("parse overpass response: %v", err)
 	}
 	log.Printf("found %d candidate courts", len(courts))
 
@@ -88,56 +77,24 @@ func main() {
 	log.Printf("done: %d inserted, %d updated", inserted, updated)
 }
 
-type bbox struct{ south, west, north, east float64 }
-
-func parseBBox(s string) (bbox, error) {
+func parseBBox(s string) (osm.BBox, error) {
 	parts := strings.Split(s, ",")
 	if len(parts) != 4 {
-		return bbox{}, fmt.Errorf("expected south,west,north,east")
+		return osm.BBox{}, fmt.Errorf("expected south,west,north,east")
 	}
 	vals := make([]float64, 4)
 	for i, p := range parts {
 		v, err := strconv.ParseFloat(strings.TrimSpace(p), 64)
 		if err != nil {
-			return bbox{}, err
+			return osm.BBox{}, err
 		}
 		vals[i] = v
 	}
-	b := bbox{south: vals[0], west: vals[1], north: vals[2], east: vals[3]}
-	if b.south >= b.north || b.west >= b.east {
-		return bbox{}, fmt.Errorf("south<north and west<east required")
+	b := osm.BBox{South: vals[0], West: vals[1], North: vals[2], East: vals[3]}
+	if b.South >= b.North || b.West >= b.East {
+		return osm.BBox{}, fmt.Errorf("south<north and west<east required")
 	}
 	return b, nil
-}
-
-func queryOverpass(ctx context.Context, endpoint string, b bbox) ([]byte, error) {
-	coords := fmt.Sprintf("%f,%f,%f,%f", b.south, b.west, b.north, b.east)
-	query := fmt.Sprintf(`[out:json][timeout:120];
-(
-  node["leisure"="pitch"]["sport"="basketball"](%s);
-  way["leisure"="pitch"]["sport"="basketball"](%s);
-);
-out center tags;`, coords, coords)
-
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint,
-		strings.NewReader(url.Values{"data": {query}}.Encode()))
-	if err != nil {
-		return nil, err
-	}
-	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("User-Agent", "pull-up-osmseed/0.1 (basketball court finder; see repository README)")
-
-	client := &http.Client{Timeout: 3 * time.Minute}
-	resp, err := client.Do(req)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		snippet, _ := io.ReadAll(io.LimitReader(resp.Body, 500))
-		return nil, fmt.Errorf("overpass returned %s: %s", resp.Status, snippet)
-	}
-	return io.ReadAll(resp.Body)
 }
 
 func isInserted(v any) bool {
