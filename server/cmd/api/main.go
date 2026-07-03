@@ -12,6 +12,7 @@ import (
 
 	"github.com/davisbrown/pull-up/server/internal/api"
 	"github.com/davisbrown/pull-up/server/internal/config"
+	"github.com/davisbrown/pull-up/server/internal/seeder"
 	"github.com/davisbrown/pull-up/server/internal/store"
 )
 
@@ -40,9 +41,16 @@ func main() {
 	}
 	log.Info("migrations up to date")
 
+	var sd *seeder.Seeder
+	if cfg.AutoSeed {
+		sd = seeder.New(st.Queries, cfg.OverpassEndpoint, log)
+		go sd.Run(ctx)
+		log.Info("osm auto-seeding enabled")
+	}
+
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           api.NewServer(cfg, st, log).Routes(),
+		Handler:           api.NewServer(cfg, st, log, sd).Routes(),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 
