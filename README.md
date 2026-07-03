@@ -7,8 +7,9 @@ comes from geo-verified check-ins and crowd reports.
 ## Stack
 
 - **`server/`** — Go API (chi, pgx + sqlc, goose migrations) on PostgreSQL + PostGIS
-- **`app/`** — Expo (React Native) app for iOS, Android, and web; Mapbox maps
-  (`@rnmapbox/maps` native, `react-map-gl` on web)
+- **`app/`** — Expo (React Native) app for iOS, Android, and web; MapLibre maps
+  with OpenFreeMap tiles (`@maplibre/maplibre-react-native` native,
+  `react-map-gl/maplibre` on web) — no map API keys needed
 
 ## Local development
 
@@ -21,16 +22,15 @@ make test           # go tests (integration tests need TEST_DATABASE_URL or the 
 make seed-osm BBOX=30.19,-97.87,30.40,-97.65   # import OSM courts for a bbox (S,W,N,E)
 
 cd app && npm install
-npx expo run:ios    # dev build — Expo Go does NOT work (@rnmapbox/maps is a native module)
+npx expo run:ios    # dev build — Expo Go does NOT work (MapLibre is a native module)
 npx expo start --web
 ```
 
 The API runs its migrations automatically on startup. Config is env-based —
 see `server/internal/config/config.go` (`DATABASE_URL`, `JWT_SECRET`, `PORT`).
 
-The app needs a Mapbox token: set `EXPO_PUBLIC_MAPBOX_TOKEN` (public `pk.` token)
-and, for native builds, `MAPBOX_DOWNLOAD_TOKEN` (secret `sk.` token) — see
-`app/app.config.ts`.
+Maps need no API keys: tiles come from [OpenFreeMap](https://openfreemap.org).
+The only app config is `EXPO_PUBLIC_API_URL` — see `app/.env.example`.
 
 ## How live activity works
 
@@ -70,8 +70,8 @@ make deploy-api                                    # needs Docker locally
 make deploy-web API_URL=https://pull-up-api.<your-subdomain>.workers.dev
 ```
 
-Or push to `main` with the `CLOUDFLARE_API_TOKEN`, `EXPO_PUBLIC_API_URL`, and
-`EXPO_PUBLIC_MAPBOX_TOKEN` repo secrets set and let GitHub Actions deploy both.
+Or push to `main` with the `CLOUDFLARE_API_TOKEN` and `EXPO_PUBLIC_API_URL`
+repo secrets set and let GitHub Actions deploy both.
 
 ## Court data & attribution
 
@@ -83,5 +83,5 @@ upvotes or a geo-verified check-in) and seeded from OpenStreetMap
 contributors, licensed [ODbL](https://www.openstreetmap.org/copyright). The
 attribution must remain visible in the app, and the OSM-derived subset of the
 courts database is kept separable via the `source`/`osm_id` columns to honor
-share-alike. Mapbox attribution is rendered by the map SDKs and must not be
-hidden.
+share-alike. Map tiles are served by OpenFreeMap (also OSM-derived); the map's
+attribution control must stay visible.

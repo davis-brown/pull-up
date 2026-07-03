@@ -1,9 +1,9 @@
-// Web implementation of CourtMap: @rnmapbox/maps is a native module and does
-// not run on Expo web, so Metro resolves this file instead (.web.tsx).
-import "mapbox-gl/dist/mapbox-gl.css";
-import Map, { GeolocateControl, Marker } from "react-map-gl/mapbox";
+// Web implementation of CourtMap: the native MapLibre module does not run on
+// Expo web, so Metro resolves this file instead (.web.tsx).
+import "maplibre-gl/dist/maplibre-gl.css";
+import Map, { GeolocateControl, Marker } from "react-map-gl/maplibre";
 import { CourtPinMarker } from "./pin";
-import { MAPBOX_TOKEN, type CourtMapProps } from "./types";
+import { MAP_STYLE_URL, type CourtMapProps } from "./types";
 
 export default function CourtMap({
   courts,
@@ -16,14 +16,13 @@ export default function CourtMap({
 }: CourtMapProps) {
   return (
     <Map
-      mapboxAccessToken={MAPBOX_TOKEN}
       initialViewState={{
         longitude: initialCenter.lng,
         latitude: initialCenter.lat,
         zoom: initialZoom,
       }}
       style={{ flex: 1, ...style }}
-      mapStyle="mapbox://styles/mapbox/streets-v12"
+      mapStyle={MAP_STYLE_URL}
       onMoveEnd={(evt) => {
         const b = evt.target.getBounds();
         if (!b) return;

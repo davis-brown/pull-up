@@ -1,8 +1,6 @@
 import type { ExpoConfig } from "expo/config";
 
-// EXPO_PUBLIC_MAPBOX_TOKEN: public pk.* token, safe to embed.
-// MAPBOX_DOWNLOAD_TOKEN: secret sk.* token used only at native build time to
-// download the Mapbox SDK — set it in EAS secrets / local env, never commit it.
+// Maps: MapLibre + OpenFreeMap tiles — no API keys or tokens required.
 const config: ExpoConfig = {
   name: "pull-up",
   slug: "pull-up",
@@ -38,12 +36,7 @@ const config: ExpoConfig = {
           "pull-up uses your location to show nearby courts and to verify you're at a court when you check in.",
       },
     ],
-    [
-      "@rnmapbox/maps",
-      {
-        RNMapboxMapsDownloadToken: process.env.MAPBOX_DOWNLOAD_TOKEN,
-      },
-    ],
+    "@maplibre/maplibre-react-native",
   ],
   experiments: {
     typedRoutes: true,

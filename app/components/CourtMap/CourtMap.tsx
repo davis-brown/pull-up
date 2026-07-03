@@ -1,9 +1,7 @@
-import Mapbox, { Camera, MapView, MarkerView } from "@rnmapbox/maps";
+import { Camera, Map, Marker, UserLocation } from "@maplibre/maplibre-react-native";
 import { StyleSheet } from "react-native";
 import { CourtPinMarker } from "./pin";
-import { MAPBOX_TOKEN, type CourtMapProps } from "./types";
-
-void Mapbox.setAccessToken(MAPBOX_TOKEN);
+import { MAP_STYLE_URL, type CourtMapProps } from "./types";
 
 export default function CourtMap({
   courts,
@@ -15,33 +13,32 @@ export default function CourtMap({
   style,
 }: CourtMapProps) {
   return (
-    <MapView
+    <Map
       style={[styles.map, style]}
-      styleURL={Mapbox.StyleURL.Street}
-      // Mapbox attribution/logo stay visible per ToS — do not disable.
-      onMapIdle={(state) => {
-        const { sw, ne } = state.properties.bounds;
+      mapStyle={MAP_STYLE_URL}
+      onRegionDidChange={(event) => {
+        const [west, south, east, north] = event.nativeEvent.bounds;
         onRegionChange?.({
-          minLng: sw[0],
-          minLat: sw[1],
-          maxLng: ne[0],
-          maxLat: ne[1],
+          minLng: west,
+          minLat: south,
+          maxLng: east,
+          maxLat: north,
         });
       }}
     >
       <Camera
-        defaultSettings={{
-          centerCoordinate: [initialCenter.lng, initialCenter.lat],
-          zoomLevel: initialZoom,
+        initialViewState={{
+          center: [initialCenter.lng, initialCenter.lat],
+          zoom: initialZoom,
         }}
       />
-      {showUserLocation && <Mapbox.UserLocation visible />}
+      {showUserLocation && <UserLocation />}
       {courts.map((pin) => (
-        <MarkerView key={pin.id} coordinate={[pin.lng, pin.lat]}>
+        <Marker key={pin.id} lngLat={[pin.lng, pin.lat]}>
           <CourtPinMarker pin={pin} onPress={() => onPinPress?.(pin.id)} />
-        </MarkerView>
+        </Marker>
       ))}
-    </MapView>
+    </Map>
   );
 }
 

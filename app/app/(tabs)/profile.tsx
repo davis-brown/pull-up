@@ -47,7 +47,7 @@ export default function ProfileScreen() {
 
       <Text style={styles.attribution}>
         Court data © OpenStreetMap contributors (ODbL) and pull-up users.{"\n"}
-        Maps © Mapbox.
+        Map tiles by OpenFreeMap, © OpenStreetMap contributors.
       </Text>
     </ScrollView>
   );

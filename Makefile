@@ -42,8 +42,7 @@ seed-osm:
 deploy-api:
 	cd deploy/api && npm install && npx wrangler deploy
 
-# API_URL is the deployed API worker URL; MAPBOX token comes from app/.env
-# or the environment.
+# API_URL is the deployed API worker URL.
 deploy-web:
 	cd app && EXPO_PUBLIC_API_URL=$(API_URL) npx expo export --platform web
 	cd app && npx wrangler deploy
