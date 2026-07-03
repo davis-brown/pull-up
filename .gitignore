@@ -1,0 +1,26 @@
+# Go
+server/bin/
+*.test
+
+# Node / Expo
+node_modules/
+.expo/
+dist/
+web-build/
+*.tsbuildinfo
+
+# EAS / native builds
+app/ios/
+app/android/
+*.ipa
+*.apk
+*.aab
+
+# Env & secrets
+.env
+.env.*
+!.env.example
+
+# OS / editor
+.DS_Store
+*.log
