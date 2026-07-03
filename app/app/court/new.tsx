@@ -1,12 +1,19 @@
 import { useRouter } from "expo-router";
-import { useRef, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useEffect, useRef, useState } from "react";
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { AuthGate } from "@/components/AuthGate";
 import CourtMap from "@/components/CourtMap/CourtMap";
 import { Button, Chip, ErrorText, Field } from "@/components/ui";
 import { ApiError } from "@/lib/api";
 import { useCreateCourt, type BBox } from "@/lib/hooks";
-import { FALLBACK_CENTER, type Coords } from "@/lib/location";
+import { FALLBACK_CENTER, tryGetPosition, type Coords } from "@/lib/location";
 import type { NearbyDuplicate, Surface } from "@/lib/types";
 
 const surfaces: Surface[] = ["asphalt", "concrete", "hardwood", "rubber", "other"];
@@ -16,7 +23,18 @@ const surfaces: Surface[] = ["asphalt", "concrete", "hardwood", "rubber", "other
 export default function NewCourtScreen() {
   const router = useRouter();
   const createCourt = useCreateCourt();
+  // Open the map at the user's location — they're usually standing at the
+  // court they're adding.
+  const [start, setStart] = useState<Coords | null>(null);
   const center = useRef<Coords>(FALLBACK_CENTER);
+
+  useEffect(() => {
+    void tryGetPosition().then((pos) => {
+      const at = pos ?? FALLBACK_CENTER;
+      center.current = at;
+      setStart(at);
+    });
+  }, []);
   const [name, setName] = useState("");
   const [hoops, setHoops] = useState("");
   const [indoor, setIndoor] = useState(false);
@@ -66,16 +84,26 @@ export default function NewCourtScreen() {
     <AuthGate>
       <View style={styles.container}>
         <View style={styles.mapWrap}>
-          <CourtMap
-            courts={[]}
-            initialCenter={FALLBACK_CENTER}
-            onRegionChange={onRegionChange}
-            showUserLocation
-          />
-          {/* Fixed crosshair: drag the map underneath it. */}
-          <View pointerEvents="none" style={styles.crosshair}>
-            <Text style={styles.crosshairText}>📍</Text>
-          </View>
+          {start ? (
+            <>
+              <CourtMap
+                courts={[]}
+                initialCenter={start}
+                initialZoom={16}
+                onRegionChange={onRegionChange}
+                showUserLocation
+              />
+              {/* Fixed crosshair: drag the map underneath it. */}
+              <View pointerEvents="none" style={styles.crosshair}>
+                <Text style={styles.crosshairText}>📍</Text>
+              </View>
+            </>
+          ) : (
+            <View style={styles.mapLoading}>
+              <ActivityIndicator size="large" />
+              <Text style={styles.mapLoadingText}>Finding your location…</Text>
+            </View>
+          )}
         </View>
 
         <ScrollView style={styles.form} contentContainerStyle={styles.formContent}>
@@ -143,6 +171,8 @@ export default function NewCourtScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   mapWrap: { height: 280 },
+  mapLoading: { flex: 1, alignItems: "center", justifyContent: "center" },
+  mapLoadingText: { marginTop: 8, color: "#777" },
   crosshair: {
     position: "absolute",
     top: 0,
