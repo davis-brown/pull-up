@@ -8,6 +8,7 @@ import (
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/go-chi/cors"
 
 	"github.com/davisbrown/pull-up/server/internal/auth"
 	"github.com/davisbrown/pull-up/server/internal/config"
@@ -36,6 +37,14 @@ func (s *Server) Routes() http.Handler {
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
+	// Auth is Bearer-token based (no cookies), so a permissive default is
+	// fine; tighten with CORS_ORIGINS=https://app.example.com in production.
+	r.Use(cors.Handler(cors.Options{
+		AllowedOrigins: s.cfg.CORSOrigins,
+		AllowedMethods: []string{"GET", "POST", "PATCH", "DELETE", "OPTIONS"},
+		AllowedHeaders: []string{"Authorization", "Content-Type"},
+		MaxAge:         600,
+	}))
 
 	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
