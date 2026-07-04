@@ -32,4 +32,8 @@ export interface CourtMapProps {
 // OpenFreeMap: free OSM-based vector tiles, no API key, no usage cap.
 // Attribution (© OpenStreetMap contributors) comes from the style itself —
 // keep the map's attribution control visible.
-export const MAP_STYLE_URL = "https://tiles.openfreemap.org/styles/liberty";
+export function mapStyleURL(scheme: "light" | "dark"): string {
+  return scheme === "dark"
+    ? "https://tiles.openfreemap.org/styles/dark"
+    : "https://tiles.openfreemap.org/styles/liberty";
+}

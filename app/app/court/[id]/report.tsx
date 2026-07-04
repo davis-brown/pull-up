@@ -4,6 +4,7 @@ import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { AuthGate } from "@/components/AuthGate";
 import { Button, Chip, ErrorText, Field } from "@/components/ui";
 import { useCreateReport } from "@/lib/hooks";
+import { useTheme } from "@/lib/theme";
 import type { RunQuality } from "@/lib/types";
 
 const qualities: Array<{ value: RunQuality; label: string }> = [
@@ -16,6 +17,7 @@ const qualities: Array<{ value: RunQuality; label: string }> = [
 export default function ReportScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const t = useTheme();
   const createReport = useCreateReport(id ?? "");
   const [quality, setQuality] = useState<RunQuality | null>(null);
   const [count, setCount] = useState("");
@@ -48,8 +50,15 @@ export default function ReportScreen() {
 
   return (
     <AuthGate>
-      <ScrollView contentContainerStyle={styles.container}>
-        <Text style={styles.label}>How's the run?</Text>
+      <ScrollView
+        style={{ backgroundColor: t.colors.background }}
+        contentContainerStyle={{ padding: t.spacing.lg }}
+      >
+        <Text
+          style={[t.type.label, { color: t.colors.textSecondary, marginBottom: t.spacing.sm }]}
+        >
+          How's the run?
+        </Text>
         <View style={styles.chips}>
           {qualities.map((q) => (
             <Chip
@@ -82,7 +91,5 @@ export default function ReportScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { padding: 16 },
-  label: { fontSize: 13, fontWeight: "600", marginBottom: 8, color: "#555" },
   chips: { flexDirection: "row", flexWrap: "wrap", marginBottom: 8 },
 });

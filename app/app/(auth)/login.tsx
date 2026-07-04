@@ -3,9 +3,11 @@ import { useState } from "react";
 import { KeyboardAvoidingView, Platform, StyleSheet, Text, View } from "react-native";
 import { Button, ErrorText, Field } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
+import { useTheme } from "@/lib/theme";
 
 export default function LoginScreen() {
   const { signIn } = useAuth();
+  const t = useTheme();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -25,11 +27,21 @@ export default function LoginScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={styles.container}
+      style={[styles.container, { backgroundColor: t.colors.background }]}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
-      <Text style={styles.title}>pull-up 🏀</Text>
-      <Text style={styles.subtitle}>Find a run near you</Text>
+      <Text style={[t.type.display, styles.center, { color: t.colors.accent }]}>
+        pull-up
+      </Text>
+      <Text
+        style={[
+          t.type.body,
+          styles.center,
+          { color: t.colors.textSecondary, marginBottom: t.spacing.xl },
+        ]}
+      >
+        Find a run near you
+      </Text>
       <Field
         label="Email"
         value={email}
@@ -43,13 +55,16 @@ export default function LoginScreen() {
         value={password}
         onChangeText={setPassword}
         secureTextEntry
-        placeholder="••••••••"
+        placeholder="Your password"
       />
       <ErrorText message={error} />
       <Button title="Sign in" onPress={submit} busy={busy} disabled={!email || !password} />
-      <View style={styles.footer}>
-        <Text style={styles.footerText}>New here? </Text>
-        <Link href="/register" style={styles.link}>
+      <View style={[styles.footer, { marginTop: t.spacing.lg }]}>
+        <Text style={[t.type.body, { color: t.colors.textSecondary }]}>New here? </Text>
+        <Link
+          href="/register"
+          style={[t.type.bodyMedium, { color: t.colors.accent }]}
+        >
           Create an account
         </Link>
       </View>
@@ -58,10 +73,7 @@ export default function LoginScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 24, justifyContent: "center", backgroundColor: "#fafafa" },
-  title: { fontSize: 34, fontWeight: "800", textAlign: "center" },
-  subtitle: { fontSize: 16, color: "#777", textAlign: "center", marginBottom: 24 },
-  footer: { flexDirection: "row", justifyContent: "center", marginTop: 16 },
-  footerText: { color: "#777" },
-  link: { color: "#e8590c", fontWeight: "700" },
+  container: { flex: 1, padding: 24, justifyContent: "center" },
+  center: { textAlign: "center" },
+  footer: { flexDirection: "row", justifyContent: "center" },
 });

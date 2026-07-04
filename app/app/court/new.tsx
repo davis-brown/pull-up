@@ -10,10 +10,11 @@ import {
 } from "react-native";
 import { AuthGate } from "@/components/AuthGate";
 import CourtMap from "@/components/CourtMap/CourtMap";
-import { Button, Chip, ErrorText, Field } from "@/components/ui";
+import { Button, Card, Chip, ErrorText, Field } from "@/components/ui";
 import { ApiError } from "@/lib/api";
 import { useCreateCourt, type BBox } from "@/lib/hooks";
 import { FALLBACK_CENTER, tryGetPosition, type Coords } from "@/lib/location";
+import { useTheme } from "@/lib/theme";
 import type { NearbyDuplicate, Surface } from "@/lib/types";
 
 const surfaces: Surface[] = ["asphalt", "concrete", "hardwood", "rubber", "other"];
@@ -22,11 +23,18 @@ const surfaces: Surface[] = ["asphalt", "concrete", "hardwood", "rubber", "other
 // created wherever the crosshair points when the user submits.
 export default function NewCourtScreen() {
   const router = useRouter();
+  const t = useTheme();
   const createCourt = useCreateCourt();
   // Open the map at the user's location — they're usually standing at the
   // court they're adding.
   const [start, setStart] = useState<Coords | null>(null);
   const center = useRef<Coords>(FALLBACK_CENTER);
+  const [name, setName] = useState("");
+  const [hoops, setHoops] = useState("");
+  const [indoor, setIndoor] = useState(false);
+  const [surface, setSurface] = useState<Surface | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [duplicates, setDuplicates] = useState<NearbyDuplicate[]>([]);
 
   useEffect(() => {
     void tryGetPosition().then((pos) => {
@@ -35,12 +43,6 @@ export default function NewCourtScreen() {
       setStart(at);
     });
   }, []);
-  const [name, setName] = useState("");
-  const [hoops, setHoops] = useState("");
-  const [indoor, setIndoor] = useState(false);
-  const [surface, setSurface] = useState<Surface | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [duplicates, setDuplicates] = useState<NearbyDuplicate[]>([]);
 
   const onRegionChange = (bbox: BBox) => {
     center.current = {
@@ -82,7 +84,7 @@ export default function NewCourtScreen() {
 
   return (
     <AuthGate>
-      <View style={styles.container}>
+      <View style={[styles.container, { backgroundColor: t.colors.background }]}>
         <View style={styles.mapWrap}>
           {start ? (
             <>
@@ -95,19 +97,26 @@ export default function NewCourtScreen() {
               />
               {/* Fixed crosshair: drag the map underneath it. */}
               <View pointerEvents="none" style={styles.crosshair}>
-                <Text style={styles.crosshairText}>📍</Text>
+                <View style={[styles.crosshairRing, { borderColor: t.colors.accent }]} />
+                <View style={[styles.crosshairDot, { backgroundColor: t.colors.accent }]} />
               </View>
             </>
           ) : (
             <View style={styles.mapLoading}>
-              <ActivityIndicator size="large" />
-              <Text style={styles.mapLoadingText}>Finding your location…</Text>
+              <ActivityIndicator size="large" color={t.colors.accent} />
+              <Text
+                style={[t.type.caption, { color: t.colors.textSecondary, marginTop: t.spacing.sm }]}
+              >
+                Finding your location…
+              </Text>
             </View>
           )}
         </View>
 
-        <ScrollView style={styles.form} contentContainerStyle={styles.formContent}>
-          <Text style={styles.hint}>Line the pin up with the court, then fill this in.</Text>
+        <ScrollView style={styles.form} contentContainerStyle={{ padding: t.spacing.lg }}>
+          <Text style={[t.type.caption, { color: t.colors.textSecondary, marginBottom: t.spacing.sm }]}>
+            Line the target up with the court, then fill this in.
+          </Text>
           <Field
             label="Court name"
             value={name}
@@ -123,7 +132,7 @@ export default function NewCourtScreen() {
             placeholder="e.g. 4"
           />
           <View style={styles.chips}>
-            <Chip label={indoor ? "Indoor ✓" : "Indoor?"} selected={indoor} onPress={() => setIndoor(!indoor)} />
+            <Chip label="Indoor" selected={indoor} onPress={() => setIndoor(!indoor)} />
             {surfaces.map((s) => (
               <Chip
                 key={s}
@@ -135,12 +144,19 @@ export default function NewCourtScreen() {
           </View>
 
           {duplicates.length > 0 && (
-            <View style={styles.dupeBox}>
-              <Text style={styles.dupeTitle}>Is it one of these?</Text>
+            <Card tone="warning">
+              <Text style={[t.type.label, { color: t.colors.warning }]}>
+                Is it one of these?
+              </Text>
               {duplicates.map((d) => (
                 <Pressable key={d.id} onPress={() => router.replace(`/court/${d.id}`)}>
-                  <Text style={styles.dupeItem}>
-                    → {d.name} ({Math.round(d.distance_m)} m away)
+                  <Text
+                    style={[
+                      t.type.bodyMedium,
+                      { color: t.colors.accent, paddingVertical: t.spacing.sm },
+                    ]}
+                  >
+                    {d.name}  ·  {Math.round(d.distance_m)} m away
                   </Text>
                 </Pressable>
               ))}
@@ -150,7 +166,7 @@ export default function NewCourtScreen() {
                 busy={createCourt.isPending}
                 onPress={() => submit(true)}
               />
-            </View>
+            </Card>
           )}
 
           <ErrorText message={error} />
@@ -172,7 +188,6 @@ const styles = StyleSheet.create({
   container: { flex: 1 },
   mapWrap: { height: 280 },
   mapLoading: { flex: 1, alignItems: "center", justifyContent: "center" },
-  mapLoadingText: { marginTop: 8, color: "#777" },
   crosshair: {
     position: "absolute",
     top: 0,
@@ -182,19 +197,18 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  crosshairText: { fontSize: 34, marginBottom: 30 },
-  form: { flex: 1 },
-  formContent: { padding: 16 },
-  hint: { color: "#777", marginBottom: 8 },
-  chips: { flexDirection: "row", flexWrap: "wrap", marginVertical: 8 },
-  dupeBox: {
-    backgroundColor: "#fffaeb",
-    borderColor: "#f0c000",
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 14,
-    marginVertical: 8,
+  crosshairRing: {
+    position: "absolute",
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    borderWidth: 2,
   },
-  dupeTitle: { fontWeight: "800", marginBottom: 6, color: "#9a7b00" },
-  dupeItem: { color: "#e8590c", fontWeight: "600", paddingVertical: 6 },
+  crosshairDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  form: { flex: 1 },
+  chips: { flexDirection: "row", flexWrap: "wrap", marginVertical: 8 },
 });

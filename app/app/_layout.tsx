@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { AuthProvider } from "@/lib/auth-context";
+import { navChrome, useTheme } from "@/lib/theme";
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -13,11 +14,12 @@ const queryClient = new QueryClient({
 });
 
 export default function RootLayout() {
+  const t = useTheme();
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <StatusBar style="auto" />
-        <Stack>
+        <StatusBar style={t.scheme === "dark" ? "light" : "dark"} />
+        <Stack screenOptions={navChrome(t)}>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="(auth)" options={{ headerShown: false }} />
           <Stack.Screen name="court/[id]/index" options={{ title: "Court" }} />

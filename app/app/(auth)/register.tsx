@@ -3,9 +3,11 @@ import { useState } from "react";
 import { KeyboardAvoidingView, Platform, StyleSheet, Text, View } from "react-native";
 import { Button, ErrorText, Field } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
+import { useTheme } from "@/lib/theme";
 
 export default function RegisterScreen() {
   const { signUp } = useAuth();
+  const t = useTheme();
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -26,16 +28,24 @@ export default function RegisterScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={styles.container}
+      style={[styles.container, { backgroundColor: t.colors.background }]}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
-      <Text style={styles.title}>Join the run</Text>
+      <Text
+        style={[
+          t.type.title,
+          styles.center,
+          { color: t.colors.textPrimary, marginBottom: t.spacing.lg },
+        ]}
+      >
+        Join the run
+      </Text>
       <Field
         label="Display name"
         value={displayName}
         onChangeText={setDisplayName}
         autoCapitalize="words"
-        placeholder="How other hoopers see you"
+        placeholder="How other players see you"
       />
       <Field
         label="Email"
@@ -59,9 +69,11 @@ export default function RegisterScreen() {
         busy={busy}
         disabled={!email || password.length < 8 || !displayName.trim()}
       />
-      <View style={styles.footer}>
-        <Text style={styles.footerText}>Already have an account? </Text>
-        <Link href="/login" style={styles.link}>
+      <View style={[styles.footer, { marginTop: t.spacing.lg }]}>
+        <Text style={[t.type.body, { color: t.colors.textSecondary }]}>
+          Already have an account?{" "}
+        </Text>
+        <Link href="/login" style={[t.type.bodyMedium, { color: t.colors.accent }]}>
           Sign in
         </Link>
       </View>
@@ -70,9 +82,7 @@ export default function RegisterScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 24, justifyContent: "center", backgroundColor: "#fafafa" },
-  title: { fontSize: 28, fontWeight: "800", textAlign: "center", marginBottom: 16 },
-  footer: { flexDirection: "row", justifyContent: "center", marginTop: 16 },
-  footerText: { color: "#777" },
-  link: { color: "#e8590c", fontWeight: "700" },
+  container: { flex: 1, padding: 24, justifyContent: "center" },
+  center: { textAlign: "center" },
+  footer: { flexDirection: "row", justifyContent: "center" },
 });

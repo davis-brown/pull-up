@@ -1,4 +1,6 @@
-// Tiny shared UI kit: enough consistency for the MVP without a design system.
+// Themed UI kit. Every component reads design tokens from useTheme() —
+// no hardcoded colors anywhere else in the app.
+import type { ReactNode } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -6,8 +8,13 @@ import {
   Text,
   TextInput,
   View,
+  type StyleProp,
   type TextInputProps,
+  type ViewStyle,
 } from "react-native";
+import { useTheme } from "@/lib/theme";
+
+type ButtonVariant = "primary" | "secondary" | "danger" | "ghost";
 
 export function Button({
   title,
@@ -20,38 +27,75 @@ export function Button({
   onPress: () => void;
   disabled?: boolean;
   busy?: boolean;
-  variant?: "primary" | "secondary" | "danger";
+  variant?: ButtonVariant;
 }) {
+  const t = useTheme();
+  const background: Record<ButtonVariant, string> = {
+    primary: t.colors.accent,
+    secondary: "transparent",
+    danger: "transparent",
+    ghost: "transparent",
+  };
+  const label: Record<ButtonVariant, string> = {
+    primary: t.colors.onAccent,
+    secondary: t.colors.accent,
+    danger: t.colors.danger,
+    ghost: t.colors.textSecondary,
+  };
+  const borderColor: Record<ButtonVariant, string> = {
+    primary: t.colors.accent,
+    secondary: t.colors.accent,
+    danger: t.colors.danger,
+    ghost: "transparent",
+  };
   return (
     <Pressable
       onPress={onPress}
       disabled={disabled || busy}
       style={({ pressed }) => [
         styles.button,
-        styles[variant],
-        (disabled || busy) && styles.disabled,
-        pressed && styles.pressed,
+        {
+          backgroundColor: background[variant],
+          borderColor: borderColor[variant],
+          borderRadius: t.radius.md,
+          opacity: disabled || busy ? 0.45 : pressed ? 0.82 : 1,
+        },
       ]}
     >
       {busy ? (
-        <ActivityIndicator color={variant === "secondary" ? "#e8590c" : "#fff"} />
+        <ActivityIndicator color={label[variant]} />
       ) : (
-        <Text style={[styles.buttonText, variant === "secondary" && styles.secondaryText]}>
-          {title}
-        </Text>
+        <Text style={[t.type.bodyMedium, { color: label[variant] }]}>{title}</Text>
       )}
     </Pressable>
   );
 }
 
 export function Field(props: TextInputProps & { label: string }) {
+  const t = useTheme();
   const { label, ...inputProps } = props;
   return (
-    <View style={styles.field}>
-      <Text style={styles.label}>{label}</Text>
+    <View style={{ marginVertical: t.spacing.sm }}>
+      <Text
+        style={[
+          t.type.label,
+          { color: t.colors.textSecondary, marginBottom: t.spacing.xs + 2 },
+        ]}
+      >
+        {label}
+      </Text>
       <TextInput
-        style={styles.input}
-        placeholderTextColor="#999"
+        style={[
+          t.type.body,
+          styles.input,
+          {
+            borderColor: t.colors.border,
+            borderRadius: t.radius.md,
+            backgroundColor: t.colors.surface,
+            color: t.colors.textPrimary,
+          },
+        ]}
+        placeholderTextColor={t.colors.textMuted}
         autoCapitalize="none"
         {...inputProps}
       />
@@ -60,8 +104,13 @@ export function Field(props: TextInputProps & { label: string }) {
 }
 
 export function ErrorText({ message }: { message: string | null }) {
+  const t = useTheme();
   if (!message) return null;
-  return <Text style={styles.error}>{message}</Text>;
+  return (
+    <Text style={[t.type.caption, { color: t.colors.danger, marginVertical: t.spacing.sm }]}>
+      {message}
+    </Text>
+  );
 }
 
 export function Chip({
@@ -73,59 +122,83 @@ export function Chip({
   selected: boolean;
   onPress: () => void;
 }) {
+  const t = useTheme();
   return (
     <Pressable
       onPress={onPress}
-      style={[styles.chip, selected && styles.chipSelected]}
+      style={[
+        styles.chip,
+        {
+          borderRadius: t.radius.full,
+          borderColor: selected ? t.colors.accent : t.colors.border,
+          backgroundColor: selected ? t.colors.accent : t.colors.surface,
+        },
+      ]}
     >
-      <Text style={[styles.chipText, selected && styles.chipTextSelected]}>
+      <Text
+        style={[
+          t.type.caption,
+          {
+            fontWeight: "500",
+            color: selected ? t.colors.onAccent : t.colors.textSecondary,
+          },
+        ]}
+      >
         {label}
       </Text>
     </Pressable>
   );
 }
 
+export function Card({
+  children,
+  tone = "default",
+  style,
+}: {
+  children: ReactNode;
+  tone?: "default" | "warning";
+  style?: StyleProp<ViewStyle>;
+}) {
+  const t = useTheme();
+  return (
+    <View
+      style={[
+        {
+          backgroundColor: tone === "warning" ? t.colors.warningSurface : t.colors.surface,
+          borderColor: tone === "warning" ? t.colors.warningBorder : t.colors.border,
+          borderWidth: StyleSheet.hairlineWidth,
+          borderRadius: t.radius.lg,
+          padding: t.spacing.lg,
+          marginBottom: t.spacing.md,
+        },
+        style,
+      ]}
+    >
+      {children}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   button: {
-    borderRadius: 10,
-    paddingVertical: 14,
+    borderWidth: 1.5,
+    paddingVertical: 13,
     paddingHorizontal: 20,
     alignItems: "center",
+    justifyContent: "center",
     marginVertical: 6,
+    minHeight: 48,
   },
-  primary: { backgroundColor: "#e8590c" },
-  secondary: {
-    backgroundColor: "transparent",
-    borderWidth: 1.5,
-    borderColor: "#e8590c",
-  },
-  danger: { backgroundColor: "#c92a2a" },
-  disabled: { opacity: 0.5 },
-  pressed: { opacity: 0.8 },
-  buttonText: { color: "#fff", fontWeight: "700", fontSize: 16 },
-  secondaryText: { color: "#e8590c" },
-  field: { marginVertical: 8 },
-  label: { fontSize: 13, fontWeight: "600", marginBottom: 4, color: "#555" },
   input: {
     borderWidth: 1,
-    borderColor: "#ccc",
-    borderRadius: 10,
     paddingVertical: 12,
     paddingHorizontal: 14,
-    fontSize: 16,
-    backgroundColor: "#fff",
   },
-  error: { color: "#c92a2a", marginVertical: 8, fontSize: 14 },
   chip: {
-    borderRadius: 20,
     borderWidth: 1,
-    borderColor: "#ccc",
-    paddingVertical: 8,
+    paddingVertical: 7,
     paddingHorizontal: 14,
     marginRight: 8,
     marginBottom: 8,
   },
-  chipSelected: { backgroundColor: "#e8590c", borderColor: "#e8590c" },
-  chipText: { color: "#555", fontWeight: "600" },
-  chipTextSelected: { color: "#fff" },
 });
