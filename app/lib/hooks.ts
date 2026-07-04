@@ -10,8 +10,12 @@ import type {
   CourtActivity,
   CourtDetail,
   CourtPhoto,
+  CourtStatus,
   CourtSummary,
   CrowdReport,
+  Flag,
+  FlagEntityType,
+  PhotoStatus,
   RunQuality,
   Surface,
 } from "./types";
@@ -206,6 +210,62 @@ export function useCheckInHistory() {
       const res = await api<{ check_ins: CheckInHistoryItem[] }>("/me/check-ins");
       return res.check_ins;
     },
+  });
+}
+
+export interface NewFlag {
+  entity_type: FlagEntityType;
+  entity_id: string;
+  reason: string;
+}
+
+export function useCreateFlag() {
+  return useMutation({
+    mutationFn: (flag: NewFlag) =>
+      api<void>("/flags", { method: "POST", body: JSON.stringify(flag) }),
+  });
+}
+
+export function useAdminFlags() {
+  return useQuery({
+    queryKey: ["admin", "flags"],
+    queryFn: async () => {
+      const res = await api<{ flags: Flag[] }>("/admin/flags");
+      return res.flags;
+    },
+  });
+}
+
+export function useResolveFlag() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (flagId: string) =>
+      api<void>(`/admin/flags/${flagId}/resolve`, { method: "POST" }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["admin", "flags"] }),
+  });
+}
+
+export function useAdminSetCourtStatus() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ courtId, status }: { courtId: string; status: CourtStatus }) =>
+      api<void>(`/admin/courts/${courtId}/status`, {
+        method: "POST",
+        body: JSON.stringify({ status }),
+      }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["courts"] }),
+  });
+}
+
+export function useAdminSetPhotoStatus() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ photoId, status }: { photoId: string; status: PhotoStatus }) =>
+      api<void>(`/admin/photos/${photoId}/status`, {
+        method: "POST",
+        body: JSON.stringify({ status }),
+      }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["courts"] }),
   });
 }
 

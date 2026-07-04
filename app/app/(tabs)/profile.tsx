@@ -171,6 +171,14 @@ export default function ProfileScreen() {
         </Card>
       )}
 
+      {user?.is_admin && (
+        <Button
+          title="Moderation queue"
+          variant="secondary"
+          onPress={() => router.push("/admin")}
+        />
+      )}
+
       <Button title="Sign out" variant="danger" onPress={() => void signOut()} />
 
       <Text

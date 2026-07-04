@@ -70,7 +70,7 @@ func (q *Queries) CreateCourtPhoto(ctx context.Context, arg CreateCourtPhotoPara
 const createOAuthUser = `-- name: CreateOAuthUser :one
 INSERT INTO users (email, display_name, auth_provider, oauth_subject)
 VALUES ($1, $2, $3, $4)
-RETURNING id, email, display_name, avatar_url, reputation, created_at
+RETURNING id, email, display_name, avatar_url, reputation, created_at, is_admin
 `
 
 type CreateOAuthUserParams struct {
@@ -87,6 +87,7 @@ type CreateOAuthUserRow struct {
 	AvatarUrl   *string   `json:"avatar_url"`
 	Reputation  int32     `json:"reputation"`
 	CreatedAt   time.Time `json:"created_at"`
+	IsAdmin     bool      `json:"is_admin"`
 }
 
 func (q *Queries) CreateOAuthUser(ctx context.Context, arg CreateOAuthUserParams) (CreateOAuthUserRow, error) {
@@ -104,6 +105,7 @@ func (q *Queries) CreateOAuthUser(ctx context.Context, arg CreateOAuthUserParams
 		&i.AvatarUrl,
 		&i.Reputation,
 		&i.CreatedAt,
+		&i.IsAdmin,
 	)
 	return i, err
 }
@@ -132,7 +134,7 @@ func (q *Queries) GetUserAdmin(ctx context.Context, id uuid.UUID) (bool, error) 
 
 const getUserByOAuth = `-- name: GetUserByOAuth :one
 
-SELECT id, email, display_name, avatar_url, reputation, created_at
+SELECT id, email, display_name, avatar_url, reputation, created_at, is_admin
 FROM users
 WHERE auth_provider = $1 AND oauth_subject = $2
 `
@@ -149,6 +151,7 @@ type GetUserByOAuthRow struct {
 	AvatarUrl   *string   `json:"avatar_url"`
 	Reputation  int32     `json:"reputation"`
 	CreatedAt   time.Time `json:"created_at"`
+	IsAdmin     bool      `json:"is_admin"`
 }
 
 // OAuth ---------------------------------------------------------------------
@@ -162,6 +165,7 @@ func (q *Queries) GetUserByOAuth(ctx context.Context, arg GetUserByOAuthParams) 
 		&i.AvatarUrl,
 		&i.Reputation,
 		&i.CreatedAt,
+		&i.IsAdmin,
 	)
 	return i, err
 }

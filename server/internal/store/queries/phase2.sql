@@ -66,14 +66,14 @@ WHERE f.court_id = $1 AND pt.user_id <> $2;
 -- OAuth ---------------------------------------------------------------------
 
 -- name: GetUserByOAuth :one
-SELECT id, email, display_name, avatar_url, reputation, created_at
+SELECT id, email, display_name, avatar_url, reputation, created_at, is_admin
 FROM users
 WHERE auth_provider = $1 AND oauth_subject = $2;
 
 -- name: CreateOAuthUser :one
 INSERT INTO users (email, display_name, auth_provider, oauth_subject)
 VALUES ($1, $2, $3, $4)
-RETURNING id, email, display_name, avatar_url, reputation, created_at;
+RETURNING id, email, display_name, avatar_url, reputation, created_at, is_admin;
 
 -- Check-in history ------------------------------------------------------------
 
