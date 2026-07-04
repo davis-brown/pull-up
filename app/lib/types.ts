@@ -5,6 +5,7 @@ export interface User {
   avatar_url: string | null;
   reputation: number;
   created_at: string;
+  is_admin: boolean;
 }
 
 export interface LatestReport {
@@ -109,4 +110,17 @@ export interface NearbyDuplicate {
   lng: number;
   status: CourtStatus;
   distance_m: number;
+}
+
+export type FlagEntityType = "court" | "photo" | "report";
+export type PhotoStatus = "visible" | "flagged" | "removed";
+
+export interface Flag {
+  id: string;
+  user_id: string;
+  reporter: string;
+  entity_type: FlagEntityType;
+  entity_id: string;
+  reason: string;
+  created_at: string;
 }
