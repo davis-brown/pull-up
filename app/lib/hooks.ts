@@ -5,6 +5,8 @@ import {
 } from "@tanstack/react-query";
 import { api, API_URL } from "./api";
 import type {
+  AdminAction,
+  AdminUser,
   CheckIn,
   CheckInHistoryItem,
   CourtActivity,
@@ -266,6 +268,45 @@ export function useAdminSetPhotoStatus() {
         body: JSON.stringify({ status }),
       }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["courts"] }),
+  });
+}
+
+export function useAdminSearchUsers(query: string) {
+  const trimmed = query.trim();
+  return useQuery({
+    queryKey: ["admin", "users", trimmed],
+    enabled: trimmed.length > 0,
+    queryFn: async () => {
+      const res = await api<{ users: AdminUser[] }>(
+        `/admin/users?q=${encodeURIComponent(trimmed)}`,
+      );
+      return res.users;
+    },
+  });
+}
+
+export function useSetUserAdmin() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ userId, isAdmin }: { userId: string; isAdmin: boolean }) =>
+      api<{ user: AdminUser }>(`/admin/users/${userId}/admin`, {
+        method: "POST",
+        body: JSON.stringify({ is_admin: isAdmin }),
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["admin", "users"] });
+      void qc.invalidateQueries({ queryKey: ["admin", "actions"] });
+    },
+  });
+}
+
+export function useAdminActions() {
+  return useQuery({
+    queryKey: ["admin", "actions"],
+    queryFn: async () => {
+      const res = await api<{ actions: AdminAction[] }>("/admin/actions");
+      return res.actions;
+    },
   });
 }
 
