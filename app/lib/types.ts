@@ -124,3 +124,22 @@ export interface Flag {
   reason: string;
   created_at: string;
 }
+
+export interface AdminUser {
+  id: string;
+  email: string;
+  display_name: string;
+  reputation: number;
+  is_admin: boolean;
+  created_at: string;
+}
+
+export interface AdminAction {
+  id: string;
+  action: "promote" | "demote";
+  created_at: string;
+  actor_id: string;
+  actor_name: string;
+  target_id: string;
+  target_name: string;
+}
