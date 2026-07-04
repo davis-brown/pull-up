@@ -32,12 +32,10 @@
       "new_sqlite_classes": ["ApiContainer"]
     }
   ],
-  // Court photos. Requires R2 enabled on the account (Dashboard → R2), then:
-  //   npx wrangler r2 bucket create pull-up-photos
-  // and uncomment this binding. Photo routes return 503 until then.
-  // "r2_buckets": [
-  //   { "binding": "PHOTOS", "bucket_name": "pull-up-photos" }
-  // ],
+  // Court photos, uploaded via HMAC-signed URLs issued by the Go API.
+  "r2_buckets": [
+    { "binding": "PHOTOS", "bucket_name": "pull-up-photos" }
+  ],
   "observability": {
     "enabled": true
   }
