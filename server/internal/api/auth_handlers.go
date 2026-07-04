@@ -91,6 +91,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	publicUser := gen.GetUserByIDRow{
 		ID: user.ID, Email: user.Email, DisplayName: user.DisplayName,
 		AvatarUrl: user.AvatarUrl, Reputation: user.Reputation, CreatedAt: user.CreatedAt,
+		IsAdmin: user.IsAdmin,
 	}
 	s.issueTokens(w, r, user.ID, publicUser)
 }
