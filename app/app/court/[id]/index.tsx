@@ -2,7 +2,7 @@ import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
 import { AuthGate } from "@/components/AuthGate";
-import { Button, ErrorText } from "@/components/ui";
+import { Button, Card, ErrorText } from "@/components/ui";
 import { ApiError } from "@/lib/api";
 import {
   useCheckIn,
@@ -13,17 +13,19 @@ import {
   useVoteCourt,
 } from "@/lib/hooks";
 import { getCurrentPosition } from "@/lib/location";
+import { useTheme } from "@/lib/theme";
 
 const runQualityLabel: Record<string, string> = {
   empty: "Empty",
   casual: "Casual shooting",
-  good_run: "Good run 🔥",
+  good_run: "Good run",
   packed: "Packed",
 };
 
 export default function CourtDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const t = useTheme();
   const { data: court, isLoading } = useCourt(id);
   const { data: activity } = useCourtActivity(id);
   const { data: current } = useCurrentCheckIn();
@@ -61,42 +63,56 @@ export default function CourtDetailScreen() {
 
   if (isLoading || !court) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" />
+      <View style={[styles.center, { backgroundColor: t.colors.background }]}>
+        <ActivityIndicator size="large" color={t.colors.accent} />
       </View>
     );
   }
 
-  const live = (activity?.active_count ?? court.active_count) > 0;
+  const activeCount = activity?.active_count ?? court.active_count;
+  const live = activeCount > 0;
 
   return (
     <AuthGate>
       <Stack.Screen options={{ title: court.name }} />
-      <ScrollView contentContainerStyle={styles.container}>
-        <View style={styles.card}>
-          <Text style={styles.name}>{court.name}</Text>
-          <Text style={styles.meta}>
+      <ScrollView
+        style={{ backgroundColor: t.colors.background }}
+        contentContainerStyle={{ padding: t.spacing.lg }}
+      >
+        <Card>
+          <Text style={[t.type.title, { color: t.colors.textPrimary }]}>{court.name}</Text>
+          <Text
+            style={[t.type.caption, { color: t.colors.textSecondary, marginTop: t.spacing.xs }]}
+          >
             {court.indoor ? "Indoor" : "Outdoor"}
-            {court.hoop_count ? ` · ${court.hoop_count} hoops` : ""}
-            {court.surface ? ` · ${court.surface}` : ""}
-            {court.lighting ? " · lit at night" : ""}
+            {court.hoop_count ? `  ·  ${court.hoop_count} hoops` : ""}
+            {court.surface ? `  ·  ${court.surface}` : ""}
+            {court.lighting ? "  ·  Lit at night" : ""}
           </Text>
-          {court.address && <Text style={styles.meta}>{court.address}</Text>}
-          {court.source === "osm" && (
-            <Text style={styles.osmNote}>Court location © OpenStreetMap contributors</Text>
+          {court.address && (
+            <Text style={[t.type.caption, { color: t.colors.textSecondary, marginTop: 2 }]}>
+              {court.address}
+            </Text>
           )}
-        </View>
+          {court.source === "osm" && (
+            <Text style={[t.type.caption, { color: t.colors.textMuted, marginTop: t.spacing.sm }]}>
+              Location © OpenStreetMap contributors
+            </Text>
+          )}
+        </Card>
 
         {court.status === "pending" && (
-          <View style={[styles.card, styles.pendingCard]}>
-            <Text style={styles.pendingTitle}>Unverified court</Text>
-            <Text style={styles.meta}>
-              Someone reported this court but it hasn't been confirmed. Is it real?
+          <Card tone="warning">
+            <Text style={[t.type.label, { color: t.colors.warning }]}>Unverified court</Text>
+            <Text
+              style={[t.type.caption, { color: t.colors.textSecondary, marginTop: t.spacing.xs }]}
+            >
+              Someone reported this court but it hasn't been confirmed yet. Is it real?
             </Text>
-            <View style={styles.voteRow}>
+            <View style={[styles.voteRow, { marginTop: t.spacing.sm }]}>
               <View style={styles.voteButton}>
                 <Button
-                  title="✓ It's real"
+                  title="It's real"
                   variant="secondary"
                   busy={vote.isPending}
                   onPress={() => vote.mutate(1)}
@@ -104,25 +120,41 @@ export default function CourtDetailScreen() {
               </View>
               <View style={styles.voteButton}>
                 <Button
-                  title="✗ Not a court"
-                  variant="secondary"
+                  title="Not a court"
+                  variant="danger"
                   busy={vote.isPending}
                   onPress={() => vote.mutate(-1)}
                 />
               </View>
             </View>
-          </View>
+          </Card>
         )}
 
-        <View style={styles.card}>
-          <Text style={[styles.liveHeader, live ? styles.liveText : styles.quietText]}>
-            {live
-              ? `🏀 ${activity?.active_count ?? court.active_count} checked in right now`
-              : "Quiet — no one checked in"}
-          </Text>
+        <Card>
+          <View style={styles.liveRow}>
+            <View
+              style={[
+                styles.liveDot,
+                { backgroundColor: live ? t.colors.live : t.colors.textMuted },
+              ]}
+            />
+            <Text
+              style={[
+                t.type.heading,
+                { color: live ? t.colors.live : t.colors.textSecondary },
+              ]}
+            >
+              {live
+                ? `${activeCount} checked in right now`
+                : "Quiet — no one checked in"}
+            </Text>
+          </View>
           {activity?.check_ins?.map((ci) => (
-            <Text key={ci.id} style={styles.playerRow}>
-              {ci.display_name} · since{" "}
+            <Text
+              key={ci.id}
+              style={[t.type.caption, { color: t.colors.textSecondary, paddingVertical: 2 }]}
+            >
+              {ci.display_name}  ·  since{" "}
               {new Date(ci.created_at).toLocaleTimeString([], {
                 hour: "2-digit",
                 minute: "2-digit",
@@ -131,39 +163,58 @@ export default function CourtDetailScreen() {
           ))}
 
           <ErrorText message={error} />
-          {checkedInHere ? (
+          <View style={{ marginTop: t.spacing.sm }}>
+            {checkedInHere ? (
+              <Button
+                title="Check out"
+                variant="secondary"
+                busy={checkOut.isPending}
+                onPress={() => checkOut.mutate()}
+              />
+            ) : (
+              <Button
+                title="I'm here — check in"
+                busy={locating || checkIn.isPending}
+                onPress={() => void doCheckIn()}
+              />
+            )}
             <Button
-              title="Check out — I left"
-              variant="secondary"
-              busy={checkOut.isPending}
-              onPress={() => checkOut.mutate()}
+              title="Report the crowd"
+              variant="ghost"
+              onPress={() => router.push(`/court/${id}/report`)}
             />
-          ) : (
-            <Button
-              title="I'm here — check in"
-              busy={locating || checkIn.isPending}
-              onPress={() => void doCheckIn()}
-            />
-          )}
-          <Button
-            title="Report the crowd"
-            variant="secondary"
-            onPress={() => router.push(`/court/${id}/report`)}
-          />
-        </View>
+          </View>
+        </Card>
 
         {(activity?.reports?.length ?? 0) > 0 && (
-          <View style={styles.card}>
-            <Text style={styles.sectionTitle}>Recent reports</Text>
+          <Card>
+            <Text style={[t.type.label, { color: t.colors.textSecondary }]}>
+              Recent reports
+            </Text>
             {activity!.reports.map((r) => (
-              <View key={r.id} style={styles.reportRow}>
-                <Text style={styles.reportText}>
-                  {r.run_quality ? runQualityLabel[r.run_quality] : ""}
-                  {r.player_count != null ? ` · ~${r.player_count} playing` : ""}
+              <View
+                key={r.id}
+                style={[
+                  styles.reportRow,
+                  { borderTopColor: t.colors.border, marginTop: t.spacing.sm },
+                ]}
+              >
+                <Text style={[t.type.bodyMedium, { color: t.colors.textPrimary }]}>
+                  {r.run_quality ? runQualityLabel[r.run_quality] : "Report"}
+                  {r.player_count != null ? `  ·  ~${r.player_count} playing` : ""}
                 </Text>
-                {r.note ? <Text style={styles.reportNote}>“{r.note}”</Text> : null}
-                <Text style={styles.reportMeta}>
-                  {r.display_name} ·{" "}
+                {r.note ? (
+                  <Text
+                    style={[
+                      t.type.caption,
+                      { color: t.colors.textSecondary, fontStyle: "italic", marginTop: 2 },
+                    ]}
+                  >
+                    “{r.note}”
+                  </Text>
+                ) : null}
+                <Text style={[t.type.caption, { color: t.colors.textMuted, marginTop: 2 }]}>
+                  {r.display_name}  ·{" "}
                   {new Date(r.created_at).toLocaleTimeString([], {
                     hour: "2-digit",
                     minute: "2-digit",
@@ -171,7 +222,7 @@ export default function CourtDetailScreen() {
                 </Text>
               </View>
             ))}
-          </View>
+          </Card>
         )}
       </ScrollView>
     </AuthGate>
@@ -180,29 +231,9 @@ export default function CourtDetailScreen() {
 
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
-  container: { padding: 16 },
-  card: {
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: "#eee",
-  },
-  pendingCard: { borderColor: "#f0c000", backgroundColor: "#fffaeb" },
-  pendingTitle: { fontWeight: "800", color: "#9a7b00", marginBottom: 4 },
-  voteRow: { flexDirection: "row", gap: 10, marginTop: 8 },
+  voteRow: { flexDirection: "row", gap: 10 },
   voteButton: { flex: 1 },
-  name: { fontSize: 24, fontWeight: "800" },
-  meta: { color: "#666", marginTop: 4 },
-  osmNote: { color: "#999", fontSize: 11, marginTop: 8 },
-  liveHeader: { fontSize: 17, fontWeight: "700", marginBottom: 8 },
-  liveText: { color: "#1a7f1a" },
-  quietText: { color: "#888" },
-  playerRow: { color: "#444", paddingVertical: 2 },
-  sectionTitle: { fontSize: 13, fontWeight: "700", color: "#777", textTransform: "uppercase", marginBottom: 8 },
-  reportRow: { paddingVertical: 8, borderTopWidth: 1, borderTopColor: "#f2f2f2" },
-  reportText: { fontWeight: "600", color: "#333" },
-  reportNote: { color: "#555", fontStyle: "italic", marginTop: 2 },
-  reportMeta: { color: "#999", fontSize: 12, marginTop: 2 },
+  liveRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 },
+  liveDot: { width: 9, height: 9, borderRadius: 5 },
+  reportRow: { paddingTop: 10, borderTopWidth: StyleSheet.hairlineWidth },
 });

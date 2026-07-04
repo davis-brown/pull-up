@@ -1,8 +1,10 @@
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useTheme } from "@/lib/theme";
 import type { CourtPin } from "./types";
 
-// Shared pin rendering for both map implementations: grey = quiet court,
-// green + count = players checked in, dashed = unverified submission.
+// Shared pin for both map implementations. A quiet court is a small neutral
+// dot; a live court grows and turns green with its player count; unverified
+// submissions render hollow.
 export function CourtPinMarker({
   pin,
   onPress,
@@ -10,65 +12,59 @@ export function CourtPinMarker({
   pin: CourtPin;
   onPress?: () => void;
 }) {
+  const t = useTheme();
   const live = pin.activeCount > 0;
+  const pending = pin.status === "pending";
+
+  if (!live) {
+    return (
+      <Pressable onPress={onPress} hitSlop={12}>
+        <View
+          style={[
+            styles.dot,
+            {
+              backgroundColor: pending ? t.colors.surface : t.colors.accent,
+              borderColor: pending ? t.colors.textMuted : t.colors.surface,
+            },
+          ]}
+        />
+      </Pressable>
+    );
+  }
+
   return (
     <Pressable onPress={onPress} hitSlop={8}>
       <View
         style={[
-          styles.pin,
-          live ? styles.live : styles.quiet,
-          pin.status === "pending" && styles.pending,
+          styles.liveBubble,
+          { backgroundColor: t.colors.live, borderColor: t.colors.surface },
         ]}
       >
-        <Text style={styles.emoji}>🏀</Text>
-        {live && (
-          <View style={styles.badge}>
-            <Text style={styles.badgeText}>{pin.activeCount}</Text>
-          </View>
-        )}
+        <Text style={styles.liveCount}>{pin.activeCount}</Text>
       </View>
     </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  pin: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: "center",
-    justifyContent: "center",
+  dot: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
     borderWidth: 2,
   },
-  quiet: {
-    backgroundColor: "#f0f0f0",
-    borderColor: "#9a9a9a",
-  },
-  live: {
-    backgroundColor: "#d3f8d3",
-    borderColor: "#1a7f1a",
-  },
-  pending: {
-    borderStyle: "dashed",
-  },
-  emoji: {
-    fontSize: 18,
-  },
-  badge: {
-    position: "absolute",
-    top: -6,
-    right: -6,
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: "#1a7f1a",
+  liveBubble: {
+    minWidth: 28,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 2,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 3,
+    paddingHorizontal: 6,
   },
-  badgeText: {
-    color: "#fff",
-    fontSize: 11,
+  liveCount: {
+    color: "#FFFFFF",
+    fontSize: 13,
     fontWeight: "700",
   },
 });

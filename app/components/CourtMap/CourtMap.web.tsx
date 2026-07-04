@@ -2,8 +2,9 @@
 // Expo web, so Metro resolves this file instead (.web.tsx).
 import "maplibre-gl/dist/maplibre-gl.css";
 import Map, { GeolocateControl, Marker } from "react-map-gl/maplibre";
+import { useTheme } from "@/lib/theme";
 import { CourtPinMarker } from "./pin";
-import { MAP_STYLE_URL, type CourtMapProps } from "./types";
+import { mapStyleURL, type CourtMapProps } from "./types";
 
 export default function CourtMap({
   courts,
@@ -14,6 +15,7 @@ export default function CourtMap({
   showUserLocation = true,
   style,
 }: CourtMapProps) {
+  const t = useTheme();
   return (
     <Map
       initialViewState={{
@@ -22,7 +24,7 @@ export default function CourtMap({
         zoom: initialZoom,
       }}
       style={{ flex: 1, ...style }}
-      mapStyle={MAP_STYLE_URL}
+      mapStyle={mapStyleURL(t.scheme)}
       onMoveEnd={(evt) => {
         const b = evt.target.getBounds();
         if (!b) return;
