@@ -18,6 +18,29 @@ import (
 // PostGIS available (e.g. the docker-compose db with a scratch database):
 //
 //	TEST_DATABASE_URL=postgres://pullup:pullup@localhost:5432/pullup_test?sslmode=disable go test ./internal/store/...
+//
+// The internal/api package's HTTP tests point at the same database and
+// truncate the same tables between tests. `go test ./...` runs different
+// packages' test binaries concurrently, so both packages take a Postgres
+// advisory lock (see testDBLockKey) around setup+truncate to keep one
+// package's reset from clobbering another package's in-flight test.
+
+const testDBLockKey = 0x7075_6c6c_7570 // "pullup" — arbitrary, just needs to match internal/api's
+
+func acquireTestDBLock(t *testing.T, ctx context.Context, databaseURL string) {
+	t.Helper()
+	conn, err := pgx.Connect(ctx, databaseURL)
+	if err != nil {
+		t.Fatalf("test db lock connect: %v", err)
+	}
+	if _, err := conn.Exec(ctx, "SELECT pg_advisory_lock($1)", int64(testDBLockKey)); err != nil {
+		t.Fatalf("acquire test db lock: %v", err)
+	}
+	t.Cleanup(func() {
+		conn.Exec(context.Background(), "SELECT pg_advisory_unlock($1)", int64(testDBLockKey))
+		conn.Close(context.Background())
+	})
+}
 
 func testStore(t *testing.T) *store.Store {
 	t.Helper()
@@ -26,6 +49,7 @@ func testStore(t *testing.T) *store.Store {
 		t.Skip("TEST_DATABASE_URL not set; skipping PostGIS integration tests")
 	}
 	ctx := context.Background()
+	acquireTestDBLock(t, ctx, url)
 	st, err := store.New(ctx, url)
 	if err != nil {
 		t.Fatalf("connect: %v", err)
