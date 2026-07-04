@@ -20,6 +20,11 @@ type Config struct {
 	// map regions the first time anyone views them.
 	AutoSeed         bool
 	OverpassEndpoint string
+	// OAuth audiences; empty disables the provider. GoogleClientIDs is a
+	// comma-separated list of OAuth client IDs (web + iOS + Android);
+	// AppleAudiences is normally the iOS bundle id.
+	GoogleClientIDs string
+	AppleAudiences  string
 }
 
 func Load() (*Config, error) {
@@ -32,6 +37,8 @@ func Load() (*Config, error) {
 		CORSOrigins:      strings.Split(getenv("CORS_ORIGINS", "*"), ","),
 		AutoSeed:         getenv("AUTO_SEED", "true") != "false",
 		OverpassEndpoint: getenv("OVERPASS_ENDPOINT", ""),
+		GoogleClientIDs:  getenv("GOOGLE_CLIENT_IDS", ""),
+		AppleAudiences:   getenv("APPLE_AUDIENCES", ""),
 	}
 	if c.DatabaseURL == "" {
 		return nil, fmt.Errorf("DATABASE_URL is required")
