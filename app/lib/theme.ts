@@ -6,7 +6,16 @@
 //
 // Palette rationale: warm neutrals (asphalt & sand, not blue-grays) with a
 // burnt-orange brand accent; green is reserved exclusively for live activity.
+import {
+  createContext,
+  createElement,
+  useContext,
+  useEffect,
+  useState,
+  type ReactNode,
+} from "react";
 import { useColorScheme } from "react-native";
+import { storage } from "./storage";
 
 export interface ThemeColors {
   background: string;
@@ -105,8 +114,53 @@ export interface Theme {
   type: typeof type;
 }
 
+// User-selectable appearance: follow the OS or force light/dark. Persisted
+// on-device and applied app-wide via ThemePreferenceProvider.
+export type ThemePreference = "system" | "light" | "dark";
+
+const PREFERENCE_KEY = "pullup.theme";
+
+interface PreferenceState {
+  preference: ThemePreference;
+  setPreference: (p: ThemePreference) => void;
+}
+
+const PreferenceContext = createContext<PreferenceState>({
+  preference: "system",
+  setPreference: () => {},
+});
+
+export function ThemePreferenceProvider({ children }: { children: ReactNode }) {
+  const [preference, setPreferenceState] = useState<ThemePreference>("system");
+
+  useEffect(() => {
+    void storage.get(PREFERENCE_KEY).then((stored) => {
+      if (stored === "light" || stored === "dark" || stored === "system") {
+        setPreferenceState(stored);
+      }
+    });
+  }, []);
+
+  const setPreference = (p: ThemePreference) => {
+    setPreferenceState(p);
+    void storage.set(PREFERENCE_KEY, p);
+  };
+
+  return createElement(
+    PreferenceContext.Provider,
+    { value: { preference, setPreference } },
+    children,
+  );
+}
+
+export function useThemePreference(): PreferenceState {
+  return useContext(PreferenceContext);
+}
+
 export function useTheme(): Theme {
-  const scheme = useColorScheme() === "dark" ? "dark" : "light";
+  const system = useColorScheme() === "dark" ? "dark" : "light";
+  const { preference } = useThemePreference();
+  const scheme = preference === "system" ? system : preference;
   return {
     scheme,
     colors: scheme === "dark" ? dark : light,

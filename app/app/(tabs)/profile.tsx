@@ -1,14 +1,21 @@
 import { useRouter } from "expo-router";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
-import { Button, Card } from "@/components/ui";
+import { Button, Card, Chip } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
 import { useCheckOut, useCurrentCheckIn } from "@/lib/hooks";
-import { useTheme } from "@/lib/theme";
+import { useTheme, useThemePreference, type ThemePreference } from "@/lib/theme";
+
+const appearanceOptions: Array<{ value: ThemePreference; label: string }> = [
+  { value: "system", label: "System" },
+  { value: "light", label: "Light" },
+  { value: "dark", label: "Dark" },
+];
 
 export default function ProfileScreen() {
   const { user, signOut } = useAuth();
   const router = useRouter();
   const t = useTheme();
+  const { preference, setPreference } = useThemePreference();
   const { data } = useCurrentCheckIn();
   const checkOut = useCheckOut();
   const checkIn = data?.check_in ?? null;
@@ -64,6 +71,22 @@ export default function ProfileScreen() {
         </Card>
       )}
 
+      <Card>
+        <Text style={[t.type.label, { color: t.colors.textSecondary, marginBottom: t.spacing.sm }]}>
+          Appearance
+        </Text>
+        <View style={styles.chips}>
+          {appearanceOptions.map((option) => (
+            <Chip
+              key={option.value}
+              label={option.label}
+              selected={preference === option.value}
+              onPress={() => setPreference(option.value)}
+            />
+          ))}
+        </View>
+      </Card>
+
       <Button title="Sign out" variant="danger" onPress={() => void signOut()} />
 
       <Text
@@ -81,6 +104,7 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
+  chips: { flexDirection: "row", flexWrap: "wrap", marginBottom: -8 },
   liveRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   liveDot: { width: 8, height: 8, borderRadius: 4 },
   attribution: { textAlign: "center", lineHeight: 18 },
