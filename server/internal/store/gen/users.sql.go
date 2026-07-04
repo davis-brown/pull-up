@@ -38,9 +38,9 @@ RETURNING id, email, display_name, avatar_url, reputation, created_at
 `
 
 type CreateUserParams struct {
-	Email        string `json:"email"`
-	PasswordHash string `json:"password_hash"`
-	DisplayName  string `json:"display_name"`
+	Email        string  `json:"email"`
+	PasswordHash *string `json:"password_hash"`
+	DisplayName  string  `json:"display_name"`
 }
 
 type CreateUserRow struct {
@@ -92,9 +92,19 @@ FROM users
 WHERE email = $1
 `
 
-func (q *Queries) GetUserByEmail(ctx context.Context, email string) (User, error) {
+type GetUserByEmailRow struct {
+	ID           uuid.UUID `json:"id"`
+	Email        string    `json:"email"`
+	PasswordHash *string   `json:"password_hash"`
+	DisplayName  string    `json:"display_name"`
+	AvatarUrl    *string   `json:"avatar_url"`
+	Reputation   int32     `json:"reputation"`
+	CreatedAt    time.Time `json:"created_at"`
+}
+
+func (q *Queries) GetUserByEmail(ctx context.Context, email string) (GetUserByEmailRow, error) {
 	row := q.db.QueryRow(ctx, getUserByEmail, email)
-	var i User
+	var i GetUserByEmailRow
 	err := row.Scan(
 		&i.ID,
 		&i.Email,

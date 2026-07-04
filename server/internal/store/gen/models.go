@@ -69,13 +69,28 @@ type CrowdReport struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
+type Favorite struct {
+	UserID    uuid.UUID `json:"user_id"`
+	CourtID   uuid.UUID `json:"court_id"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
 type Flag struct {
-	ID         uuid.UUID `json:"id"`
-	UserID     uuid.UUID `json:"user_id"`
-	EntityType string    `json:"entity_type"`
-	EntityID   uuid.UUID `json:"entity_id"`
-	Reason     string    `json:"reason"`
-	CreatedAt  time.Time `json:"created_at"`
+	ID         uuid.UUID  `json:"id"`
+	UserID     uuid.UUID  `json:"user_id"`
+	EntityType string     `json:"entity_type"`
+	EntityID   uuid.UUID  `json:"entity_id"`
+	Reason     string     `json:"reason"`
+	CreatedAt  time.Time  `json:"created_at"`
+	ResolvedAt *time.Time `json:"resolved_at"`
+	ResolvedBy *uuid.UUID `json:"resolved_by"`
+}
+
+type PushToken struct {
+	Token     string    `json:"token"`
+	UserID    uuid.UUID `json:"user_id"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 type RefreshToken struct {
@@ -100,9 +115,12 @@ type SeedRegion struct {
 type User struct {
 	ID           uuid.UUID `json:"id"`
 	Email        string    `json:"email"`
-	PasswordHash string    `json:"password_hash"`
+	PasswordHash *string   `json:"password_hash"`
 	DisplayName  string    `json:"display_name"`
 	AvatarUrl    *string   `json:"avatar_url"`
 	Reputation   int32     `json:"reputation"`
 	CreatedAt    time.Time `json:"created_at"`
+	AuthProvider string    `json:"auth_provider"`
+	OauthSubject *string   `json:"oauth_subject"`
+	IsAdmin      bool      `json:"is_admin"`
 }

@@ -1,6 +1,6 @@
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Button, Card, Chip, ErrorText } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
 import {
@@ -9,7 +9,7 @@ import {
   setGeofenceMode,
   type GeofenceMode,
 } from "@/lib/geofencing";
-import { useCheckOut, useCurrentCheckIn } from "@/lib/hooks";
+import { useCheckInHistory, useCheckOut, useCurrentCheckIn } from "@/lib/hooks";
 import { useTheme, useThemePreference, type ThemePreference } from "@/lib/theme";
 
 const appearanceOptions: Array<{ value: ThemePreference; label: string }> = [
@@ -34,6 +34,7 @@ export default function ProfileScreen() {
   const checkIn = data?.check_in ?? null;
   const [geoMode, setGeoMode] = useState<GeofenceMode>("off");
   const [geoError, setGeoError] = useState<string | null>(null);
+  const { data: history } = useCheckInHistory();
 
   useEffect(() => {
     void getGeofenceMode().then(setGeoMode);
@@ -142,6 +143,34 @@ export default function ProfileScreen() {
         </Card>
       )}
 
+      {(history?.length ?? 0) > 0 && (
+        <Card>
+          <Text style={[t.type.label, { color: t.colors.textSecondary, marginBottom: t.spacing.xs }]}>
+            Where you've played
+          </Text>
+          {history!.slice(0, 10).map((h) => (
+            <Pressable
+              key={h.id}
+              onPress={() => router.push(`/court/${h.court_id}`)}
+              style={[styles.historyRow, { borderTopColor: t.colors.border }]}
+            >
+              <Text
+                style={[t.type.bodyMedium, styles.historyName, { color: t.colors.textPrimary }]}
+                numberOfLines={1}
+              >
+                {h.court_name}
+              </Text>
+              <Text style={[t.type.caption, { color: t.colors.textMuted }]}>
+                {new Date(h.created_at).toLocaleDateString([], {
+                  month: "short",
+                  day: "numeric",
+                })}
+              </Text>
+            </Pressable>
+          ))}
+        </Card>
+      )}
+
       <Button title="Sign out" variant="danger" onPress={() => void signOut()} />
 
       <Text
@@ -160,6 +189,15 @@ export default function ProfileScreen() {
 
 const styles = StyleSheet.create({
   chips: { flexDirection: "row", flexWrap: "wrap", marginBottom: -8 },
+  historyRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 9,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  historyName: { flex: 1 },
   liveRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   liveDot: { width: 8, height: 8, borderRadius: 4 },
   attribution: { textAlign: "center", lineHeight: 18 },

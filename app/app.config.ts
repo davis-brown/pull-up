@@ -12,6 +12,7 @@ const config: ExpoConfig = {
   ios: {
     bundleIdentifier: "com.pullup.app",
     supportsTablet: false,
+    usesAppleSignIn: true,
     infoPlist: {
       NSLocationWhenInUseUsageDescription:
         "pull-up uses your location to show nearby courts and to verify you're at a court when you check in.",
@@ -48,6 +49,13 @@ const config: ExpoConfig = {
     ],
     "expo-notifications",
     "expo-task-manager",
+    "expo-apple-authentication",
+    [
+      "expo-image-picker",
+      {
+        photosPermission: "pull-up uses your photo library so you can add pictures of courts.",
+      },
+    ],
     "@maplibre/maplibre-react-native",
   ],
   experiments: {

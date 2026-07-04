@@ -85,6 +85,23 @@ export interface CourtActivity {
   reports: CrowdReport[];
 }
 
+export interface CourtPhoto {
+  id: string;
+  user_id: string;
+  storage_key: string;
+  created_at: string;
+}
+
+export interface CheckInHistoryItem {
+  id: string;
+  court_id: string;
+  court_name: string;
+  source: string;
+  created_at: string;
+  checked_out_at: string | null;
+  expires_at: string;
+}
+
 export interface NearbyDuplicate {
   id: string;
   name: string;

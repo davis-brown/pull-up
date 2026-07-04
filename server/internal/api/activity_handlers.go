@@ -86,6 +86,8 @@ func (s *Server) handleCheckIn(w http.ResponseWriter, r *http.Request) {
 	if err := s.store.Queries.PromoteCourtIfPending(r.Context(), courtID); err != nil {
 		s.log.Error("promote court after check-in", "err", err)
 	}
+	// If this started a run (0 → 1 active), ping the court's favoriters.
+	go s.notifyRunStarted(courtID, uid)
 	writeJSON(w, http.StatusCreated, checkIn)
 }
 
