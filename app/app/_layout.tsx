@@ -1,7 +1,12 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Stack } from "expo-router";
+import * as Notifications from "expo-notifications";
+import { Stack, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
+import { useEffect } from "react";
 import { AuthProvider } from "@/lib/auth-context";
+// Side-effect import: registers the geofence background task at startup so
+// headless launches (geofence event with the app killed) can handle events.
+import { geofencingSupported, refreshGeofences } from "@/lib/geofencing";
 import { navChrome, ThemePreferenceProvider, useTheme } from "@/lib/theme";
 
 const queryClient = new QueryClient({
@@ -16,6 +21,22 @@ const queryClient = new QueryClient({
 // Split from RootLayout so useTheme() sees the preference provider.
 function ThemedApp() {
   const t = useTheme();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!geofencingSupported) return;
+    // Keep the monitored courts current with wherever the user is now.
+    void refreshGeofences().catch(() => {});
+    // Tapping a geofence notification opens that court.
+    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+      const courtId = response.notification.request.content.data?.courtId;
+      if (typeof courtId === "string") {
+        router.push(`/court/${courtId}`);
+      }
+    });
+    return () => sub.remove();
+  }, [router]);
+
   return (
     <>
       <StatusBar style={t.scheme === "dark" ? "light" : "dark"} />
