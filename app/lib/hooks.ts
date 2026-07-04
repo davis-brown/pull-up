@@ -3,16 +3,22 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { api } from "./api";
+import { api, API_URL } from "./api";
 import type {
   CheckIn,
+  CheckInHistoryItem,
   CourtActivity,
   CourtDetail,
+  CourtPhoto,
   CourtSummary,
   CrowdReport,
   RunQuality,
   Surface,
 } from "./types";
+
+export function photoURL(storageKey: string): string {
+  return `${API_URL}/photos/${storageKey}`;
+}
 
 export interface BBox {
   minLng: number;
@@ -128,6 +134,77 @@ export function useCreateCourt() {
       }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["courts"] });
+    },
+  });
+}
+
+export function useCourtPhotos(courtId: string | undefined) {
+  return useQuery({
+    queryKey: ["courts", courtId, "photos"],
+    enabled: !!courtId,
+    queryFn: async () => {
+      const res = await api<{ photos: CourtPhoto[] }>(`/courts/${courtId}/photos`);
+      return res.photos;
+    },
+  });
+}
+
+// Two-step upload: the API returns an HMAC-signed path on the photos worker,
+// then the image bytes are PUT directly there (never through the Go API).
+export function useUploadPhoto(courtId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (asset: { uri: string; mimeType?: string }) => {
+      const created = await api<{ photo: CourtPhoto; upload_path: string }>(
+        `/courts/${courtId}/photos`,
+        { method: "POST", body: JSON.stringify({}) },
+      );
+      const blob = await (await fetch(asset.uri)).blob();
+      const res = await fetch(`${API_URL}${created.upload_path}`, {
+        method: "PUT",
+        headers: { "Content-Type": asset.mimeType ?? "image/jpeg" },
+        body: blob,
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(body.error ?? `upload failed (${res.status})`);
+      }
+      return created.photo;
+    },
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["courts", courtId, "photos"] });
+    },
+  });
+}
+
+export function useIsFavorite(courtId: string | undefined) {
+  return useQuery({
+    queryKey: ["courts", courtId, "favorite"],
+    enabled: !!courtId,
+    queryFn: () => api<{ favorite: boolean }>(`/courts/${courtId}/favorite`),
+  });
+}
+
+export function useSetFavorite(courtId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (favorite: boolean) =>
+      api<{ favorite: boolean }>(`/courts/${courtId}/favorite`, {
+        method: favorite ? "PUT" : "DELETE",
+      }),
+    onSuccess: (data) => {
+      qc.setQueryData(["courts", courtId, "favorite"], data);
+      void qc.invalidateQueries({ queryKey: ["me", "favorites"] });
+    },
+  });
+}
+
+export function useCheckInHistory() {
+  return useQuery({
+    queryKey: ["me", "check-in-history"],
+    queryFn: async () => {
+      const res = await api<{ check_ins: CheckInHistoryItem[] }>("/me/check-ins");
+      return res.check_ins;
     },
   });
 }

@@ -1,6 +1,7 @@
 import { Link } from "expo-router";
 import { useState } from "react";
 import { KeyboardAvoidingView, Platform, StyleSheet, Text, View } from "react-native";
+import { OAuthButtons } from "@/components/OAuthButtons";
 import { Button, ErrorText, Field } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
 import { useTheme } from "@/lib/theme";
@@ -59,6 +60,7 @@ export default function LoginScreen() {
       />
       <ErrorText message={error} />
       <Button title="Sign in" onPress={submit} busy={busy} disabled={!email || !password} />
+      <OAuthButtons />
       <View style={[styles.footer, { marginTop: t.spacing.lg }]}>
         <Text style={[t.type.body, { color: t.colors.textSecondary }]}>New here? </Text>
         <Link

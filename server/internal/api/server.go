@@ -20,6 +20,7 @@ type Server struct {
 	cfg    *config.Config
 	store  *store.Store
 	issuer *auth.Issuer
+	oauth  *auth.OAuthVerifier
 	log    *slog.Logger
 	seeder *seeder.Seeder // nil when auto-seeding is disabled
 }
@@ -29,6 +30,7 @@ func NewServer(cfg *config.Config, st *store.Store, log *slog.Logger, sd *seeder
 		cfg:    cfg,
 		store:  st,
 		issuer: auth.NewIssuer(cfg.JWTSecret, cfg.AccessTokenTTL),
+		oauth:  auth.NewOAuthVerifier(cfg.GoogleClientIDs, cfg.AppleAudiences),
 		log:    log,
 		seeder: sd,
 	}
@@ -66,10 +68,12 @@ func (s *Server) Routes() http.Handler {
 		r.Post("/auth/login", s.handleLogin)
 		r.Post("/auth/refresh", s.handleRefresh)
 		r.Post("/auth/logout", s.handleLogout)
+		r.Post("/auth/oauth", s.handleOAuth)
 
 		r.Get("/courts", s.handleListCourts)
 		r.Get("/courts/{id}", s.handleGetCourt)
 		r.Get("/courts/{id}/activity", s.handleCourtActivity)
+		r.Get("/courts/{id}/photos", s.handleListPhotos)
 
 		// Authenticated routes.
 		r.Group(func(r chi.Router) {
@@ -78,13 +82,29 @@ func (s *Server) Routes() http.Handler {
 			r.Get("/me", s.handleGetMe)
 			r.Patch("/me", s.handlePatchMe)
 			r.Get("/me/check-ins/current", s.handleCurrentCheckIn)
+			r.Get("/me/check-ins", s.handleCheckInHistory)
+			r.Get("/me/favorites", s.handleListFavorites)
+			r.Post("/me/push-token", s.handleRegisterPushToken)
 
 			r.Post("/courts", s.handleCreateCourt)
 			r.Post("/courts/{id}/vote", s.handleVoteCourt)
 			r.Post("/courts/{id}/check-ins", s.handleCheckIn)
 			r.Post("/courts/{id}/reports", s.handleCreateReport)
+			r.Post("/courts/{id}/photos", s.handleCreatePhoto)
+			r.Put("/courts/{id}/favorite", s.handleAddFavorite)
+			r.Delete("/courts/{id}/favorite", s.handleRemoveFavorite)
+			r.Get("/courts/{id}/favorite", s.handleIsFavorite)
 			r.Delete("/check-ins/current", s.handleCheckOut)
 			r.Post("/flags", s.handleCreateFlag)
+
+			// Moderation (users.is_admin, set via SQL for now).
+			r.Group(func(r chi.Router) {
+				r.Use(s.requireAdmin)
+				r.Get("/admin/flags", s.handleListFlags)
+				r.Post("/admin/flags/{id}/resolve", s.handleResolveFlag)
+				r.Post("/admin/courts/{id}/status", s.handleAdminSetCourtStatus)
+				r.Post("/admin/photos/{id}/status", s.handleAdminSetPhotoStatus)
+			})
 		})
 	})
 

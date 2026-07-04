@@ -44,8 +44,9 @@ func testStore(t *testing.T) *store.Store {
 
 func createUser(t *testing.T, st *store.Store, email string) uuid.UUID {
 	t.Helper()
+	hash := "x"
 	u, err := st.Queries.CreateUser(context.Background(), gen.CreateUserParams{
-		Email: email, PasswordHash: "x", DisplayName: "Test User",
+		Email: email, PasswordHash: &hash, DisplayName: "Test User",
 	})
 	if err != nil {
 		t.Fatalf("create user: %v", err)

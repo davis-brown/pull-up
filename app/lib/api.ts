@@ -124,6 +124,25 @@ export async function register(
   return tokens.user;
 }
 
+export async function oauthLogin(
+  provider: "google" | "apple",
+  idToken: string,
+  displayName?: string,
+): Promise<User> {
+  const res = await rawRequest("/auth/oauth", {
+    method: "POST",
+    body: JSON.stringify({
+      provider,
+      id_token: idToken,
+      ...(displayName ? { display_name: displayName } : {}),
+    }),
+  });
+  if (!res.ok) throw new ApiError(res.status, await res.json());
+  const tokens = (await res.json()) as TokenResponse;
+  await setTokens(tokens);
+  return tokens.user;
+}
+
 export async function logout(): Promise<void> {
   const refreshToken = await storage.get(REFRESH_KEY);
   if (refreshToken) {

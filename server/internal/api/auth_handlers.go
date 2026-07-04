@@ -54,7 +54,7 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	}
 	user, err := s.store.Queries.CreateUser(r.Context(), gen.CreateUserParams{
 		Email:        req.Email,
-		PasswordHash: hash,
+		PasswordHash: &hash,
 		DisplayName:  req.DisplayName,
 	})
 	if err != nil {
@@ -83,7 +83,8 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, "get user", err)
 		return
 	}
-	if !auth.CheckPassword(user.PasswordHash, req.Password) {
+	// OAuth-only accounts have no password to check.
+	if user.PasswordHash == nil || !auth.CheckPassword(*user.PasswordHash, req.Password) {
 		writeError(w, http.StatusUnauthorized, "invalid email or password")
 		return
 	}

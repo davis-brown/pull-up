@@ -7,6 +7,7 @@ import {
 } from "react";
 import * as apiClient from "./api";
 import { api } from "./api";
+import { registerPushToken } from "./push-registration";
 import type { User } from "./types";
 
 interface AuthState {
@@ -14,6 +15,11 @@ interface AuthState {
   loading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string, displayName: string) => Promise<void>;
+  oauthSignIn: (
+    provider: "google" | "apple",
+    idToken: string,
+    displayName?: string,
+  ) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -30,6 +36,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         if (await apiClient.hasSession()) {
           setUser(await api<User>("/me"));
+          void registerPushToken();
         }
       } catch {
         await apiClient.clearTokens();
@@ -41,10 +48,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signIn = async (email: string, password: string) => {
     setUser(await apiClient.login(email, password));
+    void registerPushToken();
   };
 
   const signUp = async (email: string, password: string, displayName: string) => {
     setUser(await apiClient.register(email, password, displayName));
+    void registerPushToken();
+  };
+
+  const oauthSignIn = async (
+    provider: "google" | "apple",
+    idToken: string,
+    displayName?: string,
+  ) => {
+    setUser(await apiClient.oauthLogin(provider, idToken, displayName));
+    void registerPushToken();
   };
 
   const signOut = async () => {
@@ -53,7 +71,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, signIn, signUp, signOut }}>
+    <AuthContext.Provider value={{ user, loading, signIn, signUp, oauthSignIn, signOut }}>
       {children}
     </AuthContext.Provider>
   );

@@ -1,15 +1,30 @@
+import { Ionicons } from "@expo/vector-icons";
+import * as ImagePicker from "expo-image-picker";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { AuthGate } from "@/components/AuthGate";
 import { Button, Card, ErrorText } from "@/components/ui";
 import { ApiError } from "@/lib/api";
 import {
+  photoURL,
   useCheckIn,
   useCheckOut,
   useCourt,
   useCourtActivity,
+  useCourtPhotos,
   useCurrentCheckIn,
+  useIsFavorite,
+  useSetFavorite,
+  useUploadPhoto,
   useVoteCourt,
 } from "@/lib/hooks";
 import { getCurrentPosition } from "@/lib/location";
@@ -32,8 +47,31 @@ export default function CourtDetailScreen() {
   const checkIn = useCheckIn(id ?? "");
   const checkOut = useCheckOut();
   const vote = useVoteCourt(id ?? "");
+  const { data: photos } = useCourtPhotos(id);
+  const uploadPhoto = useUploadPhoto(id ?? "");
+  const { data: favData } = useIsFavorite(id);
+  const setFavorite = useSetFavorite(id ?? "");
   const [error, setError] = useState<string | null>(null);
+  const [photoError, setPhotoError] = useState<string | null>(null);
   const [locating, setLocating] = useState(false);
+
+  const isFavorite = favData?.favorite ?? false;
+
+  const addPhoto = async () => {
+    setPhotoError(null);
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: "images",
+      quality: 0.7,
+      allowsEditing: true,
+      aspect: [4, 3],
+    });
+    const asset = result.assets?.[0];
+    if (result.canceled || !asset) return;
+    uploadPhoto.mutate(
+      { uri: asset.uri, mimeType: asset.mimeType ?? "image/jpeg" },
+      { onError: (e) => setPhotoError(e.message) },
+    );
+  };
 
   const checkedInHere = current?.check_in?.court_id === id;
 
@@ -80,7 +118,22 @@ export default function CourtDetailScreen() {
         contentContainerStyle={{ padding: t.spacing.lg }}
       >
         <Card>
-          <Text style={[t.type.title, { color: t.colors.textPrimary }]}>{court.name}</Text>
+          <View style={styles.titleRow}>
+            <Text style={[t.type.title, styles.titleText, { color: t.colors.textPrimary }]}>
+              {court.name}
+            </Text>
+            <Pressable
+              onPress={() => setFavorite.mutate(!isFavorite)}
+              hitSlop={10}
+              disabled={setFavorite.isPending}
+            >
+              <Ionicons
+                name={isFavorite ? "heart" : "heart-outline"}
+                size={26}
+                color={isFavorite ? t.colors.accent : t.colors.textMuted}
+              />
+            </Pressable>
+          </View>
           <Text
             style={[t.type.caption, { color: t.colors.textSecondary, marginTop: t.spacing.xs }]}
           >
@@ -99,6 +152,35 @@ export default function CourtDetailScreen() {
               Location © OpenStreetMap contributors
             </Text>
           )}
+        </Card>
+
+        <Card>
+          <View style={styles.titleRow}>
+            <Text style={[t.type.label, { color: t.colors.textSecondary }]}>Photos</Text>
+            <Pressable onPress={() => void addPhoto()} hitSlop={10} disabled={uploadPhoto.isPending}>
+              {uploadPhoto.isPending ? (
+                <ActivityIndicator size="small" color={t.colors.accent} />
+              ) : (
+                <Ionicons name="camera-outline" size={22} color={t.colors.accent} />
+              )}
+            </Pressable>
+          </View>
+          {(photos?.length ?? 0) > 0 ? (
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: t.spacing.sm }}>
+              {photos!.map((p) => (
+                <Image
+                  key={p.id}
+                  source={{ uri: photoURL(p.storage_key) }}
+                  style={[styles.photo, { borderRadius: t.radius.md }]}
+                />
+              ))}
+            </ScrollView>
+          ) : (
+            <Text style={[t.type.caption, { color: t.colors.textMuted, marginTop: t.spacing.sm }]}>
+              No photos yet — add the first one.
+            </Text>
+          )}
+          <ErrorText message={photoError} />
         </Card>
 
         {court.status === "pending" && (
@@ -231,6 +313,14 @@ export default function CourtDetailScreen() {
 
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
+  titleRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 8,
+  },
+  titleText: { flex: 1 },
+  photo: { width: 160, height: 120, marginRight: 10 },
   voteRow: { flexDirection: "row", gap: 10 },
   voteButton: { flex: 1 },
   liveRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 },
