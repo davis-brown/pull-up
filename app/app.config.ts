@@ -58,6 +58,12 @@ const config: ExpoConfig = {
     ],
     "@maplibre/maplibre-react-native",
   ],
+  extra: {
+    eas: {
+      // Push notifications: getExpoPushTokenAsync needs this to mint tokens.
+      projectId: "e89a09a0-ef95-412b-82fb-f1b5075058d8",
+    },
+  },
   experiments: {
     typedRoutes: true,
   },
