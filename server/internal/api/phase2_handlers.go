@@ -65,7 +65,15 @@ func (s *Server) handleListPhotos(w http.ResponseWriter, r *http.Request) {
 	if photos == nil {
 		photos = []gen.ListCourtPhotosRow{}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"photos": photos})
+	external, err := s.store.Queries.ListExternalPhotos(r.Context(), courtID)
+	if err != nil {
+		s.internalError(w, "list external photos", err)
+		return
+	}
+	if external == nil {
+		external = []gen.ListExternalPhotosRow{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"photos": photos, "external": external})
 }
 
 // --- favorites ----------------------------------------------------------------

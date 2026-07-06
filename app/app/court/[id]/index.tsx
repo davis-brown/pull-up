@@ -5,6 +5,7 @@ import { useState } from "react";
 import {
   ActivityIndicator,
   Image,
+  Linking,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -49,7 +50,9 @@ export default function CourtDetailScreen() {
   const checkIn = useCheckIn(id ?? "");
   const checkOut = useCheckOut();
   const vote = useVoteCourt(id ?? "");
-  const { data: photos } = useCourtPhotos(id);
+  const { data: photoData } = useCourtPhotos(id);
+  const photos = photoData?.photos;
+  const externalPhotos = photoData?.external ?? [];
   const uploadPhoto = useUploadPhoto(id ?? "");
   const { data: favData } = useIsFavorite(id);
   const setFavorite = useSetFavorite(id ?? "");
@@ -143,11 +146,39 @@ export default function CourtDetailScreen() {
             {court.hoop_count ? `  ·  ${court.hoop_count} hoops` : ""}
             {court.surface ? `  ·  ${court.surface}` : ""}
             {court.lighting ? "  ·  Lit at night" : ""}
+            {court.covered ? "  ·  Covered" : ""}
           </Text>
+          {(court.access === "private" || court.access === "customers" || court.fee) && (
+            <Text style={[t.type.caption, { color: t.colors.warning, marginTop: 2 }]}>
+              {court.access === "private"
+                ? "Private court"
+                : court.access === "customers"
+                  ? "Customers/members only"
+                  : ""}
+              {court.fee ? (court.access === "public" || !court.access ? "Fee to play" : "  ·  Fee to play") : ""}
+            </Text>
+          )}
           {court.address && (
             <Text style={[t.type.caption, { color: t.colors.textSecondary, marginTop: 2 }]}>
               {court.address}
             </Text>
+          )}
+          {court.opening_hours && (
+            <Text style={[t.type.caption, { color: t.colors.textSecondary, marginTop: 2 }]}>
+              Hours: {court.opening_hours}
+            </Text>
+          )}
+          {court.description && (
+            <Text style={[t.type.caption, { color: t.colors.textSecondary, marginTop: t.spacing.sm }]}>
+              {court.description}
+            </Text>
+          )}
+          {court.website && (
+            <Pressable onPress={() => void Linking.openURL(court.website!)} hitSlop={6}>
+              <Text style={[t.type.caption, { color: t.colors.accent, marginTop: t.spacing.sm }]}>
+                Website
+              </Text>
+            </Pressable>
           )}
           {court.source === "osm" && (
             <Text style={[t.type.caption, { color: t.colors.textMuted, marginTop: t.spacing.sm }]}>
@@ -167,19 +198,33 @@ export default function CourtDetailScreen() {
               )}
             </Pressable>
           </View>
-          {(photos?.length ?? 0) > 0 ? (
+          {(photos?.length ?? 0) + externalPhotos.length > 0 ? (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: t.spacing.sm }}>
-              {photos!.map((p) => (
+              {photos?.map((p) => (
                 <Image
                   key={p.id}
                   source={{ uri: photoURL(p.storage_key) }}
                   style={[styles.photo, { borderRadius: t.radius.md }]}
                 />
               ))}
+              {externalPhotos.map((p) => (
+                <Pressable key={p.id} onPress={() => void Linking.openURL(p.page_url)}>
+                  <Image
+                    source={{ uri: p.image_url }}
+                    style={[styles.photo, { borderRadius: t.radius.md }]}
+                  />
+                </Pressable>
+              ))}
             </ScrollView>
           ) : (
             <Text style={[t.type.caption, { color: t.colors.textMuted, marginTop: t.spacing.sm }]}>
               No photos yet — add the first one.
+            </Text>
+          )}
+          {externalPhotos.length > 0 && (
+            <Text style={[t.type.caption, { color: t.colors.textMuted, marginTop: t.spacing.xs }]}>
+              Some photos are from nearby on Wikimedia Commons — tap one for its
+              source and license.
             </Text>
           )}
           <ErrorText message={photoError} />

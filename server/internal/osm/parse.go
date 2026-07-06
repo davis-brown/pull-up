@@ -8,15 +8,21 @@ import (
 )
 
 type Court struct {
-	OSMType   string
-	OSMID     int64
-	Name      string
-	Lat       float64
-	Lng       float64
-	HoopCount *int16
-	Indoor    bool
-	Surface   *string
-	Lighting  *bool
+	OSMType      string
+	OSMID        int64
+	Name         string
+	Lat          float64
+	Lng          float64
+	HoopCount    *int16
+	Indoor       bool
+	Surface      *string
+	Lighting     *bool
+	Access       *string
+	Fee          *bool
+	Covered      *bool
+	OpeningHours *string
+	Website      *string
+	Description  *string
 }
 
 type overpassResponse struct {
@@ -52,15 +58,21 @@ func ParseCourts(body []byte) ([]Court, error) {
 			continue
 		}
 		courts = append(courts, Court{
-			OSMType:   el.Type,
-			OSMID:     el.ID,
-			Name:      courtName(el.Tags),
-			Lat:       lat,
-			Lng:       lng,
-			HoopCount: parseHoops(el.Tags["hoops"]),
-			Indoor:    el.Tags["indoor"] == "yes" || el.Tags["covered"] == "yes",
-			Surface:   mapSurface(el.Tags["surface"]),
-			Lighting:  parseLit(el.Tags["lit"]),
+			OSMType:      el.Type,
+			OSMID:        el.ID,
+			Name:         courtName(el.Tags),
+			Lat:          lat,
+			Lng:          lng,
+			HoopCount:    parseHoops(el.Tags["hoops"]),
+			Indoor:       el.Tags["indoor"] == "yes" || el.Tags["covered"] == "yes",
+			Surface:      mapSurface(el.Tags["surface"]),
+			Lighting:     parseLit(el.Tags["lit"]),
+			Access:       mapAccess(el.Tags["access"]),
+			Fee:          parseYesNo(el.Tags["fee"]),
+			Covered:      parseYesNo(el.Tags["covered"]),
+			OpeningHours: nonEmpty(el.Tags["opening_hours"], 200),
+			Website:      website(el.Tags),
+			Description:  nonEmpty(el.Tags["description"], 500),
 		})
 	}
 	return courts, nil
@@ -101,6 +113,57 @@ func mapSurface(v string) *string {
 		return nil
 	}
 	return &s
+}
+
+// mapAccess collapses OSM access=* onto public/private/customers; uncommon
+// values (permit, unknown, …) map to nil rather than guessing.
+func mapAccess(v string) *string {
+	var s string
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "yes", "public", "permissive":
+		s = "public"
+	case "private", "no":
+		s = "private"
+	case "customers", "members":
+		s = "customers"
+	default:
+		return nil
+	}
+	return &s
+}
+
+func parseYesNo(v string) *bool {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "yes":
+		b := true
+		return &b
+	case "no":
+		b := false
+		return &b
+	default:
+		return nil
+	}
+}
+
+func nonEmpty(v string, maxLen int) *string {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return nil
+	}
+	if len(v) > maxLen {
+		v = v[:maxLen]
+	}
+	return &v
+}
+
+func website(tags map[string]string) *string {
+	for _, key := range []string{"website", "contact:website", "url"} {
+		if w := nonEmpty(tags[key], 300); w != nil &&
+			(strings.HasPrefix(*w, "http://") || strings.HasPrefix(*w, "https://")) {
+			return w
+		}
+	}
+	return nil
 }
 
 func parseLit(v string) *bool {

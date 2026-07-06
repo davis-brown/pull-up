@@ -64,7 +64,9 @@ SELECT
     ST_Y(c.location::geometry)::float8 AS lat,
     ST_X(c.location::geometry)::float8 AS lng,
     c.address, c.hoop_count, c.indoor, c.surface, c.lighting, c.is_public,
+    c.access, c.fee, c.covered, c.opening_hours, c.website, c.description,
     c.source, c.osm_type, c.osm_id, c.status, c.submitted_by, c.created_at,
+    c.enriched_at,
     ac.active_count,
     vs.net_votes
 FROM courts c
@@ -105,21 +107,31 @@ RETURNING id, name, ST_Y(location::geometry)::float8 AS lat, ST_X(location::geom
     address, hoop_count, indoor, surface, lighting, is_public, source, status, submitted_by, created_at;
 
 -- name: UpsertOSMCourt :one
-INSERT INTO courts (name, location, hoop_count, indoor, surface, lighting, source, osm_type, osm_id, status)
+INSERT INTO courts (name, location, hoop_count, indoor, surface, lighting,
+    access, fee, covered, opening_hours, website, description,
+    source, osm_type, osm_id, status)
 VALUES (
     sqlc.arg(name),
     ST_SetSRID(ST_MakePoint(sqlc.arg(lng)::float8, sqlc.arg(lat)::float8), 4326)::geography,
     sqlc.narg(hoop_count), sqlc.arg(indoor), sqlc.narg(surface), sqlc.narg(lighting),
+    sqlc.narg(access), sqlc.narg(fee), sqlc.narg(covered),
+    sqlc.narg(opening_hours), sqlc.narg(website), sqlc.narg(description),
     'osm', sqlc.arg(osm_type), sqlc.arg(osm_id), 'pending'
 )
 ON CONFLICT (osm_type, osm_id) DO UPDATE SET
-    name       = EXCLUDED.name,
-    location   = EXCLUDED.location,
-    hoop_count = EXCLUDED.hoop_count,
-    indoor     = EXCLUDED.indoor,
-    surface    = EXCLUDED.surface,
-    lighting   = EXCLUDED.lighting,
-    updated_at = now()
+    name          = EXCLUDED.name,
+    location      = EXCLUDED.location,
+    hoop_count    = EXCLUDED.hoop_count,
+    indoor        = EXCLUDED.indoor,
+    surface       = EXCLUDED.surface,
+    lighting      = EXCLUDED.lighting,
+    access        = EXCLUDED.access,
+    fee           = EXCLUDED.fee,
+    covered       = EXCLUDED.covered,
+    opening_hours = EXCLUDED.opening_hours,
+    website       = EXCLUDED.website,
+    description   = EXCLUDED.description,
+    updated_at    = now()
 RETURNING id, (xmax = 0) AS inserted;
 
 -- Promotes and reports who submitted it (for the reputation award);
