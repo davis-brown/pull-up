@@ -187,8 +187,10 @@ type commonsResponse struct {
 				ThumbURL       string `json:"thumburl"`
 				DescriptionURL string `json:"descriptionurl"`
 				Mime           string `json:"mime"`
-				ExtMetadata    map[string]struct {
-					Value string `json:"value"`
+				// Values are usually strings but can be numbers — keep
+				// the type loose or the whole response fails to decode.
+				ExtMetadata map[string]struct {
+					Value any `json:"value"`
 				} `json:"extmetadata"`
 			} `json:"imageinfo"`
 		} `json:"pages"`
@@ -206,9 +208,10 @@ func (e *Enricher) commonsPhotos(ctx context.Context, lat, lng float64) []common
 		"ggsradius":    {fmt.Sprintf("%d", photoRadiusM)},
 		"ggslimit":     {"10"},
 		"ggsnamespace": {"6"}, // File:
-		"prop":         {"imageinfo"},
-		"iiprop":       {"url|mime|extmetadata"},
-		"iiurlwidth":   {"800"},
+		"prop":                {"imageinfo"},
+		"iiprop":              {"url|mime|extmetadata"},
+		"iiextmetadatafilter": {"Artist|LicenseShortName"},
+		"iiurlwidth":          {"800"},
 	}
 	var resp commonsResponse
 	if err := e.getJSON(ctx, "https://commons.wikimedia.org/w/api.php?"+params.Encode(), &resp); err != nil {
@@ -224,9 +227,13 @@ func (e *Enricher) commonsPhotos(ctx context.Context, lat, lng float64) []common
 		if info.ThumbURL == "" || !strings.HasPrefix(info.Mime, "image/") {
 			continue
 		}
+		metaString := func(key string) string {
+			s, _ := info.ExtMetadata[key].Value.(string)
+			return s
+		}
 		var attribution *string
-		artist := strings.TrimSpace(htmlTags.ReplaceAllString(info.ExtMetadata["Artist"].Value, ""))
-		license := strings.TrimSpace(info.ExtMetadata["LicenseShortName"].Value)
+		artist := strings.TrimSpace(htmlTags.ReplaceAllString(metaString("Artist"), ""))
+		license := strings.TrimSpace(metaString("LicenseShortName"))
 		if artist != "" || license != "" {
 			s := strings.TrimSpace(strings.Trim(artist+" · "+license, " ·"))
 			if len(s) > 200 {
