@@ -9,7 +9,9 @@ import type {
   CheckInHistoryItem,
   CourtActivity,
   CourtDetail,
+  CourtMessage,
   CourtPhoto,
+  CourtSession,
   CourtSummary,
   CrowdReport,
   RunQuality,
@@ -205,6 +207,85 @@ export function useCheckInHistory() {
     queryFn: async () => {
       const res = await api<{ check_ins: CheckInHistoryItem[] }>("/me/check-ins");
       return res.check_ins;
+    },
+  });
+}
+
+export function useCourtSessions(courtId: string | undefined) {
+  return useQuery({
+    queryKey: ["courts", courtId, "sessions"],
+    enabled: !!courtId,
+    refetchInterval: 45_000,
+    queryFn: async () => {
+      const res = await api<{ sessions: CourtSession[] }>(`/courts/${courtId}/sessions`);
+      return res.sessions;
+    },
+  });
+}
+
+export function useCreateSession(courtId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (session: { starts_at: string; note?: string }) =>
+      api<CourtSession>(`/courts/${courtId}/sessions`, {
+        method: "POST",
+        body: JSON.stringify(session),
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["courts", courtId, "sessions"] });
+    },
+  });
+}
+
+export function useRSVP(courtId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (rsvp: { sessionId: string; status: "going" | "out" }) =>
+      api<{ status: string; going_count: number }>(`/sessions/${rsvp.sessionId}/rsvp`, {
+        method: "PUT",
+        body: JSON.stringify({ status: rsvp.status }),
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["courts", courtId, "sessions"] });
+    },
+  });
+}
+
+export function useCancelSession(courtId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (sessionId: string) =>
+      api<void>(`/sessions/${sessionId}`, { method: "DELETE" }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["courts", courtId, "sessions"] });
+    },
+  });
+}
+
+export function useCourtMessages(courtId: string | undefined) {
+  return useQuery({
+    queryKey: ["courts", courtId, "messages"],
+    enabled: !!courtId,
+    // Chat is the fastest-moving surface; still fine to poll.
+    refetchInterval: 15_000,
+    queryFn: async () => {
+      const res = await api<{ messages: CourtMessage[] }>(`/courts/${courtId}/messages`);
+      // Server returns newest first; display oldest → newest.
+      return res.messages.slice().reverse();
+    },
+  });
+}
+
+export function useSendMessage(courtId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: string) =>
+      api<CourtMessage>(`/courts/${courtId}/messages`, {
+        method: "POST",
+        body: JSON.stringify({ body }),
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["courts", courtId, "messages"] });
     },
   });
 }

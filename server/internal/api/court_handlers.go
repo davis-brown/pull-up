@@ -19,11 +19,16 @@ const (
 	// dupeRadiusM is how close a new submission must be to an existing court
 	// to be treated as a likely duplicate.
 	dupeRadiusM = 75.0
-	// verifyUpvotes promotes a pending court to verified.
+	// verifyUpvotes promotes a pending court to verified (reputation-weighted:
+	// a vote counts 1-3x depending on the voter's reputation tier).
 	verifyUpvotes = 2
-	// rejectNetVotes hides a court.
+	// rejectNetVotes hides a court (also weighted).
 	rejectNetVotes = -3
 	maxSearchRadiusM = 50_000.0
+
+	// Reputation awards.
+	repCheckIn       = 1 // geo-verified check-in (max once per court per 20h)
+	repCourtVerified = 5 // your submitted court got verified by someone else
 )
 
 var validSurfaces = map[string]bool{"asphalt": true, "concrete": true, "hardwood": true, "rubber": true, "other": true}
@@ -276,17 +281,28 @@ func (s *Server) handleVoteCourt(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, "vote stats", err)
 		return
 	}
+	// Verification decisions use reputation-weighted tallies; the displayed
+	// net_votes stays a plain headcount.
+	weighted, err := s.store.Queries.CourtVoteStatsWeighted(r.Context(), courtID)
+	if err != nil {
+		s.internalError(w, "weighted vote stats", err)
+		return
+	}
 	status := court.Status
-	if stats.NetVotes <= rejectNetVotes && status != "rejected" {
+	if weighted.NetWeighted <= rejectNetVotes && status != "rejected" {
 		if err := s.store.Queries.SetCourtStatus(r.Context(), gen.SetCourtStatusParams{ID: courtID, Status: "rejected"}); err != nil {
 			s.internalError(w, "reject court", err)
 			return
 		}
 		status = "rejected"
-	} else if stats.Upvotes >= verifyUpvotes && status == "pending" {
-		if err := s.store.Queries.PromoteCourtIfPending(r.Context(), courtID); err != nil {
+	} else if weighted.WeightedUpvotes >= verifyUpvotes && status == "pending" {
+		submitter, err := s.store.Queries.PromoteCourtIfPending(r.Context(), courtID)
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			s.internalError(w, "promote court", err)
 			return
+		}
+		if err == nil && submitter != nil && *submitter != uid {
+			s.awardReputation(r.Context(), *submitter, repCourtVerified)
 		}
 		status = "verified"
 	}

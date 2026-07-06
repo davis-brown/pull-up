@@ -448,14 +448,19 @@ func (q *Queries) GetCourt(ctx context.Context, id uuid.UUID) (GetCourtRow, erro
 	return i, err
 }
 
-const promoteCourtIfPending = `-- name: PromoteCourtIfPending :exec
+const promoteCourtIfPending = `-- name: PromoteCourtIfPending :one
 UPDATE courts SET status = 'verified', updated_at = now()
 WHERE id = $1 AND status = 'pending'
+RETURNING submitted_by
 `
 
-func (q *Queries) PromoteCourtIfPending(ctx context.Context, id uuid.UUID) error {
-	_, err := q.db.Exec(ctx, promoteCourtIfPending, id)
-	return err
+// Promotes and reports who submitted it (for the reputation award);
+// pgx.ErrNoRows means the court wasn't pending.
+func (q *Queries) PromoteCourtIfPending(ctx context.Context, id uuid.UUID) (*uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, promoteCourtIfPending, id)
+	var submitted_by *uuid.UUID
+	err := row.Scan(&submitted_by)
+	return submitted_by, err
 }
 
 const setCourtStatus = `-- name: SetCourtStatus :exec

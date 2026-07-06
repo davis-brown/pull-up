@@ -102,6 +102,27 @@ export interface CheckInHistoryItem {
   expires_at: string;
 }
 
+export interface CourtSession {
+  id: string;
+  court_id: string;
+  created_by: string;
+  created_by_name: string;
+  starts_at: string;
+  note: string | null;
+  created_at: string;
+  going_count: number;
+  my_rsvp: "" | "going" | "out";
+}
+
+export interface CourtMessage {
+  id: string;
+  court_id: string;
+  user_id: string;
+  display_name: string;
+  body: string;
+  created_at: string;
+}
+
 export interface NearbyDuplicate {
   id: string;
   name: string;

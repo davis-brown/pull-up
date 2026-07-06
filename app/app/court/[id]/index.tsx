@@ -12,6 +12,8 @@ import {
   View,
 } from "react-native";
 import { AuthGate } from "@/components/AuthGate";
+import { CourtChat } from "@/components/CourtChat";
+import { CourtSessions } from "@/components/CourtSessions";
 import { Button, Card, ErrorText } from "@/components/ui";
 import { ApiError } from "@/lib/api";
 import {
@@ -268,6 +270,8 @@ export default function CourtDetailScreen() {
           </View>
         </Card>
 
+        <CourtSessions courtId={id ?? ""} />
+
         {(activity?.reports?.length ?? 0) > 0 && (
           <Card>
             <Text style={[t.type.label, { color: t.colors.textSecondary }]}>
@@ -306,6 +310,8 @@ export default function CourtDetailScreen() {
             ))}
           </Card>
         )}
+
+        <CourtChat courtId={id ?? ""} />
       </ScrollView>
     </AuthGate>
   );
