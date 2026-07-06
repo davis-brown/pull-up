@@ -74,6 +74,9 @@ func (s *Server) Routes() http.Handler {
 		r.Get("/courts/{id}", s.handleGetCourt)
 		r.Get("/courts/{id}/activity", s.handleCourtActivity)
 		r.Get("/courts/{id}/photos", s.handleListPhotos)
+		r.Get("/courts/{id}/sessions", s.handleListSessions) // personalizes via optional bearer
+		r.Get("/courts/{id}/messages", s.handleListMessages)
+		r.Get("/sessions/{id}/attendees", s.handleSessionAttendees)
 
 		// Authenticated routes.
 		r.Group(func(r chi.Router) {
@@ -97,6 +100,11 @@ func (s *Server) Routes() http.Handler {
 			r.Delete("/check-ins/current", s.handleCheckOut)
 			r.Post("/flags", s.handleCreateFlag)
 
+			r.Post("/courts/{id}/sessions", s.handleCreateSession)
+			r.Post("/courts/{id}/messages", s.handleCreateMessage)
+			r.Delete("/sessions/{id}", s.handleCancelSession)
+			r.Put("/sessions/{id}/rsvp", s.handleRSVP)
+
 			// Moderation (users.is_admin, set via SQL for now).
 			r.Group(func(r chi.Router) {
 				r.Use(s.requireAdmin)
@@ -104,6 +112,7 @@ func (s *Server) Routes() http.Handler {
 				r.Post("/admin/flags/{id}/resolve", s.handleResolveFlag)
 				r.Post("/admin/courts/{id}/status", s.handleAdminSetCourtStatus)
 				r.Post("/admin/photos/{id}/status", s.handleAdminSetPhotoStatus)
+				r.Post("/admin/messages/{id}/status", s.handleAdminSetMessageStatus)
 			})
 		})
 	})

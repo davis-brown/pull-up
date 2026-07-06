@@ -122,9 +122,12 @@ ON CONFLICT (osm_type, osm_id) DO UPDATE SET
     updated_at = now()
 RETURNING id, (xmax = 0) AS inserted;
 
--- name: PromoteCourtIfPending :exec
+-- Promotes and reports who submitted it (for the reputation award);
+-- pgx.ErrNoRows means the court wasn't pending.
+-- name: PromoteCourtIfPending :one
 UPDATE courts SET status = 'verified', updated_at = now()
-WHERE id = $1 AND status = 'pending';
+WHERE id = $1 AND status = 'pending'
+RETURNING submitted_by;
 
 -- name: SetCourtStatus :exec
 UPDATE courts SET status = $2, updated_at = now()

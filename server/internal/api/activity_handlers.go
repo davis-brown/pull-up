@@ -83,8 +83,22 @@ func (s *Server) handleCheckIn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// A person verified at the court is the strongest signal it's real.
-	if err := s.store.Queries.PromoteCourtIfPending(r.Context(), courtID); err != nil {
+	submitter, err := s.store.Queries.PromoteCourtIfPending(r.Context(), courtID)
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		s.log.Error("promote court after check-in", "err", err)
+	}
+	if err == nil && submitter != nil && *submitter != uid {
+		s.awardReputation(r.Context(), *submitter, repCourtVerified)
+	}
+	// Reputation for showing up, capped to once per court per 20h so
+	// check-in/out loops don't farm it.
+	recent, err := s.store.Queries.HasRecentCheckInAtCourt(r.Context(), gen.HasRecentCheckInAtCourtParams{
+		UserID: uid, CourtID: courtID, ExcludeID: checkIn.ID,
+	})
+	if err != nil {
+		s.log.Error("recent check-in lookup", "err", err)
+	} else if !recent {
+		s.awardReputation(r.Context(), uid, repCheckIn)
 	}
 	// If this started a run (0 → 1 active), ping the court's favoriters.
 	go s.notifyRunStarted(courtID, uid)
