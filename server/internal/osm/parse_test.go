@@ -96,3 +96,40 @@ func TestParseCourtsRejectsGarbage(t *testing.T) {
 		t.Error("expected error for non-JSON body")
 	}
 }
+
+func TestParseEnrichmentTags(t *testing.T) {
+	body := []byte(`{"elements":[{"type":"way","id":42,"center":{"lat":40.7,"lon":-73.9},
+		"tags":{"leisure":"pitch","sport":"basketball","access":"customers","fee":"yes",
+		"covered":"no","opening_hours":"Mo-Su 08:00-22:00","website":"https://example.org/court",
+		"description":"Two full courts behind the rec center."}}]}`)
+	courts, err := ParseCourts(body)
+	if err != nil || len(courts) != 1 {
+		t.Fatalf("parse: %v (%d courts)", err, len(courts))
+	}
+	c := courts[0]
+	if c.Access == nil || *c.Access != "customers" {
+		t.Errorf("access = %v", c.Access)
+	}
+	if c.Fee == nil || !*c.Fee {
+		t.Errorf("fee = %v", c.Fee)
+	}
+	if c.Covered == nil || *c.Covered {
+		t.Errorf("covered = %v", c.Covered)
+	}
+	if c.OpeningHours == nil || *c.OpeningHours != "Mo-Su 08:00-22:00" {
+		t.Errorf("opening_hours = %v", c.OpeningHours)
+	}
+	if c.Website == nil || *c.Website != "https://example.org/court" {
+		t.Errorf("website = %v", c.Website)
+	}
+	if c.Description == nil {
+		t.Error("description missing")
+	}
+	// Garbage access values must map to nil, not a guess.
+	body2 := []byte(`{"elements":[{"type":"node","id":7,"lat":40.7,"lon":-73.9,
+		"tags":{"access":"permit","website":"not-a-url"}}]}`)
+	courts2, _ := ParseCourts(body2)
+	if courts2[0].Access != nil || courts2[0].Website != nil {
+		t.Errorf("bad values not nil: access=%v website=%v", courts2[0].Access, courts2[0].Website)
+	}
+}

@@ -46,11 +46,26 @@ export interface CourtDetail {
   surface: Surface | null;
   lighting: boolean | null;
   is_public: boolean;
+  access: "public" | "private" | "customers" | null;
+  fee: boolean | null;
+  covered: boolean | null;
+  opening_hours: string | null;
+  website: string | null;
+  description: string | null;
   source: "user" | "osm";
   status: CourtStatus;
   created_at: string;
   active_count: number;
   net_votes: number;
+}
+
+export interface ExternalPhoto {
+  id: string;
+  source: "commons";
+  image_url: string;
+  page_url: string;
+  attribution: string | null;
+  created_at: string;
 }
 
 export interface CheckIn {

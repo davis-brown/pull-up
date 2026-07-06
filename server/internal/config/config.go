@@ -20,6 +20,10 @@ type Config struct {
 	// map regions the first time anyone views them.
 	AutoSeed         bool
 	OverpassEndpoint string
+	// Enrich enables the background worker that fills missing addresses
+	// (Nominatim) and finds openly-licensed photos (Wikimedia Commons) the
+	// first time a court's detail page is viewed.
+	Enrich bool
 	// OAuth audiences; empty disables the provider. GoogleClientIDs is a
 	// comma-separated list of OAuth client IDs (web + iOS + Android);
 	// AppleAudiences is normally the iOS bundle id.
@@ -37,6 +41,7 @@ func Load() (*Config, error) {
 		CORSOrigins:      strings.Split(getenv("CORS_ORIGINS", "*"), ","),
 		AutoSeed:         getenv("AUTO_SEED", "true") != "false",
 		OverpassEndpoint: getenv("OVERPASS_ENDPOINT", ""),
+		Enrich:           getenv("ENRICH", "true") != "false",
 		GoogleClientIDs:  getenv("GOOGLE_CLIENT_IDS", ""),
 		AppleAudiences:   getenv("APPLE_AUDIENCES", ""),
 	}

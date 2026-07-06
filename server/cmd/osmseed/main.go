@@ -63,6 +63,8 @@ func main() {
 		row, err := st.Queries.UpsertOSMCourt(ctx, gen.UpsertOSMCourtParams{
 			Name: c.Name, Lng: c.Lng, Lat: c.Lat,
 			HoopCount: c.HoopCount, Indoor: c.Indoor, Surface: c.Surface, Lighting: c.Lighting,
+			Access: c.Access, Fee: c.Fee, Covered: c.Covered,
+			OpeningHours: c.OpeningHours, Website: c.Website, Description: c.Description,
 			OsmType: &c.OSMType, OsmID: &c.OSMID,
 		})
 		if err != nil {

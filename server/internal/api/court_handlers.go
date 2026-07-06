@@ -163,6 +163,10 @@ func (s *Server) handleGetCourt(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, "get court", err)
 		return
 	}
+	// First detail view kicks off one-time enrichment (address + photos).
+	if s.enricher != nil && court.EnrichedAt == nil {
+		s.enricher.Request(court.ID)
+	}
 	writeJSON(w, http.StatusOK, court)
 }
 

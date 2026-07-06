@@ -384,7 +384,9 @@ SELECT
     ST_Y(c.location::geometry)::float8 AS lat,
     ST_X(c.location::geometry)::float8 AS lng,
     c.address, c.hoop_count, c.indoor, c.surface, c.lighting, c.is_public,
+    c.access, c.fee, c.covered, c.opening_hours, c.website, c.description,
     c.source, c.osm_type, c.osm_id, c.status, c.submitted_by, c.created_at,
+    c.enriched_at,
     ac.active_count,
     vs.net_votes
 FROM courts c
@@ -402,24 +404,31 @@ WHERE c.id = $1
 `
 
 type GetCourtRow struct {
-	ID          uuid.UUID  `json:"id"`
-	Name        string     `json:"name"`
-	Lat         float64    `json:"lat"`
-	Lng         float64    `json:"lng"`
-	Address     *string    `json:"address"`
-	HoopCount   *int16     `json:"hoop_count"`
-	Indoor      bool       `json:"indoor"`
-	Surface     *string    `json:"surface"`
-	Lighting    *bool      `json:"lighting"`
-	IsPublic    bool       `json:"is_public"`
-	Source      string     `json:"source"`
-	OsmType     *string    `json:"osm_type"`
-	OsmID       *int64     `json:"osm_id"`
-	Status      string     `json:"status"`
-	SubmittedBy *uuid.UUID `json:"submitted_by"`
-	CreatedAt   time.Time  `json:"created_at"`
-	ActiveCount int32      `json:"active_count"`
-	NetVotes    int32      `json:"net_votes"`
+	ID           uuid.UUID  `json:"id"`
+	Name         string     `json:"name"`
+	Lat          float64    `json:"lat"`
+	Lng          float64    `json:"lng"`
+	Address      *string    `json:"address"`
+	HoopCount    *int16     `json:"hoop_count"`
+	Indoor       bool       `json:"indoor"`
+	Surface      *string    `json:"surface"`
+	Lighting     *bool      `json:"lighting"`
+	IsPublic     bool       `json:"is_public"`
+	Access       *string    `json:"access"`
+	Fee          *bool      `json:"fee"`
+	Covered      *bool      `json:"covered"`
+	OpeningHours *string    `json:"opening_hours"`
+	Website      *string    `json:"website"`
+	Description  *string    `json:"description"`
+	Source       string     `json:"source"`
+	OsmType      *string    `json:"osm_type"`
+	OsmID        *int64     `json:"osm_id"`
+	Status       string     `json:"status"`
+	SubmittedBy  *uuid.UUID `json:"submitted_by"`
+	CreatedAt    time.Time  `json:"created_at"`
+	EnrichedAt   *time.Time `json:"enriched_at"`
+	ActiveCount  int32      `json:"active_count"`
+	NetVotes     int32      `json:"net_votes"`
 }
 
 func (q *Queries) GetCourt(ctx context.Context, id uuid.UUID) (GetCourtRow, error) {
@@ -436,12 +445,19 @@ func (q *Queries) GetCourt(ctx context.Context, id uuid.UUID) (GetCourtRow, erro
 		&i.Surface,
 		&i.Lighting,
 		&i.IsPublic,
+		&i.Access,
+		&i.Fee,
+		&i.Covered,
+		&i.OpeningHours,
+		&i.Website,
+		&i.Description,
 		&i.Source,
 		&i.OsmType,
 		&i.OsmID,
 		&i.Status,
 		&i.SubmittedBy,
 		&i.CreatedAt,
+		&i.EnrichedAt,
 		&i.ActiveCount,
 		&i.NetVotes,
 	)
@@ -496,34 +512,50 @@ func (q *Queries) UpsertCourtVote(ctx context.Context, arg UpsertCourtVoteParams
 }
 
 const upsertOSMCourt = `-- name: UpsertOSMCourt :one
-INSERT INTO courts (name, location, hoop_count, indoor, surface, lighting, source, osm_type, osm_id, status)
+INSERT INTO courts (name, location, hoop_count, indoor, surface, lighting,
+    access, fee, covered, opening_hours, website, description,
+    source, osm_type, osm_id, status)
 VALUES (
     $1,
     ST_SetSRID(ST_MakePoint($2::float8, $3::float8), 4326)::geography,
     $4, $5, $6, $7,
-    'osm', $8, $9, 'pending'
+    $8, $9, $10,
+    $11, $12, $13,
+    'osm', $14, $15, 'pending'
 )
 ON CONFLICT (osm_type, osm_id) DO UPDATE SET
-    name       = EXCLUDED.name,
-    location   = EXCLUDED.location,
-    hoop_count = EXCLUDED.hoop_count,
-    indoor     = EXCLUDED.indoor,
-    surface    = EXCLUDED.surface,
-    lighting   = EXCLUDED.lighting,
-    updated_at = now()
+    name          = EXCLUDED.name,
+    location      = EXCLUDED.location,
+    hoop_count    = EXCLUDED.hoop_count,
+    indoor        = EXCLUDED.indoor,
+    surface       = EXCLUDED.surface,
+    lighting      = EXCLUDED.lighting,
+    access        = EXCLUDED.access,
+    fee           = EXCLUDED.fee,
+    covered       = EXCLUDED.covered,
+    opening_hours = EXCLUDED.opening_hours,
+    website       = EXCLUDED.website,
+    description   = EXCLUDED.description,
+    updated_at    = now()
 RETURNING id, (xmax = 0) AS inserted
 `
 
 type UpsertOSMCourtParams struct {
-	Name      string  `json:"name"`
-	Lng       float64 `json:"lng"`
-	Lat       float64 `json:"lat"`
-	HoopCount *int16  `json:"hoop_count"`
-	Indoor    bool    `json:"indoor"`
-	Surface   *string `json:"surface"`
-	Lighting  *bool   `json:"lighting"`
-	OsmType   *string `json:"osm_type"`
-	OsmID     *int64  `json:"osm_id"`
+	Name         string  `json:"name"`
+	Lng          float64 `json:"lng"`
+	Lat          float64 `json:"lat"`
+	HoopCount    *int16  `json:"hoop_count"`
+	Indoor       bool    `json:"indoor"`
+	Surface      *string `json:"surface"`
+	Lighting     *bool   `json:"lighting"`
+	Access       *string `json:"access"`
+	Fee          *bool   `json:"fee"`
+	Covered      *bool   `json:"covered"`
+	OpeningHours *string `json:"opening_hours"`
+	Website      *string `json:"website"`
+	Description  *string `json:"description"`
+	OsmType      *string `json:"osm_type"`
+	OsmID        *int64  `json:"osm_id"`
 }
 
 type UpsertOSMCourtRow struct {
@@ -540,6 +572,12 @@ func (q *Queries) UpsertOSMCourt(ctx context.Context, arg UpsertOSMCourtParams) 
 		arg.Indoor,
 		arg.Surface,
 		arg.Lighting,
+		arg.Access,
+		arg.Fee,
+		arg.Covered,
+		arg.OpeningHours,
+		arg.Website,
+		arg.Description,
 		arg.OsmType,
 		arg.OsmID,
 	)
