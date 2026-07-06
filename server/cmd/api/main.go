@@ -12,6 +12,7 @@ import (
 
 	"github.com/davisbrown/pull-up/server/internal/api"
 	"github.com/davisbrown/pull-up/server/internal/config"
+	"github.com/davisbrown/pull-up/server/internal/enrich"
 	"github.com/davisbrown/pull-up/server/internal/seeder"
 	"github.com/davisbrown/pull-up/server/internal/store"
 )
@@ -48,9 +49,16 @@ func main() {
 		log.Info("osm auto-seeding enabled")
 	}
 
+	var en *enrich.Enricher
+	if cfg.Enrich {
+		en = enrich.New(st.Queries, log)
+		go en.Run(ctx)
+		log.Info("court enrichment enabled")
+	}
+
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
-		Handler:           api.NewServer(cfg, st, log, sd).Routes(),
+		Handler:           api.NewServer(cfg, st, log, sd, en).Routes(),
 		ReadHeaderTimeout: 5 * time.Second,
 	}
 

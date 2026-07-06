@@ -14,6 +14,7 @@ import type {
   CourtSession,
   CourtSummary,
   CrowdReport,
+  ExternalPhoto,
   RunQuality,
   Surface,
 } from "./types";
@@ -145,8 +146,10 @@ export function useCourtPhotos(courtId: string | undefined) {
     queryKey: ["courts", courtId, "photos"],
     enabled: !!courtId,
     queryFn: async () => {
-      const res = await api<{ photos: CourtPhoto[] }>(`/courts/${courtId}/photos`);
-      return res.photos;
+      const res = await api<{ photos: CourtPhoto[]; external?: ExternalPhoto[] }>(
+        `/courts/${courtId}/photos`,
+      );
+      return { photos: res.photos, external: res.external ?? [] };
     },
   });
 }

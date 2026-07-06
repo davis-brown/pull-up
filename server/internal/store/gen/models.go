@@ -23,22 +23,29 @@ type CheckIn struct {
 }
 
 type Court struct {
-	ID          uuid.UUID  `json:"id"`
-	Name        string     `json:"name"`
-	Location    string     `json:"location"`
-	Address     *string    `json:"address"`
-	HoopCount   *int16     `json:"hoop_count"`
-	Indoor      bool       `json:"indoor"`
-	Surface     *string    `json:"surface"`
-	Lighting    *bool      `json:"lighting"`
-	IsPublic    bool       `json:"is_public"`
-	Source      string     `json:"source"`
-	OsmType     *string    `json:"osm_type"`
-	OsmID       *int64     `json:"osm_id"`
-	Status      string     `json:"status"`
-	SubmittedBy *uuid.UUID `json:"submitted_by"`
-	CreatedAt   time.Time  `json:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at"`
+	ID           uuid.UUID  `json:"id"`
+	Name         string     `json:"name"`
+	Location     string     `json:"location"`
+	Address      *string    `json:"address"`
+	HoopCount    *int16     `json:"hoop_count"`
+	Indoor       bool       `json:"indoor"`
+	Surface      *string    `json:"surface"`
+	Lighting     *bool      `json:"lighting"`
+	IsPublic     bool       `json:"is_public"`
+	Source       string     `json:"source"`
+	OsmType      *string    `json:"osm_type"`
+	OsmID        *int64     `json:"osm_id"`
+	Status       string     `json:"status"`
+	SubmittedBy  *uuid.UUID `json:"submitted_by"`
+	CreatedAt    time.Time  `json:"created_at"`
+	UpdatedAt    time.Time  `json:"updated_at"`
+	Access       *string    `json:"access"`
+	Fee          *bool      `json:"fee"`
+	Covered      *bool      `json:"covered"`
+	OpeningHours *string    `json:"opening_hours"`
+	Website      *string    `json:"website"`
+	Description  *string    `json:"description"`
+	EnrichedAt   *time.Time `json:"enriched_at"`
 }
 
 type CourtMessage struct {
@@ -75,6 +82,17 @@ type CrowdReport struct {
 	PlayerCount *int16    `json:"player_count"`
 	RunQuality  *string   `json:"run_quality"`
 	Note        *string   `json:"note"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+type ExternalPhoto struct {
+	ID          uuid.UUID `json:"id"`
+	CourtID     uuid.UUID `json:"court_id"`
+	Source      string    `json:"source"`
+	SourceID    string    `json:"source_id"`
+	ImageUrl    string    `json:"image_url"`
+	PageUrl     string    `json:"page_url"`
+	Attribution *string   `json:"attribution"`
 	CreatedAt   time.Time `json:"created_at"`
 }
 

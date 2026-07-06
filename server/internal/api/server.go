@@ -12,27 +12,30 @@ import (
 
 	"github.com/davisbrown/pull-up/server/internal/auth"
 	"github.com/davisbrown/pull-up/server/internal/config"
+	"github.com/davisbrown/pull-up/server/internal/enrich"
 	"github.com/davisbrown/pull-up/server/internal/seeder"
 	"github.com/davisbrown/pull-up/server/internal/store"
 )
 
 type Server struct {
-	cfg    *config.Config
-	store  *store.Store
-	issuer *auth.Issuer
-	oauth  *auth.OAuthVerifier
-	log    *slog.Logger
-	seeder *seeder.Seeder // nil when auto-seeding is disabled
+	cfg      *config.Config
+	store    *store.Store
+	issuer   *auth.Issuer
+	oauth    *auth.OAuthVerifier
+	log      *slog.Logger
+	seeder   *seeder.Seeder   // nil when auto-seeding is disabled
+	enricher *enrich.Enricher // nil when enrichment is disabled
 }
 
-func NewServer(cfg *config.Config, st *store.Store, log *slog.Logger, sd *seeder.Seeder) *Server {
+func NewServer(cfg *config.Config, st *store.Store, log *slog.Logger, sd *seeder.Seeder, en *enrich.Enricher) *Server {
 	return &Server{
-		cfg:    cfg,
-		store:  st,
-		issuer: auth.NewIssuer(cfg.JWTSecret, cfg.AccessTokenTTL),
-		oauth:  auth.NewOAuthVerifier(cfg.GoogleClientIDs, cfg.AppleAudiences),
-		log:    log,
-		seeder: sd,
+		cfg:      cfg,
+		store:    st,
+		issuer:   auth.NewIssuer(cfg.JWTSecret, cfg.AccessTokenTTL),
+		oauth:    auth.NewOAuthVerifier(cfg.GoogleClientIDs, cfg.AppleAudiences),
+		log:      log,
+		seeder:   sd,
+		enricher: en,
 	}
 }
 
