@@ -4,6 +4,7 @@ import type { ExpoConfig } from "expo/config";
 const config: ExpoConfig = {
   name: "pull-up",
   slug: "pull-up",
+  owner: "davis-team",
   version: "0.1.0",
   scheme: "pullup",
   orientation: "portrait",
