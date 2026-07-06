@@ -5,6 +5,9 @@ interface Env {
   DATABASE_URL: string;
   JWT_SECRET: string;
   CORS_ORIGINS?: string;
+  // OAuth audiences (comma-separated). Empty/unset disables that provider.
+  GOOGLE_CLIENT_IDS?: string;
+  APPLE_AUDIENCES?: string;
   // R2 bucket for court photos. Optional: photo routes return 503 until the
   // binding is configured (requires R2 enabled on the account).
   PHOTOS?: R2Bucket;
@@ -24,6 +27,8 @@ export class ApiContainer extends Container {
       JWT_SECRET: env.JWT_SECRET,
       APP_ENV: "production",
       CORS_ORIGINS: env.CORS_ORIGINS ?? "*",
+      GOOGLE_CLIENT_IDS: env.GOOGLE_CLIENT_IDS ?? "",
+      APPLE_AUDIENCES: env.APPLE_AUDIENCES ?? "",
       PORT: "8080",
     };
   }
