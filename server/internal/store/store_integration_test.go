@@ -36,7 +36,7 @@ func testStore(t *testing.T) *store.Store {
 	}
 	// Isolate each run.
 	if _, err := st.Pool.Exec(ctx,
-		"TRUNCATE users, refresh_tokens, courts, check_ins, crowd_reports, court_votes, court_photos, flags, seed_regions CASCADE"); err != nil {
+		"TRUNCATE users, refresh_tokens, courts, check_ins, crowd_reports, court_votes, court_photos, flags, seed_regions, sessions, session_rsvps, court_messages CASCADE"); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 	return st
@@ -263,7 +263,7 @@ func TestOSMUpsertIdempotent(t *testing.T) {
 	}
 
 	// Simulate the court getting verified by the crowd, then a re-import.
-	if err := st.Queries.PromoteCourtIfPending(ctx, first.ID); err != nil {
+	if _, err := st.Queries.PromoteCourtIfPending(ctx, first.ID); err != nil {
 		t.Fatalf("promote: %v", err)
 	}
 	second, err := st.Queries.UpsertOSMCourt(ctx, gen.UpsertOSMCourtParams{
@@ -336,7 +336,7 @@ func TestVerifiedCheckInPromotesCourt(t *testing.T) {
 	uid := createUser(t, st, "promote@test.local")
 	court := createCourt(t, st, "Pending Court", ruckerLat, ruckerLng, uid)
 
-	if err := st.Queries.PromoteCourtIfPending(ctx, court.ID); err != nil {
+	if _, err := st.Queries.PromoteCourtIfPending(ctx, court.ID); err != nil {
 		t.Fatalf("promote: %v", err)
 	}
 	got, err := st.Queries.GetCourt(ctx, court.ID)
@@ -345,5 +345,168 @@ func TestVerifiedCheckInPromotesCourt(t *testing.T) {
 	}
 	if got.Status != "verified" {
 		t.Errorf("status = %q, want verified", got.Status)
+	}
+}
+
+func TestPhase3Sessions(t *testing.T) {
+	st := testStore(t)
+	ctx := context.Background()
+	planner := createUser(t, st, "planner@test.local")
+	joiner := createUser(t, st, "joiner@test.local")
+	court := createCourt(t, st, "Session Court", ruckerLat, ruckerLng, planner)
+
+	starts := time.Now().Add(3 * time.Hour).Truncate(time.Second)
+	sess, err := st.Queries.CreateSession(ctx, gen.CreateSessionParams{
+		CourtID: court.ID, CreatedBy: planner, StartsAt: starts,
+	})
+	if err != nil {
+		t.Fatalf("create session: %v", err)
+	}
+
+	for _, uid := range []uuid.UUID{planner, joiner} {
+		if err := st.Queries.UpsertRSVP(ctx, gen.UpsertRSVPParams{
+			SessionID: sess.ID, UserID: uid, Status: "going",
+		}); err != nil {
+			t.Fatalf("rsvp: %v", err)
+		}
+	}
+
+	rows, err := st.Queries.ListUpcomingSessions(ctx, gen.ListUpcomingSessionsParams{
+		CourtID: court.ID, ViewerID: joiner,
+	})
+	if err != nil {
+		t.Fatalf("list sessions: %v", err)
+	}
+	if len(rows) != 1 || rows[0].GoingCount != 2 || rows[0].MyRsvp != "going" {
+		t.Fatalf("want 1 session, 2 going, viewer going; got %+v", rows)
+	}
+
+	// Flipping to out drops the count; anonymous viewers see no my_rsvp.
+	if err := st.Queries.UpsertRSVP(ctx, gen.UpsertRSVPParams{
+		SessionID: sess.ID, UserID: joiner, Status: "out",
+	}); err != nil {
+		t.Fatalf("rsvp out: %v", err)
+	}
+	rows, _ = st.Queries.ListUpcomingSessions(ctx, gen.ListUpcomingSessionsParams{
+		CourtID: court.ID, ViewerID: uuid.Nil,
+	})
+	if len(rows) != 1 || rows[0].GoingCount != 1 || rows[0].MyRsvp != "" {
+		t.Fatalf("want 1 going and empty my_rsvp for anon; got %+v", rows)
+	}
+
+	// Only the creator can cancel.
+	n, err := st.Queries.CancelSession(ctx, gen.CancelSessionParams{ID: sess.ID, CreatedBy: joiner})
+	if err != nil || n != 0 {
+		t.Fatalf("non-creator cancel: n=%d err=%v, want 0 rows", n, err)
+	}
+	n, err = st.Queries.CancelSession(ctx, gen.CancelSessionParams{ID: sess.ID, CreatedBy: planner})
+	if err != nil || n != 1 {
+		t.Fatalf("creator cancel: n=%d err=%v, want 1 row", n, err)
+	}
+	rows, _ = st.Queries.ListUpcomingSessions(ctx, gen.ListUpcomingSessionsParams{
+		CourtID: court.ID, ViewerID: uuid.Nil,
+	})
+	if len(rows) != 0 {
+		t.Fatalf("canceled session still listed: %+v", rows)
+	}
+}
+
+func TestPhase3ChatAndModeration(t *testing.T) {
+	st := testStore(t)
+	ctx := context.Background()
+	uid := createUser(t, st, "chatter@test.local")
+	court := createCourt(t, st, "Chat Court", ruckerLat, ruckerLng, uid)
+
+	msg, err := st.Queries.CreateCourtMessage(ctx, gen.CreateCourtMessageParams{
+		CourtID: court.ID, UserID: uid, Body: "who's running at 6?",
+	})
+	if err != nil {
+		t.Fatalf("create message: %v", err)
+	}
+	if msg.DisplayName != "Test User" {
+		t.Errorf("display_name = %q", msg.DisplayName)
+	}
+
+	last, err := st.Queries.LastMessageAt(ctx, uid)
+	if err != nil || time.Since(last) > time.Minute {
+		t.Fatalf("last message at = %v err=%v, want just now", last, err)
+	}
+
+	rows, err := st.Queries.ListCourtMessages(ctx, court.ID)
+	if err != nil || len(rows) != 1 {
+		t.Fatalf("list messages: %d rows, err=%v", len(rows), err)
+	}
+
+	// Hidden messages disappear from the list and reappear on unhide.
+	if n, err := st.Queries.SetMessageHidden(ctx, gen.SetMessageHiddenParams{ID: msg.ID, Hidden: true}); err != nil || n != 1 {
+		t.Fatalf("hide: n=%d err=%v", n, err)
+	}
+	if rows, _ = st.Queries.ListCourtMessages(ctx, court.ID); len(rows) != 0 {
+		t.Fatal("hidden message still listed")
+	}
+	if n, err := st.Queries.SetMessageHidden(ctx, gen.SetMessageHiddenParams{ID: msg.ID, Hidden: false}); err != nil || n != 1 {
+		t.Fatalf("unhide: n=%d err=%v", n, err)
+	}
+	if rows, _ = st.Queries.ListCourtMessages(ctx, court.ID); len(rows) != 1 {
+		t.Fatal("unhidden message not listed")
+	}
+}
+
+func TestPhase3ReputationWeighting(t *testing.T) {
+	st := testStore(t)
+	ctx := context.Background()
+	submitter := createUser(t, st, "submitter@test.local")
+	vet := createUser(t, st, "veteran@test.local")
+	rookie := createUser(t, st, "rookie@test.local")
+	court := createCourt(t, st, "Weighted Court", ruckerLat, ruckerLng, submitter)
+
+	// 60 reputation lands in the 2x tier (50-99).
+	if err := st.Queries.AddReputation(ctx, gen.AddReputationParams{ID: vet, Reputation: 60}); err != nil {
+		t.Fatalf("add reputation: %v", err)
+	}
+	for _, v := range []struct {
+		uid  uuid.UUID
+		vote int16
+	}{{vet, 1}, {rookie, -1}} {
+		if err := st.Queries.UpsertCourtVote(ctx, gen.UpsertCourtVoteParams{
+			CourtID: court.ID, UserID: v.uid, Vote: v.vote,
+		}); err != nil {
+			t.Fatalf("vote: %v", err)
+		}
+	}
+	stats, err := st.Queries.CourtVoteStatsWeighted(ctx, court.ID)
+	if err != nil {
+		t.Fatalf("weighted stats: %v", err)
+	}
+	// vet: +1 × 2, rookie: −1 × 1.
+	if stats.NetWeighted != 1 || stats.WeightedUpvotes != 2 {
+		t.Fatalf("weighted = %+v, want net 1, upvotes 2", stats)
+	}
+
+	// Check-in reputation guard: first check-in has no prior, second does.
+	d := float32(5)
+	ci1, err := st.Queries.CreateCheckIn(ctx, gen.CreateCheckInParams{
+		CourtID: court.ID, UserID: rookie, Source: "manual", Lng: ruckerLng, Lat: ruckerLat, DistanceM: &d,
+	})
+	if err != nil {
+		t.Fatalf("check-in: %v", err)
+	}
+	recent, err := st.Queries.HasRecentCheckInAtCourt(ctx, gen.HasRecentCheckInAtCourtParams{
+		UserID: rookie, CourtID: court.ID, ExcludeID: ci1.ID,
+	})
+	if err != nil || recent {
+		t.Fatalf("first check-in: recent=%v err=%v, want false", recent, err)
+	}
+	ci2, err := st.Queries.CreateCheckIn(ctx, gen.CreateCheckInParams{
+		CourtID: court.ID, UserID: rookie, Source: "manual", Lng: ruckerLng, Lat: ruckerLat, DistanceM: &d,
+	})
+	if err != nil {
+		t.Fatalf("second check-in: %v", err)
+	}
+	recent, err = st.Queries.HasRecentCheckInAtCourt(ctx, gen.HasRecentCheckInAtCourtParams{
+		UserID: rookie, CourtID: court.ID, ExcludeID: ci2.ID,
+	})
+	if err != nil || !recent {
+		t.Fatalf("second check-in: recent=%v err=%v, want true", recent, err)
 	}
 }

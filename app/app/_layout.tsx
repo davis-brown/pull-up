@@ -49,6 +49,10 @@ function ThemedApp() {
           options={{ title: "Report the crowd", presentation: "modal" }}
         />
         <Stack.Screen
+          name="court/[id]/plan"
+          options={{ title: "Plan a run", presentation: "modal" }}
+        />
+        <Stack.Screen
           name="court/new"
           options={{ title: "Add a court", presentation: "modal" }}
         />

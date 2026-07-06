@@ -41,6 +41,15 @@ type Court struct {
 	UpdatedAt   time.Time  `json:"updated_at"`
 }
 
+type CourtMessage struct {
+	ID        uuid.UUID  `json:"id"`
+	CourtID   uuid.UUID  `json:"court_id"`
+	UserID    uuid.UUID  `json:"user_id"`
+	Body      string     `json:"body"`
+	HiddenAt  *time.Time `json:"hidden_at"`
+	CreatedAt time.Time  `json:"created_at"`
+}
+
 type CourtPhoto struct {
 	ID         uuid.UUID `json:"id"`
 	CourtID    uuid.UUID `json:"court_id"`
@@ -110,6 +119,24 @@ type SeedRegion struct {
 	SeededAt    *time.Time `json:"seeded_at"`
 	CreatedAt   time.Time  `json:"created_at"`
 	UpdatedAt   time.Time  `json:"updated_at"`
+}
+
+type Session struct {
+	ID         uuid.UUID  `json:"id"`
+	CourtID    uuid.UUID  `json:"court_id"`
+	CreatedBy  uuid.UUID  `json:"created_by"`
+	StartsAt   time.Time  `json:"starts_at"`
+	Note       *string    `json:"note"`
+	CanceledAt *time.Time `json:"canceled_at"`
+	CreatedAt  time.Time  `json:"created_at"`
+}
+
+type SessionRsvp struct {
+	SessionID uuid.UUID `json:"session_id"`
+	UserID    uuid.UUID `json:"user_id"`
+	Status    string    `json:"status"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }
 
 type User struct {
