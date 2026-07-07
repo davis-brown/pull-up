@@ -18,13 +18,31 @@ Requirements: Go 1.23+, Node 20+, Docker (for Postgres+PostGIS), and
 
 ```sh
 make dev            # start postgres+postgis and run the API on :8080
-make test           # go tests (integration tests need TEST_DATABASE_URL or the compose DB)
 make seed-osm BBOX=30.19,-97.87,30.40,-97.65   # import OSM courts for a bbox (S,W,N,E)
 
 cd app && npm install
 npx expo run:ios    # dev build — Expo Go does NOT work (MapLibre is a native module)
 npx expo start --web
 ```
+
+### Tests
+
+```sh
+make test           # server: unit tests only (DB-backed tests skip without TEST_DATABASE_URL)
+make test-app       # app: jest unit tests (lib/api.ts token refresh & auth client)
+
+# Server integration tests (store queries + full HTTP API) need a scratch
+# Postgres with PostGIS — e.g. a second database on the compose instance:
+TEST_DATABASE_URL=postgres://pullup:pullup@localhost:5432/pullup_test?sslmode=disable \
+  make test
+```
+
+The API integration tests in `server/internal/api` spin up the real router
+against the test database and drive it over HTTP: auth (register/login/
+refresh rotation/logout), courts (create/dupe-detect/vote thresholds),
+geo-verified check-ins, crowd reports, photos, favorites, push tokens,
+flags, and the whole admin/moderation flow. CI runs all of this plus the
+app's typecheck and jest suite on every push.
 
 The API runs its migrations automatically on startup. Config is env-based —
 see `server/internal/config/config.go` (`DATABASE_URL`, `JWT_SECRET`, `PORT`).
@@ -41,6 +59,26 @@ The only app config is `EXPO_PUBLIC_API_URL` — see `app/.env.example`.
 - **Passive geofencing** (phase 2, native only, opt-in) — the app monitors
   geofences for nearby courts and either prompts ("Looks like you're at Rucker
   Park — check in?") or checks in automatically, per user setting.
+
+## Moderation & admins
+
+Anyone signed in can report a court, photo, or crowd report (flag icons in
+the app → `POST /flags`). Admins get a moderation queue (Profile →
+"Moderation queue") to review open flags, reject courts, remove photos, and
+resolve reports.
+
+Admin rights are managed in-app with a security model designed to avoid
+both self-escalation and lock-out:
+
+- **Bootstrap the first admin out-of-band** (one-time, direct SQL):
+  `UPDATE users SET is_admin = true WHERE email = 'you@example.com';`
+- **Every admin after that** is promoted (or demoted) by an existing admin
+  from the moderation screen — `POST /admin/users/{id}/admin`, gated by
+  `is_admin` checked live per request, never baked into the JWT.
+- **Demoting the last remaining admin is rejected** server-side, so the
+  account base can never lose moderation access entirely.
+- **Every promote/demote is recorded** in the `admin_actions` audit table
+  and shown in the moderation screen's "Recent admin activity" feed.
 
 ## Deploying (Cloudflare)
 
