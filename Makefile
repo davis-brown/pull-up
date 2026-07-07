@@ -1,6 +1,6 @@
 DATABASE_URL ?= postgres://pullup:pullup@localhost:5432/pullup?sslmode=disable
 
-.PHONY: dev db-up db-down api test vet generate seed-osm app app-web typecheck
+.PHONY: dev db-up db-down api test test-app vet generate seed-osm app app-web typecheck
 
 ## Backend ---------------------------------------------------------------
 
@@ -16,8 +16,13 @@ api:
 
 dev: db-up api
 
+# DB-backed tests (store queries + HTTP API) skip unless TEST_DATABASE_URL
+# points at a scratch Postgres with PostGIS.
 test:
 	cd server && go test ./...
+
+test-app:
+	cd app && npm test
 
 vet:
 	cd server && go vet ./...
