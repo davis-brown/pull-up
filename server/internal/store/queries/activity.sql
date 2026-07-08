@@ -42,10 +42,15 @@ INSERT INTO crowd_reports (court_id, user_id, player_count, run_quality, note)
 VALUES ($1, $2, $3, $4, $5)
 RETURNING id, court_id, user_id, player_count, run_quality, note, created_at;
 
+-- viewer_id (zero UUID for anonymous) hides reports from blocked users.
 -- name: ListRecentReports :many
 SELECT cr.id, cr.user_id, u.display_name, cr.player_count, cr.run_quality, cr.note, cr.created_at
 FROM crowd_reports cr
 JOIN users u ON u.id = cr.user_id
-WHERE cr.court_id = $1 AND cr.created_at > now() - interval '2 hours'
+WHERE cr.court_id = sqlc.arg(court_id) AND cr.created_at > now() - interval '2 hours'
+  AND NOT EXISTS (
+      SELECT 1 FROM blocked_users b
+      WHERE b.blocker_id = sqlc.arg(viewer_id) AND b.blocked_id = cr.user_id
+  )
 ORDER BY cr.created_at DESC
 LIMIT 20;

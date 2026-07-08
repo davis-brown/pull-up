@@ -325,9 +325,9 @@ func (s *Server) handleCreateFlag(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	switch req.EntityType {
-	case "court", "photo", "report":
+	case "court", "photo", "report", "message", "session":
 	default:
-		writeError(w, http.StatusBadRequest, "entity_type must be court, photo, or report")
+		writeError(w, http.StatusBadRequest, "entity_type must be court, photo, report, message, or session")
 		return
 	}
 	req.Reason = strings.TrimSpace(req.Reason)

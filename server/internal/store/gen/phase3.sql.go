@@ -229,9 +229,18 @@ SELECT m.id, m.court_id, m.user_id, u.display_name, m.body, m.created_at
 FROM court_messages m
 JOIN users u ON u.id = m.user_id
 WHERE m.court_id = $1 AND m.hidden_at IS NULL
+  AND NOT EXISTS (
+      SELECT 1 FROM blocked_users b
+      WHERE b.blocker_id = $2 AND b.blocked_id = m.user_id
+  )
 ORDER BY m.created_at DESC
 LIMIT 50
 `
+
+type ListCourtMessagesParams struct {
+	CourtID  uuid.UUID `json:"court_id"`
+	ViewerID uuid.UUID `json:"viewer_id"`
+}
 
 type ListCourtMessagesRow struct {
 	ID          uuid.UUID `json:"id"`
@@ -243,8 +252,9 @@ type ListCourtMessagesRow struct {
 }
 
 // Latest 50 visible messages, newest first (client reverses for display).
-func (q *Queries) ListCourtMessages(ctx context.Context, courtID uuid.UUID) ([]ListCourtMessagesRow, error) {
-	rows, err := q.db.Query(ctx, listCourtMessages, courtID)
+// viewer_id (zero UUID for anonymous) hides users the viewer has blocked.
+func (q *Queries) ListCourtMessages(ctx context.Context, arg ListCourtMessagesParams) ([]ListCourtMessagesRow, error) {
+	rows, err := q.db.Query(ctx, listCourtMessages, arg.CourtID, arg.ViewerID)
 	if err != nil {
 		return nil, err
 	}
@@ -323,6 +333,10 @@ LEFT JOIN session_rsvps mine
 WHERE s.court_id = $2
   AND s.canceled_at IS NULL
   AND s.starts_at > now() - interval '2 hours'
+  AND NOT EXISTS (
+      SELECT 1 FROM blocked_users b
+      WHERE b.blocker_id = $1 AND b.blocked_id = s.created_by
+  )
 ORDER BY s.starts_at
 LIMIT 20
 `

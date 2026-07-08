@@ -18,6 +18,12 @@ type AdminAction struct {
 	CreatedAt    time.Time `json:"created_at"`
 }
 
+type BlockedUser struct {
+	BlockerID uuid.UUID `json:"blocker_id"`
+	BlockedID uuid.UUID `json:"blocked_id"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
 type CheckIn struct {
 	ID               uuid.UUID  `json:"id"`
 	CourtID          uuid.UUID  `json:"court_id"`

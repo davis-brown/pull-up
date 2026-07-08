@@ -148,7 +148,13 @@ export interface NearbyDuplicate {
   distance_m: number;
 }
 
-export type FlagEntityType = "court" | "photo" | "report";
+export type FlagEntityType = "court" | "photo" | "report" | "message" | "session";
+
+export interface BlockedUser {
+  blocked_id: string;
+  display_name: string;
+  created_at: string;
+}
 export type PhotoStatus = "visible" | "flagged" | "removed";
 
 export interface Flag {

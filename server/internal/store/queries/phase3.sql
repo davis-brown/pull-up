@@ -31,6 +31,10 @@ LEFT JOIN session_rsvps mine
 WHERE s.court_id = sqlc.arg(court_id)
   AND s.canceled_at IS NULL
   AND s.starts_at > now() - interval '2 hours'
+  AND NOT EXISTS (
+      SELECT 1 FROM blocked_users b
+      WHERE b.blocker_id = sqlc.arg(viewer_id) AND b.blocked_id = s.created_by
+  )
 ORDER BY s.starts_at
 LIMIT 20;
 
@@ -59,11 +63,16 @@ RETURNING id, court_id, user_id,
     body, created_at;
 
 -- Latest 50 visible messages, newest first (client reverses for display).
+-- viewer_id (zero UUID for anonymous) hides users the viewer has blocked.
 -- name: ListCourtMessages :many
 SELECT m.id, m.court_id, m.user_id, u.display_name, m.body, m.created_at
 FROM court_messages m
 JOIN users u ON u.id = m.user_id
-WHERE m.court_id = $1 AND m.hidden_at IS NULL
+WHERE m.court_id = sqlc.arg(court_id) AND m.hidden_at IS NULL
+  AND NOT EXISTS (
+      SELECT 1 FROM blocked_users b
+      WHERE b.blocker_id = sqlc.arg(viewer_id) AND b.blocked_id = m.user_id
+  )
 ORDER BY m.created_at DESC
 LIMIT 50;
 

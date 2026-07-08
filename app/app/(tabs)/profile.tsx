@@ -1,5 +1,5 @@
-import { useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import { useCallback, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Button, Card, Chip, ErrorText } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
@@ -9,7 +9,14 @@ import {
   setGeofenceMode,
   type GeofenceMode,
 } from "@/lib/geofencing";
-import { useCheckInHistory, useCheckOut, useCurrentCheckIn } from "@/lib/hooks";
+import {
+  useBlockedUsers,
+  useCheckInHistory,
+  useCheckOut,
+  useCurrentCheckIn,
+  useDeleteAccount,
+  useSetBlocked,
+} from "@/lib/hooks";
 import { useTheme, useThemePreference, type ThemePreference } from "@/lib/theme";
 
 const appearanceOptions: Array<{ value: ThemePreference; label: string }> = [
@@ -35,19 +42,41 @@ export default function ProfileScreen() {
   const [geoMode, setGeoMode] = useState<GeofenceMode>("off");
   const [geoError, setGeoError] = useState<string | null>(null);
   const { data: history } = useCheckInHistory();
+  const { data: blocked } = useBlockedUsers();
+  const setBlocked = useSetBlocked();
+  const deleteAccount = useDeleteAccount();
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  useEffect(() => {
-    void getGeofenceMode().then(setGeoMode);
-  }, []);
+  // Re-read on focus: the disclosure modal may have changed the mode.
+  useFocusEffect(
+    useCallback(() => {
+      void getGeofenceMode().then(setGeoMode);
+    }, []),
+  );
 
   const changeGeoMode = async (mode: GeofenceMode) => {
     setGeoError(null);
+    // Enabling from Off requires the prominent background-location
+    // disclosure first; the modal performs the actual enable.
+    if (mode !== "off" && geoMode === "off") {
+      router.push(`/location-disclosure?mode=${mode}`);
+      return;
+    }
     const result = await setGeofenceMode(mode);
     if (result.ok) {
       setGeoMode(mode);
     } else {
       setGeoError(result.reason ?? "Could not enable auto check-in.");
     }
+  };
+
+  const doDeleteAccount = () => {
+    setDeleteError(null);
+    deleteAccount.mutate(undefined, {
+      onSuccess: () => void signOut(),
+      onError: (e) => setDeleteError(e.message),
+    });
   };
 
   return (
@@ -179,7 +208,65 @@ export default function ProfileScreen() {
         />
       )}
 
+      {(blocked?.length ?? 0) > 0 && (
+        <Card>
+          <Text style={[t.type.label, { color: t.colors.textSecondary, marginBottom: t.spacing.xs }]}>
+            Blocked users
+          </Text>
+          {blocked!.map((b) => (
+            <View key={b.blocked_id} style={[styles.blockedRow, { borderTopColor: t.colors.border }]}>
+              <Text style={[t.type.bodyMedium, { color: t.colors.textPrimary }]} numberOfLines={1}>
+                {b.display_name}
+              </Text>
+              <Pressable
+                onPress={() => setBlocked.mutate({ userId: b.blocked_id, blocked: false })}
+                hitSlop={8}
+                disabled={setBlocked.isPending}
+              >
+                <Text style={[t.type.caption, { color: t.colors.accent }]}>Unblock</Text>
+              </Pressable>
+            </View>
+          ))}
+        </Card>
+      )}
+
+      <Card>
+        <View style={styles.legalRow}>
+          <Pressable onPress={() => router.push("/privacy")} hitSlop={8}>
+            <Text style={[t.type.caption, { color: t.colors.textSecondary }]}>Privacy Policy</Text>
+          </Pressable>
+          <Pressable onPress={() => router.push("/terms")} hitSlop={8}>
+            <Text style={[t.type.caption, { color: t.colors.textSecondary }]}>Terms of Service</Text>
+          </Pressable>
+        </View>
+      </Card>
+
       <Button title="Sign out" variant="danger" onPress={() => void signOut()} />
+
+      {confirmingDelete ? (
+        <Card tone="warning">
+          <Text style={[t.type.label, { color: t.colors.warning }]}>Delete account?</Text>
+          <Text style={[t.type.caption, { color: t.colors.textSecondary, marginTop: t.spacing.xs, marginBottom: t.spacing.sm }]}>
+            This permanently deletes your account, check-ins, messages, photos,
+            and favorites. Courts you added stay on the map without your name.
+            This cannot be undone.
+          </Text>
+          <ErrorText message={deleteError} />
+          <Button
+            title="Yes, delete my account forever"
+            variant="danger"
+            busy={deleteAccount.isPending}
+            onPress={doDeleteAccount}
+          />
+          <Button title="Keep my account" variant="ghost" onPress={() => setConfirmingDelete(false)} />
+        </Card>
+      ) : (
+        <Pressable onPress={() => setConfirmingDelete(true)} hitSlop={8}>
+          <Text style={[t.type.caption, styles.deleteLink, { color: t.colors.textMuted }]}>
+            Delete account
+          </Text>
+        </Pressable>
+      )}
 
       <Text
         style={[
@@ -206,6 +293,16 @@ const styles = StyleSheet.create({
     borderTopWidth: StyleSheet.hairlineWidth,
   },
   historyName: { flex: 1 },
+  blockedRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  legalRow: { flexDirection: "row", justifyContent: "space-around" },
+  deleteLink: { textAlign: "center", marginTop: 14, textDecorationLine: "underline" },
   liveRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   liveDot: { width: 8, height: 8, borderRadius: 4 },
   attribution: { textAlign: "center", lineHeight: 18 },

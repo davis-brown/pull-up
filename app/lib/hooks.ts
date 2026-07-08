@@ -7,6 +7,7 @@ import { api, API_URL } from "./api";
 import type {
   AdminAction,
   AdminUser,
+  BlockedUser,
   CheckIn,
   CheckInHistoryItem,
   CourtActivity,
@@ -391,6 +392,35 @@ export function useAdminActions() {
       const res = await api<{ actions: AdminAction[] }>("/admin/actions");
       return res.actions;
     },
+  });
+}
+
+export function useBlockedUsers() {
+  return useQuery({
+    queryKey: ["me", "blocked"],
+    queryFn: async () => {
+      const res = await api<{ blocked: BlockedUser[] }>("/me/blocked");
+      return res.blocked;
+    },
+  });
+}
+
+export function useSetBlocked() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ userId, blocked }: { userId: string; blocked: boolean }) =>
+      api<void>(`/users/${userId}/block`, { method: blocked ? "PUT" : "DELETE" }),
+    onSuccess: () => {
+      // Blocking changes what chat/reports/sessions show — refetch broadly.
+      void qc.invalidateQueries({ queryKey: ["me", "blocked"] });
+      void qc.invalidateQueries({ queryKey: ["courts"] });
+    },
+  });
+}
+
+export function useDeleteAccount() {
+  return useMutation({
+    mutationFn: () => api<void>("/me", { method: "DELETE" }),
   });
 }
 
