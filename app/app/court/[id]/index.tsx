@@ -128,6 +128,13 @@ export default function CourtDetailScreen() {
               {court.name}
             </Text>
             <Pressable
+              onPress={() => router.push(`/flag?entityType=court&entityId=${id}`)}
+              hitSlop={10}
+              style={{ marginRight: t.spacing.md }}
+            >
+              <Ionicons name="flag-outline" size={22} color={t.colors.textMuted} />
+            </Pressable>
+            <Pressable
               onPress={() => setFavorite.mutate(!isFavorite)}
               hitSlop={10}
               disabled={setFavorite.isPending}
@@ -201,11 +208,19 @@ export default function CourtDetailScreen() {
           {(photos?.length ?? 0) + externalPhotos.length > 0 ? (
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: t.spacing.sm }}>
               {photos?.map((p) => (
-                <Image
-                  key={p.id}
-                  source={{ uri: photoURL(p.storage_key) }}
-                  style={[styles.photo, { borderRadius: t.radius.md }]}
-                />
+                <View key={p.id} style={styles.photoWrap}>
+                  <Image
+                    source={{ uri: photoURL(p.storage_key) }}
+                    style={[styles.photo, { borderRadius: t.radius.md }]}
+                  />
+                  <Pressable
+                    onPress={() => router.push(`/flag?entityType=photo&entityId=${p.id}`)}
+                    hitSlop={8}
+                    style={[styles.photoFlag, { backgroundColor: t.colors.background + "cc" }]}
+                  >
+                    <Ionicons name="flag-outline" size={16} color={t.colors.textMuted} />
+                  </Pressable>
+                </View>
               ))}
               {externalPhotos.map((p) => (
                 <Pressable key={p.id} onPress={() => void Linking.openURL(p.page_url)}>
@@ -330,10 +345,18 @@ export default function CourtDetailScreen() {
                   { borderTopColor: t.colors.border, marginTop: t.spacing.sm },
                 ]}
               >
-                <Text style={[t.type.bodyMedium, { color: t.colors.textPrimary }]}>
-                  {r.run_quality ? runQualityLabel[r.run_quality] : "Report"}
-                  {r.player_count != null ? `  ·  ~${r.player_count} playing` : ""}
-                </Text>
+                <View style={styles.titleRow}>
+                  <Text style={[t.type.bodyMedium, styles.titleText, { color: t.colors.textPrimary }]}>
+                    {r.run_quality ? runQualityLabel[r.run_quality] : "Report"}
+                    {r.player_count != null ? `  ·  ~${r.player_count} playing` : ""}
+                  </Text>
+                  <Pressable
+                    onPress={() => router.push(`/flag?entityType=report&entityId=${r.id}`)}
+                    hitSlop={10}
+                  >
+                    <Ionicons name="flag-outline" size={16} color={t.colors.textMuted} />
+                  </Pressable>
+                </View>
                 {r.note ? (
                   <Text
                     style={[
@@ -371,7 +394,15 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   titleText: { flex: 1 },
-  photo: { width: 160, height: 120, marginRight: 10 },
+  photo: { width: 160, height: 120 },
+  photoWrap: { marginRight: 10 },
+  photoFlag: {
+    position: "absolute",
+    top: 6,
+    right: 6,
+    padding: 4,
+    borderRadius: 12,
+  },
   voteRow: { flexDirection: "row", gap: 10 },
   voteButton: { flex: 1 },
   liveRow: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 },

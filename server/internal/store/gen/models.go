@@ -10,6 +10,14 @@ import (
 	"github.com/google/uuid"
 )
 
+type AdminAction struct {
+	ID           uuid.UUID `json:"id"`
+	ActorID      uuid.UUID `json:"actor_id"`
+	Action       string    `json:"action"`
+	TargetUserID uuid.UUID `json:"target_user_id"`
+	CreatedAt    time.Time `json:"created_at"`
+}
+
 type CheckIn struct {
 	ID               uuid.UUID  `json:"id"`
 	CourtID          uuid.UUID  `json:"court_id"`

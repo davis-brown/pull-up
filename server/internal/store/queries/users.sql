@@ -1,15 +1,15 @@
 -- name: CreateUser :one
 INSERT INTO users (email, password_hash, display_name)
 VALUES ($1, $2, $3)
-RETURNING id, email, display_name, avatar_url, reputation, created_at;
+RETURNING id, email, display_name, avatar_url, reputation, created_at, is_admin;
 
 -- name: GetUserByEmail :one
-SELECT id, email, password_hash, display_name, avatar_url, reputation, created_at
+SELECT id, email, password_hash, display_name, avatar_url, reputation, created_at, is_admin
 FROM users
 WHERE email = $1;
 
 -- name: GetUserByID :one
-SELECT id, email, display_name, avatar_url, reputation, created_at
+SELECT id, email, display_name, avatar_url, reputation, created_at, is_admin
 FROM users
 WHERE id = $1;
 
@@ -18,7 +18,7 @@ UPDATE users SET
     display_name = coalesce(sqlc.narg('display_name'), display_name),
     avatar_url   = coalesce(sqlc.narg('avatar_url'), avatar_url)
 WHERE id = sqlc.arg('id')
-RETURNING id, email, display_name, avatar_url, reputation, created_at;
+RETURNING id, email, display_name, avatar_url, reputation, created_at, is_admin;
 
 -- name: CreateRefreshToken :one
 INSERT INTO refresh_tokens (user_id, token_hash, expires_at)

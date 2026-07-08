@@ -1,0 +1,254 @@
+package api_test
+
+import (
+	"context"
+	"net/http"
+	"testing"
+
+	"github.com/google/uuid"
+
+	"github.com/davisbrown/pull-up/server/internal/store"
+	"github.com/davisbrown/pull-up/server/internal/store/gen"
+)
+
+// bootstrapAdmin promotes a user the same way an operator would for the
+// very first admin: directly against the store, out-of-band of the API.
+func bootstrapAdmin(t *testing.T, st *store.Store, userID string) {
+	t.Helper()
+	id, err := uuid.Parse(userID)
+	if err != nil {
+		t.Fatalf("parse user id: %v", err)
+	}
+	if _, err := st.Queries.SetUserAdmin(context.Background(), gen.SetUserAdminParams{ID: id, IsAdmin: true}); err != nil {
+		t.Fatalf("bootstrap admin: %v", err)
+	}
+}
+
+func TestCreateFlagValidation(t *testing.T) {
+	ts, _ := newTestServer(t)
+	u := registerUser(t, ts, "flagger@test.local", "Flagger")
+	court := createTestCourt(t, ts, u.AccessToken, "Flaggable Court", ruckerLat, ruckerLng)
+
+	resp := doJSON(t, ts, http.MethodPost, "/flags", u.AccessToken, map[string]any{
+		"entity_type": "vehicle", "entity_id": court.ID, "reason": "not a real type",
+	})
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("bad entity_type: status %d, want 400", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	resp = doJSON(t, ts, http.MethodPost, "/flags", u.AccessToken, map[string]any{
+		"entity_type": "court", "entity_id": court.ID, "reason": "",
+	})
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("empty reason: status %d, want 400", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	resp = doJSON(t, ts, http.MethodPost, "/flags", u.AccessToken, map[string]any{
+		"entity_type": "court", "entity_id": court.ID, "reason": "Wrong location",
+	})
+	if resp.StatusCode != http.StatusCreated {
+		defer resp.Body.Close()
+		t.Fatalf("valid flag: status %d: %s", resp.StatusCode, readBody(t, resp))
+	}
+	resp.Body.Close()
+}
+
+func TestAdminRoutesForbiddenForRegularUsers(t *testing.T) {
+	ts, _ := newTestServer(t)
+	u := registerUser(t, ts, "civilian@test.local", "Civilian")
+
+	for _, req := range []struct {
+		method, path string
+	}{
+		{http.MethodGet, "/admin/flags"},
+		{http.MethodGet, "/admin/users?q=a"},
+		{http.MethodGet, "/admin/actions"},
+	} {
+		resp := doJSON(t, ts, req.method, req.path, u.AccessToken, nil)
+		if resp.StatusCode != http.StatusForbidden {
+			t.Errorf("%s %s as non-admin: status %d, want 403", req.method, req.path, resp.StatusCode)
+		}
+		resp.Body.Close()
+	}
+}
+
+func TestAdminFlagAndModerationFlow(t *testing.T) {
+	ts, st := newTestServer(t)
+	admin := registerUser(t, ts, "modadmin@test.local", "ModAdmin")
+	bootstrapAdmin(t, st, admin.User.ID)
+	reporter := registerUser(t, ts, "modreporter@test.local", "ModReporter")
+
+	court := createTestCourt(t, ts, reporter.AccessToken, "Under Review Court", ruckerLat, ruckerLng)
+	resp := doJSON(t, ts, http.MethodPost, "/flags", reporter.AccessToken, map[string]any{
+		"entity_type": "court", "entity_id": court.ID, "reason": "Doesn't exist",
+	})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("create flag: status %d", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	resp = doJSON(t, ts, http.MethodGet, "/admin/flags", admin.AccessToken, nil)
+	flags := decodeJSON[struct {
+		Flags []struct {
+			ID         string `json:"id"`
+			EntityType string `json:"entity_type"`
+			EntityID   string `json:"entity_id"`
+		} `json:"flags"`
+	}](t, resp)
+	if len(flags.Flags) != 1 || flags.Flags[0].EntityID != court.ID {
+		t.Fatalf("open flags = %+v, want just the court flag", flags.Flags)
+	}
+	flagID := flags.Flags[0].ID
+
+	// Reject the flagged court.
+	resp = doJSON(t, ts, http.MethodPost, "/admin/courts/"+court.ID+"/status", admin.AccessToken, map[string]string{
+		"status": "rejected",
+	})
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("set court status: status %d", resp.StatusCode)
+	}
+	resp.Body.Close()
+	resp = doJSON(t, ts, http.MethodGet, "/courts/"+court.ID, "", nil)
+	got := decodeJSON[courtResp](t, resp)
+	if got.Status != "rejected" {
+		t.Errorf("court status = %q, want rejected", got.Status)
+	}
+
+	// Bad status values are rejected.
+	resp = doJSON(t, ts, http.MethodPost, "/admin/courts/"+court.ID+"/status", admin.AccessToken, map[string]string{
+		"status": "banned",
+	})
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("invalid court status: status %d, want 400", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	// Resolve the flag; it must drop off the open queue.
+	resp = doJSON(t, ts, http.MethodPost, "/admin/flags/"+flagID+"/resolve", admin.AccessToken, nil)
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("resolve flag: status %d", resp.StatusCode)
+	}
+	resp.Body.Close()
+	resp = doJSON(t, ts, http.MethodGet, "/admin/flags", admin.AccessToken, nil)
+	flags = decodeJSON[struct {
+		Flags []struct {
+			ID         string `json:"id"`
+			EntityType string `json:"entity_type"`
+			EntityID   string `json:"entity_id"`
+		} `json:"flags"`
+	}](t, resp)
+	if len(flags.Flags) != 0 {
+		t.Fatalf("flags after resolve = %+v, want none", flags.Flags)
+	}
+
+	// Photo moderation: upload then remove.
+	resp = doJSON(t, ts, http.MethodPost, "/courts/"+court.ID+"/photos", reporter.AccessToken, map[string]any{})
+	photo := decodeJSON[struct {
+		Photo struct {
+			ID string `json:"id"`
+		} `json:"photo"`
+	}](t, resp)
+
+	resp = doJSON(t, ts, http.MethodPost, "/admin/photos/"+photo.Photo.ID+"/status", admin.AccessToken, map[string]string{
+		"status": "removed",
+	})
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("set photo status: status %d", resp.StatusCode)
+	}
+	resp.Body.Close()
+	resp = doJSON(t, ts, http.MethodGet, "/courts/"+court.ID+"/photos", "", nil)
+	photos := decodeJSON[struct {
+		Photos []map[string]any `json:"photos"`
+	}](t, resp)
+	if len(photos.Photos) != 0 {
+		t.Fatalf("removed photo still listed: %+v", photos.Photos)
+	}
+}
+
+func TestAdminPromoteDemoteAndLastAdminGuard(t *testing.T) {
+	ts, st := newTestServer(t)
+	first := registerUser(t, ts, "firstadmin@test.local", "FirstAdmin")
+	bootstrapAdmin(t, st, first.User.ID)
+	regular := registerUser(t, ts, "promotable@test.local", "Promotable Pat")
+
+	// Search finds the user by name and by email.
+	resp := doJSON(t, ts, http.MethodGet, "/admin/users?q=Promotable", first.AccessToken, nil)
+	found := decodeJSON[struct {
+		Users []struct {
+			ID      string `json:"id"`
+			IsAdmin bool   `json:"is_admin"`
+		} `json:"users"`
+	}](t, resp)
+	if len(found.Users) != 1 || found.Users[0].ID != regular.User.ID || found.Users[0].IsAdmin {
+		t.Fatalf("search result = %+v, want one non-admin match", found.Users)
+	}
+
+	// Promote them.
+	resp = doJSON(t, ts, http.MethodPost, "/admin/users/"+regular.User.ID+"/admin", first.AccessToken, map[string]bool{
+		"is_admin": true,
+	})
+	if resp.StatusCode != http.StatusOK {
+		defer resp.Body.Close()
+		t.Fatalf("promote: status %d: %s", resp.StatusCode, readBody(t, resp))
+	}
+	resp.Body.Close()
+
+	// A freshly promoted admin can use admin routes (their token was
+	// issued before promotion, but authorization is checked live per
+	// request against the DB, not baked into the JWT).
+	resp = doJSON(t, ts, http.MethodGet, "/admin/flags", regular.AccessToken, nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("promoted user hitting admin route: status %d, want 200", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	// With two admins, demoting the first one is fine.
+	resp = doJSON(t, ts, http.MethodPost, "/admin/users/"+first.User.ID+"/admin", regular.AccessToken, map[string]bool{
+		"is_admin": false,
+	})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("demote first admin (not last): status %d", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	// Now there's exactly one admin left; demoting them must be rejected
+	// so nobody can lock the account out of moderation entirely.
+	resp = doJSON(t, ts, http.MethodPost, "/admin/users/"+regular.User.ID+"/admin", regular.AccessToken, map[string]bool{
+		"is_admin": false,
+	})
+	if resp.StatusCode != http.StatusBadRequest {
+		defer resp.Body.Close()
+		t.Fatalf("demote last admin: status %d, want 400: %s", resp.StatusCode, readBody(t, resp))
+	}
+	resp.Body.Close()
+
+	// The demoted first admin can no longer reach admin routes.
+	resp = doJSON(t, ts, http.MethodGet, "/admin/flags", first.AccessToken, nil)
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("demoted user hitting admin route: status %d, want 403", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	// Two admin-changing actions actually succeeded: promote(first→regular)
+	// and demote(regular→first). The rejected self-demote attempt must NOT
+	// appear — the guard runs before anything is written.
+	resp = doJSON(t, ts, http.MethodGet, "/admin/actions", regular.AccessToken, nil)
+	actions := decodeJSON[struct {
+		Actions []struct {
+			Action     string `json:"action"`
+			ActorName  string `json:"actor_name"`
+			TargetName string `json:"target_name"`
+		} `json:"actions"`
+	}](t, resp)
+	if len(actions.Actions) != 2 {
+		t.Fatalf("audit log = %+v, want exactly 2 entries", actions.Actions)
+	}
+	if actions.Actions[0].Action != "demote" || actions.Actions[0].ActorName != "Promotable Pat" || actions.Actions[0].TargetName != "FirstAdmin" {
+		t.Errorf("most recent action = %+v, want Promotable Pat's demote of FirstAdmin", actions.Actions[0])
+	}
+	if actions.Actions[1].Action != "promote" || actions.Actions[1].TargetName != "Promotable Pat" {
+		t.Errorf("oldest action = %+v, want the initial promotion of Promotable Pat", actions.Actions[1])
+	}
+}

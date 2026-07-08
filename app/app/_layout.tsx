@@ -56,6 +56,8 @@ function ThemedApp() {
           name="court/new"
           options={{ title: "Add a court", presentation: "modal" }}
         />
+        <Stack.Screen name="flag" options={{ title: "Report", presentation: "modal" }} />
+        <Stack.Screen name="admin/index" options={{ title: "Moderation" }} />
       </Stack>
     </>
   );
