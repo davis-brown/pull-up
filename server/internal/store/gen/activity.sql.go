@@ -220,9 +220,18 @@ SELECT cr.id, cr.user_id, u.display_name, cr.player_count, cr.run_quality, cr.no
 FROM crowd_reports cr
 JOIN users u ON u.id = cr.user_id
 WHERE cr.court_id = $1 AND cr.created_at > now() - interval '2 hours'
+  AND NOT EXISTS (
+      SELECT 1 FROM blocked_users b
+      WHERE b.blocker_id = $2 AND b.blocked_id = cr.user_id
+  )
 ORDER BY cr.created_at DESC
 LIMIT 20
 `
+
+type ListRecentReportsParams struct {
+	CourtID  uuid.UUID `json:"court_id"`
+	ViewerID uuid.UUID `json:"viewer_id"`
+}
 
 type ListRecentReportsRow struct {
 	ID          uuid.UUID `json:"id"`
@@ -234,8 +243,9 @@ type ListRecentReportsRow struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
-func (q *Queries) ListRecentReports(ctx context.Context, courtID uuid.UUID) ([]ListRecentReportsRow, error) {
-	rows, err := q.db.Query(ctx, listRecentReports, courtID)
+// viewer_id (zero UUID for anonymous) hides reports from blocked users.
+func (q *Queries) ListRecentReports(ctx context.Context, arg ListRecentReportsParams) ([]ListRecentReportsRow, error) {
+	rows, err := q.db.Query(ctx, listRecentReports, arg.CourtID, arg.ViewerID)
 	if err != nil {
 		return nil, err
 	}

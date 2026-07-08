@@ -456,7 +456,7 @@ func TestPhase3ChatAndModeration(t *testing.T) {
 		t.Fatalf("last message at = %v err=%v, want just now", last, err)
 	}
 
-	rows, err := st.Queries.ListCourtMessages(ctx, court.ID)
+	rows, err := st.Queries.ListCourtMessages(ctx, gen.ListCourtMessagesParams{CourtID: court.ID, ViewerID: uuid.Nil})
 	if err != nil || len(rows) != 1 {
 		t.Fatalf("list messages: %d rows, err=%v", len(rows), err)
 	}
@@ -465,13 +465,13 @@ func TestPhase3ChatAndModeration(t *testing.T) {
 	if n, err := st.Queries.SetMessageHidden(ctx, gen.SetMessageHiddenParams{ID: msg.ID, Hidden: true}); err != nil || n != 1 {
 		t.Fatalf("hide: n=%d err=%v", n, err)
 	}
-	if rows, _ = st.Queries.ListCourtMessages(ctx, court.ID); len(rows) != 0 {
+	if rows, _ = st.Queries.ListCourtMessages(ctx, gen.ListCourtMessagesParams{CourtID: court.ID, ViewerID: uuid.Nil}); len(rows) != 0 {
 		t.Fatal("hidden message still listed")
 	}
 	if n, err := st.Queries.SetMessageHidden(ctx, gen.SetMessageHiddenParams{ID: msg.ID, Hidden: false}); err != nil || n != 1 {
 		t.Fatalf("unhide: n=%d err=%v", n, err)
 	}
-	if rows, _ = st.Queries.ListCourtMessages(ctx, court.ID); len(rows) != 1 {
+	if rows, _ = st.Queries.ListCourtMessages(ctx, gen.ListCourtMessagesParams{CourtID: court.ID, ViewerID: uuid.Nil}); len(rows) != 1 {
 		t.Fatal("unhidden message not listed")
 	}
 }
@@ -532,5 +532,61 @@ func TestPhase3ReputationWeighting(t *testing.T) {
 	})
 	if err != nil || !recent {
 		t.Fatalf("second check-in: recent=%v err=%v, want true", recent, err)
+	}
+}
+
+func TestComplianceBlockAndDelete(t *testing.T) {
+	st := testStore(t)
+	ctx := context.Background()
+	alice := createUser(t, st, "alice-comp@test.local")
+	bob := createUser(t, st, "bob-comp@test.local")
+	court := createCourt(t, st, "Compliance Court", ruckerLat, ruckerLng, alice)
+
+	if _, err := st.Queries.CreateCourtMessage(ctx, gen.CreateCourtMessageParams{
+		CourtID: court.ID, UserID: bob, Body: "hello",
+	}); err != nil {
+		t.Fatalf("message: %v", err)
+	}
+
+	// Blocking hides bob's messages from alice, but not from anonymous.
+	if err := st.Queries.BlockUser(ctx, gen.BlockUserParams{BlockerID: alice, BlockedID: bob}); err != nil {
+		t.Fatalf("block: %v", err)
+	}
+	rows, _ := st.Queries.ListCourtMessages(ctx, gen.ListCourtMessagesParams{CourtID: court.ID, ViewerID: alice})
+	if len(rows) != 0 {
+		t.Fatal("blocked user's message still visible to blocker")
+	}
+	rows, _ = st.Queries.ListCourtMessages(ctx, gen.ListCourtMessagesParams{CourtID: court.ID, ViewerID: uuid.Nil})
+	if len(rows) != 1 {
+		t.Fatal("message hidden from anonymous viewer")
+	}
+	blocked, err := st.Queries.ListBlockedUsers(ctx, alice)
+	if err != nil || len(blocked) != 1 || blocked[0].BlockedID != bob {
+		t.Fatalf("blocked list = %+v err=%v", blocked, err)
+	}
+	if err := st.Queries.UnblockUser(ctx, gen.UnblockUserParams{BlockerID: alice, BlockedID: bob}); err != nil {
+		t.Fatalf("unblock: %v", err)
+	}
+	rows, _ = st.Queries.ListCourtMessages(ctx, gen.ListCourtMessagesParams{CourtID: court.ID, ViewerID: alice})
+	if len(rows) != 1 {
+		t.Fatal("message still hidden after unblock")
+	}
+
+	// Deleting alice detaches her court but keeps it, and removes her row.
+	if err := st.Queries.DetachUserFromCourts(ctx, &alice); err != nil {
+		t.Fatalf("detach courts: %v", err)
+	}
+	if err := st.Queries.DetachUserFromResolvedFlags(ctx, &alice); err != nil {
+		t.Fatalf("detach flags: %v", err)
+	}
+	if n, err := st.Queries.DeleteUser(ctx, alice); err != nil || n != 1 {
+		t.Fatalf("delete user: n=%d err=%v", n, err)
+	}
+	got, err := st.Queries.GetCourt(ctx, court.ID)
+	if err != nil {
+		t.Fatalf("court gone after submitter deletion: %v", err)
+	}
+	if got.SubmittedBy != nil {
+		t.Error("submitted_by not detached")
 	}
 }

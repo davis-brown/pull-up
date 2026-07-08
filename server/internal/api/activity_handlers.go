@@ -186,7 +186,9 @@ func (s *Server) handleCourtActivity(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, "list check-ins", err)
 		return
 	}
-	reports, err := s.store.Queries.ListRecentReports(r.Context(), courtID)
+	reports, err := s.store.Queries.ListRecentReports(r.Context(), gen.ListRecentReportsParams{
+		CourtID: courtID, ViewerID: s.optionalUserID(r),
+	})
 	if err != nil {
 		s.internalError(w, "list reports", err)
 		return

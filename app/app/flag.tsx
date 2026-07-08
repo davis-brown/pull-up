@@ -11,6 +11,8 @@ const entityLabels: Record<FlagEntityType, string> = {
   court: "court",
   photo: "photo",
   report: "crowd report",
+  message: "message",
+  session: "planned run",
 };
 
 export default function FlagScreen() {

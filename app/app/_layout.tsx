@@ -58,6 +58,12 @@ function ThemedApp() {
         />
         <Stack.Screen name="flag" options={{ title: "Report", presentation: "modal" }} />
         <Stack.Screen name="admin/index" options={{ title: "Moderation" }} />
+        <Stack.Screen
+          name="location-disclosure"
+          options={{ title: "Auto check-in", presentation: "modal" }}
+        />
+        <Stack.Screen name="privacy" options={{ title: "Privacy Policy" }} />
+        <Stack.Screen name="terms" options={{ title: "Terms of Service" }} />
       </Stack>
     </>
   );
