@@ -1,8 +1,11 @@
 package api
 
 import (
+	"errors"
 	"net/http"
 	"strings"
+
+	"github.com/jackc/pgx/v5"
 
 	"github.com/davisbrown/pull-up/server/internal/store/gen"
 )
@@ -10,6 +13,12 @@ import (
 func (s *Server) handleGetMe(w http.ResponseWriter, r *http.Request) {
 	user, err := s.store.Queries.GetUserByID(r.Context(), userID(r))
 	if err != nil {
+		// A valid token can outlive the account (deleted account): 401 so
+		// the client clears its session instead of retrying.
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeError(w, http.StatusUnauthorized, "account no longer exists")
+			return
+		}
 		s.internalError(w, "get me", err)
 		return
 	}
