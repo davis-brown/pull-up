@@ -34,7 +34,7 @@ func (q *Queries) CreateRefreshToken(ctx context.Context, arg CreateRefreshToken
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (email, password_hash, display_name)
 VALUES ($1, $2, $3)
-RETURNING id, email, display_name, avatar_url, reputation, created_at
+RETURNING id, email, display_name, avatar_url, reputation, created_at, is_admin
 `
 
 type CreateUserParams struct {
@@ -50,6 +50,7 @@ type CreateUserRow struct {
 	AvatarUrl   *string   `json:"avatar_url"`
 	Reputation  int32     `json:"reputation"`
 	CreatedAt   time.Time `json:"created_at"`
+	IsAdmin     bool      `json:"is_admin"`
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error) {
@@ -62,6 +63,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CreateU
 		&i.AvatarUrl,
 		&i.Reputation,
 		&i.CreatedAt,
+		&i.IsAdmin,
 	)
 	return i, err
 }
@@ -87,7 +89,7 @@ func (q *Queries) GetRefreshTokenByHash(ctx context.Context, tokenHash string) (
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, email, password_hash, display_name, avatar_url, reputation, created_at
+SELECT id, email, password_hash, display_name, avatar_url, reputation, created_at, is_admin
 FROM users
 WHERE email = $1
 `
@@ -100,6 +102,7 @@ type GetUserByEmailRow struct {
 	AvatarUrl    *string   `json:"avatar_url"`
 	Reputation   int32     `json:"reputation"`
 	CreatedAt    time.Time `json:"created_at"`
+	IsAdmin      bool      `json:"is_admin"`
 }
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (GetUserByEmailRow, error) {
@@ -113,12 +116,13 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (GetUserByEm
 		&i.AvatarUrl,
 		&i.Reputation,
 		&i.CreatedAt,
+		&i.IsAdmin,
 	)
 	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, email, display_name, avatar_url, reputation, created_at
+SELECT id, email, display_name, avatar_url, reputation, created_at, is_admin
 FROM users
 WHERE id = $1
 `
@@ -130,6 +134,7 @@ type GetUserByIDRow struct {
 	AvatarUrl   *string   `json:"avatar_url"`
 	Reputation  int32     `json:"reputation"`
 	CreatedAt   time.Time `json:"created_at"`
+	IsAdmin     bool      `json:"is_admin"`
 }
 
 func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (GetUserByIDRow, error) {
@@ -142,6 +147,7 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (GetUserByIDRow
 		&i.AvatarUrl,
 		&i.Reputation,
 		&i.CreatedAt,
+		&i.IsAdmin,
 	)
 	return i, err
 }
@@ -171,7 +177,7 @@ UPDATE users SET
     display_name = coalesce($1, display_name),
     avatar_url   = coalesce($2, avatar_url)
 WHERE id = $3
-RETURNING id, email, display_name, avatar_url, reputation, created_at
+RETURNING id, email, display_name, avatar_url, reputation, created_at, is_admin
 `
 
 type UpdateUserParams struct {
@@ -187,6 +193,7 @@ type UpdateUserRow struct {
 	AvatarUrl   *string   `json:"avatar_url"`
 	Reputation  int32     `json:"reputation"`
 	CreatedAt   time.Time `json:"created_at"`
+	IsAdmin     bool      `json:"is_admin"`
 }
 
 func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (UpdateUserRow, error) {
@@ -199,6 +206,7 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (UpdateU
 		&i.AvatarUrl,
 		&i.Reputation,
 		&i.CreatedAt,
+		&i.IsAdmin,
 	)
 	return i, err
 }

@@ -5,6 +5,8 @@ import {
 } from "@tanstack/react-query";
 import { api, API_URL } from "./api";
 import type {
+  AdminAction,
+  AdminUser,
   CheckIn,
   CheckInHistoryItem,
   CourtActivity,
@@ -12,9 +14,13 @@ import type {
   CourtMessage,
   CourtPhoto,
   CourtSession,
+  CourtStatus,
   CourtSummary,
   CrowdReport,
   ExternalPhoto,
+  Flag,
+  FlagEntityType,
+  PhotoStatus,
   RunQuality,
   Surface,
 } from "./types";
@@ -226,6 +232,29 @@ export function useCourtSessions(courtId: string | undefined) {
   });
 }
 
+export interface NewFlag {
+  entity_type: FlagEntityType;
+  entity_id: string;
+  reason: string;
+}
+
+export function useCreateFlag() {
+  return useMutation({
+    mutationFn: (flag: NewFlag) =>
+      api<void>("/flags", { method: "POST", body: JSON.stringify(flag) }),
+  });
+}
+
+export function useAdminFlags() {
+  return useQuery({
+    queryKey: ["admin", "flags"],
+    queryFn: async () => {
+      const res = await api<{ flags: Flag[] }>("/admin/flags");
+      return res.flags;
+    },
+  });
+}
+
 export function useCreateSession(courtId: string) {
   const qc = useQueryClient();
   return useMutation({
@@ -279,6 +308,53 @@ export function useCourtMessages(courtId: string | undefined) {
   });
 }
 
+export function useResolveFlag() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (flagId: string) =>
+      api<void>(`/admin/flags/${flagId}/resolve`, { method: "POST" }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["admin", "flags"] }),
+  });
+}
+
+export function useAdminSetCourtStatus() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ courtId, status }: { courtId: string; status: CourtStatus }) =>
+      api<void>(`/admin/courts/${courtId}/status`, {
+        method: "POST",
+        body: JSON.stringify({ status }),
+      }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["courts"] }),
+  });
+}
+
+export function useAdminSetPhotoStatus() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ photoId, status }: { photoId: string; status: PhotoStatus }) =>
+      api<void>(`/admin/photos/${photoId}/status`, {
+        method: "POST",
+        body: JSON.stringify({ status }),
+      }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["courts"] }),
+  });
+}
+
+export function useAdminSearchUsers(query: string) {
+  const trimmed = query.trim();
+  return useQuery({
+    queryKey: ["admin", "users", trimmed],
+    enabled: trimmed.length > 0,
+    queryFn: async () => {
+      const res = await api<{ users: AdminUser[] }>(
+        `/admin/users?q=${encodeURIComponent(trimmed)}`,
+      );
+      return res.users;
+    },
+  });
+}
+
 export function useSendMessage(courtId: string) {
   const qc = useQueryClient();
   return useMutation({
@@ -289,6 +365,31 @@ export function useSendMessage(courtId: string) {
       }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["courts", courtId, "messages"] });
+    },
+  });
+}
+
+export function useSetUserAdmin() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ userId, isAdmin }: { userId: string; isAdmin: boolean }) =>
+      api<{ user: AdminUser }>(`/admin/users/${userId}/admin`, {
+        method: "POST",
+        body: JSON.stringify({ is_admin: isAdmin }),
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["admin", "users"] });
+      void qc.invalidateQueries({ queryKey: ["admin", "actions"] });
+    },
+  });
+}
+
+export function useAdminActions() {
+  return useQuery({
+    queryKey: ["admin", "actions"],
+    queryFn: async () => {
+      const res = await api<{ actions: AdminAction[] }>("/admin/actions");
+      return res.actions;
     },
   });
 }

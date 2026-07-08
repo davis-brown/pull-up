@@ -108,7 +108,8 @@ func (s *Server) Routes() http.Handler {
 			r.Delete("/sessions/{id}", s.handleCancelSession)
 			r.Put("/sessions/{id}/rsvp", s.handleRSVP)
 
-			// Moderation (users.is_admin, set via SQL for now).
+			// Moderation. The first admin is bootstrapped out-of-band (SQL);
+			// every admin after that is promoted through the API below.
 			r.Group(func(r chi.Router) {
 				r.Use(s.requireAdmin)
 				r.Get("/admin/flags", s.handleListFlags)
@@ -116,6 +117,9 @@ func (s *Server) Routes() http.Handler {
 				r.Post("/admin/courts/{id}/status", s.handleAdminSetCourtStatus)
 				r.Post("/admin/photos/{id}/status", s.handleAdminSetPhotoStatus)
 				r.Post("/admin/messages/{id}/status", s.handleAdminSetMessageStatus)
+				r.Get("/admin/users", s.handleAdminSearchUsers)
+				r.Post("/admin/users/{id}/admin", s.handleAdminSetUserAdmin)
+				r.Get("/admin/actions", s.handleAdminListActions)
 			})
 		})
 	})
