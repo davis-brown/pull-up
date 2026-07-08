@@ -285,7 +285,9 @@ func (s *Server) handleListMessages(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid court id")
 		return
 	}
-	rows, err := s.store.Queries.ListCourtMessages(r.Context(), courtID)
+	rows, err := s.store.Queries.ListCourtMessages(r.Context(), gen.ListCourtMessagesParams{
+		CourtID: courtID, ViewerID: s.optionalUserID(r),
+	})
 	if err != nil {
 		s.internalError(w, "list messages", err)
 		return

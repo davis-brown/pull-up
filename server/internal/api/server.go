@@ -87,6 +87,10 @@ func (s *Server) Routes() http.Handler {
 
 			r.Get("/me", s.handleGetMe)
 			r.Patch("/me", s.handlePatchMe)
+			r.Delete("/me", s.handleDeleteMe)
+			r.Get("/me/blocked", s.handleListBlocked)
+			r.Put("/users/{id}/block", s.handleBlockUser)
+			r.Delete("/users/{id}/block", s.handleUnblockUser)
 			r.Get("/me/check-ins/current", s.handleCurrentCheckIn)
 			r.Get("/me/check-ins", s.handleCheckInHistory)
 			r.Get("/me/favorites", s.handleListFavorites)
