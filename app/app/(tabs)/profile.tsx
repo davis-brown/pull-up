@@ -1,7 +1,8 @@
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Button, Card, Chip, ErrorText } from "@/components/ui";
+import { SignInScreenCta } from "@/components/SignInCta";
 import { useAuth } from "@/lib/auth-context";
 import {
   geofencingSupported,
@@ -32,6 +33,24 @@ const geofenceOptions: Array<{ value: GeofenceMode; label: string }> = [
 ];
 
 export default function ProfileScreen() {
+  const { user, loading } = useAuth();
+  const t = useTheme();
+  if (loading) {
+    return (
+      <View style={[styles.center, { backgroundColor: t.colors.background }]}>
+        <ActivityIndicator size="large" color={t.colors.accent} />
+      </View>
+    );
+  }
+  if (!user) {
+    return (
+      <SignInScreenCta message="Sign in to see your check-ins, manage favorites, and set up auto check-in." />
+    );
+  }
+  return <ProfileContent />;
+}
+
+function ProfileContent() {
   const { user, signOut } = useAuth();
   const router = useRouter();
   const t = useTheme();
@@ -283,6 +302,7 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
+  center: { flex: 1, alignItems: "center", justifyContent: "center" },
   chips: { flexDirection: "row", flexWrap: "wrap", marginBottom: -8 },
   historyRow: {
     flexDirection: "row",
