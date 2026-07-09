@@ -14,6 +14,7 @@ import {
 } from "react-native";
 import { CourtChat } from "@/components/CourtChat";
 import { CourtSessions } from "@/components/CourtSessions";
+import { QueryError } from "@/components/QueryError";
 import { SignInAction, useSignInDetour } from "@/components/SignInCta";
 import { Button, Card, ErrorText } from "@/components/ui";
 import { ApiError } from "@/lib/api";
@@ -47,7 +48,7 @@ export default function CourtDetailScreen() {
   const t = useTheme();
   const { user } = useAuth();
   const detour = useSignInDetour();
-  const { data: court, isLoading } = useCourt(id);
+  const { data: court, isLoading, error: courtError, refetch } = useCourt(id);
   const { data: activity } = useCourtActivity(id);
   const { data: current } = useCurrentCheckIn();
   const checkIn = useCheckIn(id ?? "");
@@ -106,6 +107,14 @@ export default function CourtDetailScreen() {
       setLocating(false);
     }
   };
+
+  if (courtError) {
+    return (
+      <View style={[styles.center, { backgroundColor: t.colors.background }]}>
+        <QueryError error={courtError} onRetry={() => void refetch()} />
+      </View>
+    );
+  }
 
   if (isLoading || !court) {
     return (
