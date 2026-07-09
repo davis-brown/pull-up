@@ -10,6 +10,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/getsentry/sentry-go"
+
 	"github.com/davisbrown/pull-up/server/internal/api"
 	"github.com/davisbrown/pull-up/server/internal/config"
 	"github.com/davisbrown/pull-up/server/internal/enrich"
@@ -24,6 +26,18 @@ func main() {
 	if err != nil {
 		log.Error("config", "err", err)
 		os.Exit(1)
+	}
+
+	if cfg.SentryDSN != "" {
+		if err := sentry.Init(sentry.ClientOptions{
+			Dsn:         cfg.SentryDSN,
+			Environment: os.Getenv("APP_ENV"),
+		}); err != nil {
+			log.Error("sentry init", "err", err)
+		} else {
+			defer sentry.Flush(2 * time.Second)
+			log.Info("sentry enabled")
+		}
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
