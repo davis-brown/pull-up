@@ -58,6 +58,15 @@ const config: ExpoConfig = {
       },
     ],
     "@maplibre/maplibre-react-native",
+    [
+      "@sentry/react-native/expo",
+      {
+        // Source-map upload happens in EAS builds when SENTRY_AUTH_TOKEN is
+        // present in the build env; local dev builds skip it silently.
+        organization: process.env.SENTRY_ORG ?? "",
+        project: process.env.SENTRY_PROJECT ?? "pull-up",
+      },
+    ],
   ],
   extra: {
     eas: {
