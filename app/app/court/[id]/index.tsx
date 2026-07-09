@@ -1,11 +1,13 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
+import * as Notifications from "expo-notifications";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import {
   ActivityIndicator,
   Image,
   Linking,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -14,11 +16,13 @@ import {
 } from "react-native";
 import { CourtChat } from "@/components/CourtChat";
 import { CourtSessions } from "@/components/CourtSessions";
+import { PermissionPrimer } from "@/components/PermissionPrimer";
 import { QueryError } from "@/components/QueryError";
 import { SignInAction, useSignInDetour } from "@/components/SignInCta";
 import { Button, Card, ErrorText } from "@/components/ui";
 import { ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import { markPushPrimerDone, pushPrimerDone } from "@/lib/first-run";
 import {
   photoURL,
   useCheckIn,
@@ -33,6 +37,7 @@ import {
   useVoteCourt,
 } from "@/lib/hooks";
 import { getCurrentPosition } from "@/lib/location";
+import { registerPushToken } from "@/lib/push-registration";
 import { useTheme } from "@/lib/theme";
 
 const runQualityLabel: Record<string, string> = {
@@ -63,8 +68,23 @@ export default function CourtDetailScreen() {
   const [error, setError] = useState<string | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [locating, setLocating] = useState(false);
+  const [showPushPrimer, setShowPushPrimer] = useState(false);
 
   const isFavorite = favData?.favorite ?? false;
+
+  const toggleFavorite = () => {
+    if (!user) return detour();
+    const turningOn = !isFavorite;
+    setFavorite.mutate(turningOn);
+    if (turningOn && Platform.OS !== "web") {
+      void (async () => {
+        const perms = await Notifications.getPermissionsAsync();
+        if (!perms.granted && perms.canAskAgain && !(await pushPrimerDone())) {
+          setShowPushPrimer(true);
+        }
+      })();
+    }
+  };
 
   const addPhoto = async () => {
     setPhotoError(null);
@@ -147,7 +167,7 @@ export default function CourtDetailScreen() {
               <Ionicons name="flag-outline" size={22} color={t.colors.textMuted} />
             </Pressable>
             <Pressable
-              onPress={() => (user ? setFavorite.mutate(!isFavorite) : detour())}
+              onPress={toggleFavorite}
               hitSlop={10}
               disabled={setFavorite.isPending}
             >
@@ -399,6 +419,22 @@ export default function CourtDetailScreen() {
 
         <CourtChat courtId={id ?? ""} />
       </ScrollView>
+      <PermissionPrimer
+        visible={showPushPrimer}
+        icon="notifications-outline"
+        title="Hear when a run is planned"
+        body="Get a notification when someone plans a run at a court you favorited. You can turn this off anytime in system settings."
+        allowLabel="Turn on notifications"
+        onAllow={() => {
+          void markPushPrimerDone();
+          setShowPushPrimer(false);
+          void registerPushToken({ requestPermission: true });
+        }}
+        onDismiss={() => {
+          void markPushPrimerDone();
+          setShowPushPrimer(false);
+        }}
+      />
     </>
   );
 }
