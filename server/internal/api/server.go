@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -68,11 +69,17 @@ func (s *Server) Routes() http.Handler {
 	})
 
 	r.Route("/api/v1", func(r chi.Router) {
-		r.Post("/auth/register", s.handleRegister)
-		r.Post("/auth/login", s.handleLogin)
-		r.Post("/auth/refresh", s.handleRefresh)
-		r.Post("/auth/logout", s.handleLogout)
-		r.Post("/auth/oauth", s.handleOAuth)
+		r.Group(func(r chi.Router) {
+			// Brute-force guard: covers register, login, refresh, logout, oauth.
+			if s.cfg.RateLimitAuthPerMin > 0 {
+				r.Use(perIPLimit(s.cfg.RateLimitAuthPerMin, time.Minute))
+			}
+			r.Post("/auth/register", s.handleRegister)
+			r.Post("/auth/login", s.handleLogin)
+			r.Post("/auth/refresh", s.handleRefresh)
+			r.Post("/auth/logout", s.handleLogout)
+			r.Post("/auth/oauth", s.handleOAuth)
+		})
 
 		r.Get("/courts", s.handleListCourts)
 		r.Get("/courts/{id}", s.handleGetCourt)
@@ -85,6 +92,9 @@ func (s *Server) Routes() http.Handler {
 		// Authenticated routes.
 		r.Group(func(r chi.Router) {
 			r.Use(s.requireAuth)
+			if s.cfg.RateLimitWritePerMin > 0 {
+				r.Use(writeLimiter(s.cfg.RateLimitWritePerMin, time.Minute))
+			}
 
 			r.Get("/me", s.handleGetMe)
 			r.Patch("/me", s.handlePatchMe)
