@@ -1,4 +1,4 @@
-import { Link } from "expo-router";
+import { Link, useLocalSearchParams, type Href } from "expo-router";
 import { useState } from "react";
 import { KeyboardAvoidingView, Platform, StyleSheet, Text, View } from "react-native";
 import { Button, ErrorText, Field } from "@/components/ui";
@@ -8,6 +8,7 @@ import { useTheme } from "@/lib/theme";
 export default function RegisterScreen() {
   const { signUp } = useAuth();
   const t = useTheme();
+  const { next } = useLocalSearchParams<{ next?: string }>();
   const [displayName, setDisplayName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -73,7 +74,10 @@ export default function RegisterScreen() {
         <Text style={[t.type.body, { color: t.colors.textSecondary }]}>
           Already have an account?{" "}
         </Text>
-        <Link href="/login" style={[t.type.bodyMedium, { color: t.colors.accent }]}>
+        <Link
+          href={(next ? `/login?next=${encodeURIComponent(next)}` : "/login") as Href}
+          style={[t.type.bodyMedium, { color: t.colors.accent }]}
+        >
           Sign in
         </Link>
       </View>
