@@ -1,4 +1,4 @@
-import { Link } from "expo-router";
+import { Link, useLocalSearchParams, type Href } from "expo-router";
 import { useState } from "react";
 import { KeyboardAvoidingView, Platform, StyleSheet, Text, View } from "react-native";
 import { OAuthButtons } from "@/components/OAuthButtons";
@@ -9,6 +9,7 @@ import { useTheme } from "@/lib/theme";
 export default function LoginScreen() {
   const { signIn } = useAuth();
   const t = useTheme();
+  const { next } = useLocalSearchParams<{ next?: string }>();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -64,7 +65,7 @@ export default function LoginScreen() {
       <View style={[styles.footer, { marginTop: t.spacing.lg }]}>
         <Text style={[t.type.body, { color: t.colors.textSecondary }]}>New here? </Text>
         <Link
-          href="/register"
+          href={(next ? `/register?next=${encodeURIComponent(next)}` : "/register") as Href}
           style={[t.type.bodyMedium, { color: t.colors.accent }]}
         >
           Create an account
