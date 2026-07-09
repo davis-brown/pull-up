@@ -37,7 +37,7 @@ import {
   useUploadPhoto,
   useVoteCourt,
 } from "@/lib/hooks";
-import { buildCourtLink, courtShareMessage } from "@/lib/links";
+import { buildCourtLink, courtShareMessage, parseRunParam } from "@/lib/links";
 import { getCurrentPosition } from "@/lib/location";
 import { registerPushToken } from "@/lib/push-registration";
 import { useTheme } from "@/lib/theme";
@@ -50,7 +50,7 @@ const runQualityLabel: Record<string, string> = {
 };
 
 export default function CourtDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, run } = useLocalSearchParams<{ id: string; run?: string }>();
   const router = useRouter();
   const t = useTheme();
   const { user } = useAuth();
@@ -381,7 +381,11 @@ export default function CourtDetailScreen() {
           </View>
         </Card>
 
-        <CourtSessions courtId={id ?? ""} courtName={court.name} />
+        <CourtSessions
+          courtId={id ?? ""}
+          courtName={court.name}
+          highlightId={parseRunParam(run)}
+        />
 
         {(activity?.reports?.length ?? 0) > 0 && (
           <Card>
