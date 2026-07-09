@@ -10,6 +10,7 @@ import {
   Platform,
   Pressable,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   View,
@@ -36,6 +37,7 @@ import {
   useUploadPhoto,
   useVoteCourt,
 } from "@/lib/hooks";
+import { buildCourtLink, courtShareMessage } from "@/lib/links";
 import { getCurrentPosition } from "@/lib/location";
 import { registerPushToken } from "@/lib/push-registration";
 import { useTheme } from "@/lib/theme";
@@ -159,6 +161,17 @@ export default function CourtDetailScreen() {
             <Text style={[t.type.title, styles.titleText, { color: t.colors.textPrimary }]}>
               {court.name}
             </Text>
+            <Pressable
+              onPress={() =>
+                void Share.share({
+                  message: courtShareMessage(court.name, buildCourtLink(court.id)),
+                })
+              }
+              hitSlop={10}
+              style={{ marginRight: t.spacing.md }}
+            >
+              <Ionicons name="share-outline" size={22} color={t.colors.textMuted} />
+            </Pressable>
             <Pressable
               onPress={() => router.push(`/flag?entityType=court&entityId=${id}`)}
               hitSlop={10}
@@ -368,7 +381,7 @@ export default function CourtDetailScreen() {
           </View>
         </Card>
 
-        <CourtSessions courtId={id ?? ""} />
+        <CourtSessions courtId={id ?? ""} courtName={court.name} />
 
         {(activity?.reports?.length ?? 0) > 0 && (
           <Card>
