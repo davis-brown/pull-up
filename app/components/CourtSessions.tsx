@@ -1,11 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, Share, StyleSheet, Text, View } from "react-native";
 import { useSignInDetour } from "@/components/SignInCta";
 import { Button, Card, ErrorText } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
 import { useCancelSession, useCourtSessions, useRSVP } from "@/lib/hooks";
+import { buildCourtLink, runShareMessage } from "@/lib/links";
 import { useTheme } from "@/lib/theme";
 import type { CourtSession } from "@/lib/types";
 
@@ -21,7 +22,15 @@ export function sessionTimeLabel(iso: string): string {
   return `${d.toLocaleDateString([], { weekday: "short", month: "short", day: "numeric" })} ${time}`;
 }
 
-function SessionRow({ session, courtId }: { session: CourtSession; courtId: string }) {
+function SessionRow({
+  session,
+  courtId,
+  courtName,
+}: {
+  session: CourtSession;
+  courtId: string;
+  courtName: string;
+}) {
   const t = useTheme();
   const { user } = useAuth();
   const detour = useSignInDetour();
@@ -52,6 +61,21 @@ function SessionRow({ session, courtId }: { session: CourtSession; courtId: stri
         <ErrorText message={error} />
       </View>
       <View style={styles.rowActions}>
+        <Pressable
+          onPress={() =>
+            void Share.share({
+              message: runShareMessage(
+                courtName,
+                sessionTimeLabel(session.starts_at),
+                buildCourtLink(courtId, session.id),
+              ),
+            })
+          }
+          hitSlop={8}
+          style={styles.cancelButton}
+        >
+          <Ionicons name="share-outline" size={18} color={t.colors.textMuted} />
+        </Pressable>
         <Pressable
           onPress={() => {
             if (!user) return detour();
@@ -97,7 +121,7 @@ function SessionRow({ session, courtId }: { session: CourtSession; courtId: stri
   );
 }
 
-export function CourtSessions({ courtId }: { courtId: string }) {
+export function CourtSessions({ courtId, courtName }: { courtId: string; courtName: string }) {
   const t = useTheme();
   const router = useRouter();
   const { data: sessions } = useCourtSessions(courtId);
@@ -111,7 +135,9 @@ export function CourtSessions({ courtId }: { courtId: string }) {
         </Pressable>
       </View>
       {(sessions?.length ?? 0) > 0 ? (
-        sessions!.map((s) => <SessionRow key={s.id} session={s} courtId={courtId} />)
+        sessions!.map((s) => (
+          <SessionRow key={s.id} session={s} courtId={courtId} courtName={courtName} />
+        ))
       ) : (
         <Text style={[t.type.caption, { color: t.colors.textMuted, marginTop: t.spacing.sm }]}>
           Nothing planned. Set a time and get a run going.
