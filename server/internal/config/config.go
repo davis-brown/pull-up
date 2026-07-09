@@ -29,6 +29,8 @@ type Config struct {
 	// AppleAudiences is normally the iOS bundle id.
 	GoogleClientIDs string
 	AppleAudiences  string
+	// SentryDSN enables server-side crash/error reporting when set.
+	SentryDSN string
 }
 
 func Load() (*Config, error) {
@@ -44,6 +46,7 @@ func Load() (*Config, error) {
 		Enrich:           getenv("ENRICH", "true") != "false",
 		GoogleClientIDs:  getenv("GOOGLE_CLIENT_IDS", ""),
 		AppleAudiences:   getenv("APPLE_AUDIENCES", ""),
+		SentryDSN:        os.Getenv("SENTRY_DSN"),
 	}
 	if c.DatabaseURL == "" {
 		return nil, fmt.Errorf("DATABASE_URL is required")

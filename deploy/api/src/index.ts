@@ -8,6 +8,8 @@ interface Env {
   // OAuth audiences (comma-separated). Empty/unset disables that provider.
   GOOGLE_CLIENT_IDS?: string;
   APPLE_AUDIENCES?: string;
+  // Sentry crash reporting for the Go API. Optional.
+  SENTRY_DSN?: string;
   // R2 bucket for court photos. Optional: photo routes return 503 until the
   // binding is configured (requires R2 enabled on the account).
   PHOTOS?: R2Bucket;
@@ -29,6 +31,7 @@ export class ApiContainer extends Container {
       CORS_ORIGINS: env.CORS_ORIGINS ?? "*",
       GOOGLE_CLIENT_IDS: env.GOOGLE_CLIENT_IDS ?? "",
       APPLE_AUDIENCES: env.APPLE_AUDIENCES ?? "",
+      SENTRY_DSN: env.SENTRY_DSN ?? "",
       PORT: "8080",
     };
   }

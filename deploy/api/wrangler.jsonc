@@ -5,6 +5,7 @@
 // Requires the Workers Paid plan (Containers). Secrets (set once):
 //   npx wrangler secret put DATABASE_URL   # Neon Postgres w/ PostGIS
 //   npx wrangler secret put JWT_SECRET     # e.g. openssl rand -hex 32
+//   npx wrangler secret put SENTRY_DSN     # optional: server crash reporting
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "pull-up-api",
