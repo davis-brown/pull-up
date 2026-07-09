@@ -12,11 +12,12 @@ import {
   Text,
   View,
 } from "react-native";
-import { AuthGate } from "@/components/AuthGate";
 import { CourtChat } from "@/components/CourtChat";
 import { CourtSessions } from "@/components/CourtSessions";
+import { SignInAction, useSignInDetour } from "@/components/SignInCta";
 import { Button, Card, ErrorText } from "@/components/ui";
 import { ApiError } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
 import {
   photoURL,
   useCheckIn,
@@ -44,6 +45,8 @@ export default function CourtDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const t = useTheme();
+  const { user } = useAuth();
+  const detour = useSignInDetour();
   const { data: court, isLoading } = useCourt(id);
   const { data: activity } = useCourtActivity(id);
   const { data: current } = useCurrentCheckIn();
@@ -116,7 +119,7 @@ export default function CourtDetailScreen() {
   const live = activeCount > 0;
 
   return (
-    <AuthGate>
+    <>
       <Stack.Screen options={{ title: court.name }} />
       <ScrollView
         style={{ backgroundColor: t.colors.background }}
@@ -135,7 +138,7 @@ export default function CourtDetailScreen() {
               <Ionicons name="flag-outline" size={22} color={t.colors.textMuted} />
             </Pressable>
             <Pressable
-              onPress={() => setFavorite.mutate(!isFavorite)}
+              onPress={() => (user ? setFavorite.mutate(!isFavorite) : detour())}
               hitSlop={10}
               disabled={setFavorite.isPending}
             >
@@ -197,7 +200,11 @@ export default function CourtDetailScreen() {
         <Card>
           <View style={styles.titleRow}>
             <Text style={[t.type.label, { color: t.colors.textSecondary }]}>Photos</Text>
-            <Pressable onPress={() => void addPhoto()} hitSlop={10} disabled={uploadPhoto.isPending}>
+            <Pressable
+              onPress={() => (user ? void addPhoto() : detour())}
+              hitSlop={10}
+              disabled={uploadPhoto.isPending}
+            >
               {uploadPhoto.isPending ? (
                 <ActivityIndicator size="small" color={t.colors.accent} />
               ) : (
@@ -259,7 +266,7 @@ export default function CourtDetailScreen() {
                   title="It's real"
                   variant="secondary"
                   busy={vote.isPending}
-                  onPress={() => vote.mutate(1)}
+                  onPress={() => (user ? vote.mutate(1) : detour())}
                 />
               </View>
               <View style={styles.voteButton}>
@@ -267,7 +274,7 @@ export default function CourtDetailScreen() {
                   title="Not a court"
                   variant="danger"
                   busy={vote.isPending}
-                  onPress={() => vote.mutate(-1)}
+                  onPress={() => (user ? vote.mutate(-1) : detour())}
                 />
               </View>
             </View>
@@ -308,7 +315,9 @@ export default function CourtDetailScreen() {
 
           <ErrorText message={error} />
           <View style={{ marginTop: t.spacing.sm }}>
-            {checkedInHere ? (
+            {!user ? (
+              <SignInAction label="Sign in to check in" />
+            ) : checkedInHere ? (
               <Button
                 title="Check out"
                 variant="secondary"
@@ -381,7 +390,7 @@ export default function CourtDetailScreen() {
 
         <CourtChat courtId={id ?? ""} />
       </ScrollView>
-    </AuthGate>
+    </>
   );
 }
 

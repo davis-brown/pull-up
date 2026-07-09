@@ -9,6 +9,7 @@ import {
   TextInput,
   View,
 } from "react-native";
+import { SignInAction } from "@/components/SignInCta";
 import { Card, ErrorText } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
 import { useCourtMessages, useSendMessage, useSetBlocked } from "@/lib/hooks";
@@ -53,8 +54,8 @@ export function CourtChat({ courtId }: { courtId: string }) {
             return (
               <View key={m.id} style={styles.message}>
                 <Pressable
-                  onPress={() => !mine && setActionsFor(actionsFor === m.id ? null : m.id)}
-                  disabled={mine}
+                  onPress={() => user && !mine && setActionsFor(actionsFor === m.id ? null : m.id)}
+                  disabled={mine || !user}
                 >
                   <Text style={[t.type.caption, { color: t.colors.textMuted }]}>
                     <Text style={{ fontWeight: "600", color: mine ? t.colors.accent : t.colors.textSecondary }}>
@@ -103,43 +104,49 @@ export function CourtChat({ courtId }: { courtId: string }) {
           No messages yet. Ask who's running today.
         </Text>
       )}
-      <View style={[styles.inputRow, { marginTop: t.spacing.sm }]}>
-        <TextInput
-          style={[
-            t.type.body,
-            styles.input,
-            {
-              borderColor: t.colors.border,
-              borderRadius: t.radius.full,
-              backgroundColor: t.colors.surface,
-              color: t.colors.textPrimary,
-            },
-          ]}
-          placeholder="Message this court…"
-          placeholderTextColor={t.colors.textMuted}
-          value={draft}
-          onChangeText={setDraft}
-          maxLength={500}
-          multiline
-          onSubmitEditing={submit}
-        />
-        <Pressable
-          onPress={submit}
-          disabled={send.isPending || !draft.trim()}
-          hitSlop={8}
-          style={styles.sendButton}
-        >
-          {send.isPending ? (
-            <ActivityIndicator size="small" color={t.colors.accent} />
-          ) : (
-            <Ionicons
-              name="arrow-up-circle"
-              size={30}
-              color={draft.trim() ? t.colors.accent : t.colors.textMuted}
-            />
-          )}
-        </Pressable>
-      </View>
+      {user ? (
+        <View style={[styles.inputRow, { marginTop: t.spacing.sm }]}>
+          <TextInput
+            style={[
+              t.type.body,
+              styles.input,
+              {
+                borderColor: t.colors.border,
+                borderRadius: t.radius.full,
+                backgroundColor: t.colors.surface,
+                color: t.colors.textPrimary,
+              },
+            ]}
+            placeholder="Message this court…"
+            placeholderTextColor={t.colors.textMuted}
+            value={draft}
+            onChangeText={setDraft}
+            maxLength={500}
+            multiline
+            onSubmitEditing={submit}
+          />
+          <Pressable
+            onPress={submit}
+            disabled={send.isPending || !draft.trim()}
+            hitSlop={8}
+            style={styles.sendButton}
+          >
+            {send.isPending ? (
+              <ActivityIndicator size="small" color={t.colors.accent} />
+            ) : (
+              <Ionicons
+                name="arrow-up-circle"
+                size={30}
+                color={draft.trim() ? t.colors.accent : t.colors.textMuted}
+              />
+            )}
+          </Pressable>
+        </View>
+      ) : (
+        <View style={{ marginTop: t.spacing.sm }}>
+          <SignInAction label="Sign in to chat" />
+        </View>
+      )}
       <ErrorText message={error} />
     </Card>
   );

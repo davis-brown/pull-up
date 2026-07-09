@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useSignInDetour } from "@/components/SignInCta";
 import { Button, Card, ErrorText } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
 import { useCancelSession, useCourtSessions, useRSVP } from "@/lib/hooks";
@@ -23,6 +24,7 @@ export function sessionTimeLabel(iso: string): string {
 function SessionRow({ session, courtId }: { session: CourtSession; courtId: string }) {
   const t = useTheme();
   const { user } = useAuth();
+  const detour = useSignInDetour();
   const rsvp = useRSVP(courtId);
   const cancel = useCancelSession(courtId);
   const [error, setError] = useState<string | null>(null);
@@ -52,6 +54,7 @@ function SessionRow({ session, courtId }: { session: CourtSession; courtId: stri
       <View style={styles.rowActions}>
         <Pressable
           onPress={() => {
+            if (!user) return detour();
             setError(null);
             rsvp.mutate(
               { sessionId: session.id, status: going ? "out" : "going" },
