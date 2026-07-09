@@ -20,6 +20,8 @@ const config: ExpoConfig = {
       NSLocationAlwaysAndWhenInUseUsageDescription:
         "With auto check-in enabled, pull-up detects when you arrive at a basketball court so you can check in without opening the app. Only court arrivals are used — your location history is never stored.",
       UIBackgroundModes: ["location"],
+      // Standard HTTPS only — skips the App Store export-compliance questionnaire.
+      ITSAppUsesNonExemptEncryption: false,
     },
   },
   android: {
