@@ -43,7 +43,7 @@ export default function PrivacyScreen() {
       </Section>
 
       <Section title="Services we rely on">
-        {"Hosting and photo storage run on Cloudflare; the database is hosted by Neon. Push notifications are delivered through Expo's push service. Court locations come from OpenStreetMap; missing addresses are looked up via the Nominatim geocoding service using the court's coordinates (never your identity). Court photos may be displayed from Wikimedia Commons. If you sign in with Google or Apple, their privacy policies also apply to that sign-in."}
+        {"Hosting and photo storage run on Cloudflare; the database is hosted by Neon. Push notifications are delivered through Expo's push service. Court locations come from OpenStreetMap; missing addresses are looked up via the Nominatim geocoding service using the court's coordinates (never your identity). Court photos may be displayed from Wikimedia Commons. If you sign in with Google or Apple, their privacy policies also apply to that sign-in. If the app crashes, a crash report (device model, OS version, and the error's stack trace — never your location or identity) is sent to Sentry so we can fix the bug."}
       </Section>
 
       <Section title="Deleting your account">

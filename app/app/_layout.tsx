@@ -3,12 +3,22 @@ import * as Notifications from "expo-notifications";
 import { Stack, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
+import * as Sentry from "@sentry/react-native";
 import { AuthProvider } from "@/lib/auth-context";
 // Side-effect import: registers the geofence background task at startup so
 // headless launches (geofence event with the app killed) can handle events.
 import { geofencingSupported, refreshGeofences } from "@/lib/geofencing";
 import { onboardingSeen } from "@/lib/first-run";
 import { navChrome, ThemePreferenceProvider, useTheme } from "@/lib/theme";
+
+const sentryDSN = process.env.EXPO_PUBLIC_SENTRY_DSN;
+if (sentryDSN) {
+  Sentry.init({
+    dsn: sentryDSN,
+    // Crash + error reporting only; no session replay, no PII.
+    sendDefaultPii: false,
+  });
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -78,7 +88,7 @@ function ThemedApp() {
   );
 }
 
-export default function RootLayout() {
+function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
@@ -89,3 +99,5 @@ export default function RootLayout() {
     </QueryClientProvider>
   );
 }
+
+export default sentryDSN ? Sentry.wrap(RootLayout) : RootLayout;
