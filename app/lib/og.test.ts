@@ -1,4 +1,12 @@
-import { aasaBody, assetlinksBody, type OgConfig } from "./og";
+import {
+  aasaBody,
+  appBannerTag,
+  assetlinksBody,
+  courtImageUrl,
+  liveStatusLine,
+  ogMetaTags,
+  type OgConfig,
+} from "./og";
 
 const cfg: OgConfig = {
   IOS_APP_ID: "ABCDE12345.com.pullup.app",
@@ -26,5 +34,59 @@ describe("assetlinksBody", () => {
     expect(body[0].relation).toContain("delegate_permission/common.handle_all_urls");
     expect(body[0].target.package_name).toBe("com.pullup.app");
     expect(body[0].target.sha256_cert_fingerprints).toEqual(["AA:BB:CC"]);
+  });
+});
+
+describe("liveStatusLine", () => {
+  it("counts active players when present", () => {
+    expect(liveStatusLine(3)).toBe("3 playing right now");
+    expect(liveStatusLine(1)).toBe("1 playing right now");
+  });
+  it("uses a neutral tagline when empty", () => {
+    expect(liveStatusLine(0)).toBe("See who's playing pickup here");
+  });
+});
+
+describe("ogMetaTags", () => {
+  const tags = ogMetaTags({
+    name: "Rucker Park",
+    description: "3 playing right now",
+    imageUrl: "https://api.example.com/photos/k",
+    link: "https://pullup.app/court/x",
+  });
+  it("includes escaped title, description, image, url and twitter card", () => {
+    expect(tags).toContain('property="og:title" content="Rucker Park"');
+    expect(tags).toContain('property="og:description" content="3 playing right now"');
+    expect(tags).toContain('property="og:image" content="https://api.example.com/photos/k"');
+    expect(tags).toContain('property="og:url" content="https://pullup.app/court/x"');
+    expect(tags).toContain('name="twitter:card" content="summary_large_image"');
+  });
+  it("escapes double quotes in the name", () => {
+    const t = ogMetaTags({ name: 'A "B" Court', description: "d", imageUrl: "i", link: "l" });
+    expect(t).toContain('content="A &quot;B&quot; Court"');
+  });
+});
+
+describe("appBannerTag", () => {
+  it("emits the apple-itunes-app meta with the store id", () => {
+    expect(appBannerTag(cfg)).toBe(
+      '<meta name="apple-itunes-app" content="app-id=1234567890">',
+    );
+  });
+});
+
+describe("courtImageUrl", () => {
+  it("uses the first uploaded photo via the API origin", () => {
+    expect(courtImageUrl(cfg, { photos: [{ storage_key: "k1" }], external: [] })).toBe(
+      "https://api.example.com/photos/k1",
+    );
+  });
+  it("falls back to an external photo, then the brand image", () => {
+    expect(
+      courtImageUrl(cfg, { photos: [], external: [{ image_url: "https://ex/e.jpg" }] }),
+    ).toBe("https://ex/e.jpg");
+    expect(courtImageUrl(cfg, { photos: [], external: [] })).toBe(
+      "https://pullup.app/icon.png",
+    );
   });
 });
