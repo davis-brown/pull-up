@@ -1,9 +1,11 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useMemo, useState } from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { ScrollView, Share, StyleSheet, Text, View } from "react-native";
 import { AuthGate } from "@/components/AuthGate";
+import { sessionTimeLabel } from "@/components/CourtSessions";
 import { Button, Chip, ErrorText, Field } from "@/components/ui";
 import { useCreateSession } from "@/lib/hooks";
+import { buildCourtLink, runShareMessage } from "@/lib/links";
 import { useTheme } from "@/lib/theme";
 
 // Quick-pick scheduling: day + hour chips instead of a date-picker dependency.
@@ -60,7 +62,15 @@ export default function PlanSessionScreen() {
     createSession.mutate(
       { starts_at: starts.toISOString(), note: note.trim() || undefined },
       {
-        onSuccess: () => router.back(),
+        onSuccess: (session) => {
+          void Share.share({
+            message: runShareMessage(
+              "this court",
+              sessionTimeLabel(session.starts_at),
+              buildCourtLink(id ?? "", session.id),
+            ),
+          }).finally(() => router.back());
+        },
         onError: (e) => setError(e.message),
       },
     );
