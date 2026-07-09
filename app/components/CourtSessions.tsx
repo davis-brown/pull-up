@@ -54,6 +54,7 @@ function SessionRow({
                 borderWidth: 1,
                 borderTopWidth: 1,
                 borderColor: t.colors.accent,
+                borderTopColor: t.colors.accent,
                 borderRadius: t.radius.md,
                 paddingHorizontal: t.spacing.sm,
               }
