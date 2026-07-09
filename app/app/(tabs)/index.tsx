@@ -6,6 +6,7 @@ import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from "
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import CourtMap from "@/components/CourtMap/CourtMap";
 import type { CourtPin } from "@/components/CourtMap/types";
+import { GetTheAppBanner } from "@/components/GetTheAppBanner";
 import { PermissionPrimer } from "@/components/PermissionPrimer";
 import { locationPrimerDone, markLocationPrimerDone } from "@/lib/first-run";
 import { useCourtsInBBox, type BBox } from "@/lib/hooks";
@@ -79,6 +80,7 @@ export default function MapScreen() {
 
   return (
     <View style={styles.container}>
+      <GetTheAppBanner />
       <CourtMap
         courts={pins}
         initialCenter={center}
