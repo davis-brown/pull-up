@@ -4,6 +4,7 @@ import {
   useQueryClient,
 } from "@tanstack/react-query";
 import { api, API_URL } from "./api";
+import { useAuth } from "./auth-context";
 import type {
   AdminAction,
   AdminUser,
@@ -71,8 +72,10 @@ export function useCourtActivity(id: string | undefined) {
 }
 
 export function useCurrentCheckIn() {
+  const { user } = useAuth();
   return useQuery({
     queryKey: ["me", "check-in"],
+    enabled: !!user,
     queryFn: () => api<{ check_in: CheckIn | null }>("/me/check-ins/current"),
   });
 }
@@ -190,9 +193,10 @@ export function useUploadPhoto(courtId: string) {
 }
 
 export function useIsFavorite(courtId: string | undefined) {
+  const { user } = useAuth();
   return useQuery({
     queryKey: ["courts", courtId, "favorite"],
-    enabled: !!courtId,
+    enabled: !!courtId && !!user,
     queryFn: () => api<{ favorite: boolean }>(`/courts/${courtId}/favorite`),
   });
 }
@@ -212,8 +216,10 @@ export function useSetFavorite(courtId: string) {
 }
 
 export function useCheckInHistory() {
+  const { user } = useAuth();
   return useQuery({
     queryKey: ["me", "check-in-history"],
+    enabled: !!user,
     queryFn: async () => {
       const res = await api<{ check_ins: CheckInHistoryItem[] }>("/me/check-ins");
       return res.check_ins;
@@ -396,8 +402,10 @@ export function useAdminActions() {
 }
 
 export function useBlockedUsers() {
+  const { user } = useAuth();
   return useQuery({
     queryKey: ["me", "blocked"],
+    enabled: !!user,
     queryFn: async () => {
       const res = await api<{ blocked: BlockedUser[] }>("/me/blocked");
       return res.blocked;
