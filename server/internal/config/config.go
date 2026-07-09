@@ -31,22 +31,27 @@ type Config struct {
 	AppleAudiences  string
 	// SentryDSN enables server-side crash/error reporting when set.
 	SentryDSN string
+	// Per-IP rate limits (requests/minute). 0 disables the limiter.
+	RateLimitAuthPerMin  int
+	RateLimitWritePerMin int
 }
 
 func Load() (*Config, error) {
 	c := &Config{
-		Port:             getenv("PORT", "8080"),
-		DatabaseURL:      os.Getenv("DATABASE_URL"),
-		JWTSecret:        []byte(getenv("JWT_SECRET", "")),
-		AccessTokenTTL:   15 * time.Minute,
-		RefreshTokenTTL:  30 * 24 * time.Hour,
-		CORSOrigins:      strings.Split(getenv("CORS_ORIGINS", "*"), ","),
-		AutoSeed:         getenv("AUTO_SEED", "true") != "false",
-		OverpassEndpoint: getenv("OVERPASS_ENDPOINT", ""),
-		Enrich:           getenv("ENRICH", "true") != "false",
-		GoogleClientIDs:  getenv("GOOGLE_CLIENT_IDS", ""),
-		AppleAudiences:   getenv("APPLE_AUDIENCES", ""),
-		SentryDSN:        os.Getenv("SENTRY_DSN"),
+		Port:                 getenv("PORT", "8080"),
+		DatabaseURL:          os.Getenv("DATABASE_URL"),
+		JWTSecret:            []byte(getenv("JWT_SECRET", "")),
+		AccessTokenTTL:       15 * time.Minute,
+		RefreshTokenTTL:      30 * 24 * time.Hour,
+		CORSOrigins:          strings.Split(getenv("CORS_ORIGINS", "*"), ","),
+		AutoSeed:             getenv("AUTO_SEED", "true") != "false",
+		OverpassEndpoint:     getenv("OVERPASS_ENDPOINT", ""),
+		Enrich:               getenv("ENRICH", "true") != "false",
+		GoogleClientIDs:      getenv("GOOGLE_CLIENT_IDS", ""),
+		AppleAudiences:       getenv("APPLE_AUDIENCES", ""),
+		SentryDSN:            os.Getenv("SENTRY_DSN"),
+		RateLimitAuthPerMin:  10,
+		RateLimitWritePerMin: 60,
 	}
 	if c.DatabaseURL == "" {
 		return nil, fmt.Errorf("DATABASE_URL is required")
