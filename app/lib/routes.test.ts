@@ -1,4 +1,4 @@
-import { signInHref } from "./routes";
+import { resolveNextPath, signInHref } from "./routes";
 
 describe("signInHref", () => {
   it("returns plain /login when there is nowhere to return to", () => {
@@ -14,5 +14,21 @@ describe("signInHref", () => {
 
   it("encodes the return route", () => {
     expect(signInHref("/court/abc-123")).toBe("/login?next=%2Fcourt%2Fabc-123");
+  });
+});
+
+describe("resolveNextPath", () => {
+  it("passes plain internal paths through", () => {
+    expect(resolveNextPath("/court/abc-123")).toBe("/court/abc-123");
+  });
+
+  it("rejects non-strings and arrays", () => {
+    expect(resolveNextPath(undefined)).toBe("/");
+    expect(resolveNextPath(["/a", "/b"])).toBe("/");
+  });
+
+  it("rejects external and protocol-relative values (open redirect)", () => {
+    expect(resolveNextPath("//evil.com")).toBe("/");
+    expect(resolveNextPath("https://evil.com")).toBe("/");
   });
 });

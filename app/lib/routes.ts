@@ -6,3 +6,13 @@ export function signInHref(next?: string | null): string {
   }
   return `/login?next=${encodeURIComponent(next)}`;
 }
+
+// Resolves a ?next= value to a safe internal path. Rejects anything that
+// isn't a plain in-app path — in particular protocol-relative "//host"
+// values, which expo-router would open as an external URL (open redirect).
+export function resolveNextPath(next: unknown): string {
+  if (typeof next !== "string" || !next.startsWith("/") || next.startsWith("//")) {
+    return "/";
+  }
+  return next;
+}

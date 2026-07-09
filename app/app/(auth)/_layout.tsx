@@ -1,5 +1,6 @@
 import { Redirect, Stack, useGlobalSearchParams, type Href } from "expo-router";
 import { useAuth } from "@/lib/auth-context";
+import { resolveNextPath } from "@/lib/routes";
 import { navChrome, useTheme } from "@/lib/theme";
 
 export default function AuthLayout() {
@@ -8,7 +9,7 @@ export default function AuthLayout() {
   // Set by signInHref(): where to send the user once they're signed in.
   const { next } = useGlobalSearchParams<{ next?: string }>();
   if (!loading && user) {
-    const target = typeof next === "string" && next.startsWith("/") ? next : "/";
+    const target = resolveNextPath(next);
     return <Redirect href={target as Href} />;
   }
   return (
