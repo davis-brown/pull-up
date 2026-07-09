@@ -7,6 +7,7 @@ import { AuthProvider } from "@/lib/auth-context";
 // Side-effect import: registers the geofence background task at startup so
 // headless launches (geofence event with the app killed) can handle events.
 import { geofencingSupported, refreshGeofences } from "@/lib/geofencing";
+import { onboardingSeen } from "@/lib/first-run";
 import { navChrome, ThemePreferenceProvider, useTheme } from "@/lib/theme";
 
 const queryClient = new QueryClient({
@@ -37,12 +38,20 @@ function ThemedApp() {
     return () => sub.remove();
   }, [router]);
 
+  useEffect(() => {
+    // First launch: show the welcome carousel once, before anything else.
+    void onboardingSeen().then((seen) => {
+      if (!seen) router.replace("/onboarding");
+    });
+  }, [router]);
+
   return (
     <>
       <StatusBar style={t.scheme === "dark" ? "light" : "dark"} />
       <Stack screenOptions={navChrome(t)}>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+        <Stack.Screen name="onboarding" options={{ headerShown: false }} />
         <Stack.Screen name="court/[id]/index" options={{ title: "Court" }} />
         <Stack.Screen
           name="court/[id]/report"
