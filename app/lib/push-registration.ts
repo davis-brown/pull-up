@@ -8,7 +8,9 @@ import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 import { api } from "./api";
 
-export async function registerPushToken(): Promise<void> {
+export async function registerPushToken(opts?: {
+  requestPermission?: boolean;
+}): Promise<void> {
   if (Platform.OS === "web") return;
   try {
     const projectId: string | undefined =
@@ -16,6 +18,9 @@ export async function registerPushToken(): Promise<void> {
     if (!projectId) return;
     const perms = await Notifications.getPermissionsAsync();
     if (!perms.granted) {
+      // Only prompt when the caller has just primed the user (first
+      // favorite). Sign-in must not fire a surprise permission dialog.
+      if (!opts?.requestPermission) return;
       const req = await Notifications.requestPermissionsAsync();
       if (!req.granted) return;
     }
