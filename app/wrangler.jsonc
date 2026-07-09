@@ -1,14 +1,26 @@
-// Cloudflare Workers static-assets hosting for the Expo web build.
+// Cloudflare Worker fronting the Expo web build's static assets.
 // Build first (dist/ is the export output), then deploy:
 //   EXPO_PUBLIC_API_URL=https://pull-up-api.<subdomain>.workers.dev \
+//   EXPO_PUBLIC_WEB_URL=https://<domain> \
 //     npx expo export --platform web
 //   npx wrangler deploy
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "pull-up-web",
+  "main": "worker.ts",
   "compatibility_date": "2026-06-01",
   "assets": {
     "directory": "./dist",
+    "binding": "ASSETS",
     "not_found_handling": "single-page-application"
+  },
+  // Non-secret configuration. Fill in per environment before deploy.
+  "vars": {
+    "API_URL": "https://pull-up-api.example.workers.dev",
+    "IOS_APP_ID": "TEAMID.com.pullup.app",
+    "ANDROID_CERT_SHA256": "",
+    "APPLE_APP_STORE_ID": "",
+    "IOS_STORE_URL": "https://apps.apple.com/app/id0000000000",
+    "ANDROID_STORE_URL": "https://play.google.com/store/apps/details?id=com.pullup.app"
   }
 }
