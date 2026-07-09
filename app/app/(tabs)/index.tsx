@@ -53,6 +53,23 @@ export default function MapScreen() {
         onRegionChange={setBBox}
         onPinPress={(id) => router.push(`/court/${id}`)}
       />
+      {bbox != null && courts?.length === 0 && (
+        <View
+          style={[
+            styles.banner,
+            {
+              top: insets.top + 12,
+              backgroundColor: t.colors.surface,
+              borderColor: t.colors.border,
+              borderRadius: t.radius.full,
+            },
+          ]}
+        >
+          <Text style={[t.type.caption, { color: t.colors.textSecondary }]}>
+            No courts here yet — add the first one
+          </Text>
+        </View>
+      )}
       <Pressable
         onPress={() => router.push("/court/new")}
         style={({ pressed }) => [
@@ -88,5 +105,12 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 3 },
     elevation: 5,
+  },
+  banner: {
+    position: "absolute",
+    alignSelf: "center",
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
   },
 });
