@@ -53,6 +53,7 @@ func (s *Server) Routes() http.Handler {
 	r.Use(middleware.RealIP)
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
+	r.Use(sentryReporter)
 	// Auth is Bearer-token based (no cookies), so a permissive default is
 	// fine; tighten with CORS_ORIGINS=https://app.example.com in production.
 	r.Use(cors.Handler(cors.Options{
