@@ -25,6 +25,8 @@ func (s *Server) requireAuth(next http.Handler) http.Handler {
 			writeError(w, http.StatusUnauthorized, "invalid or expired token")
 			return
 		}
+		// Authed responses are user-specific; never let an intermediary cache them.
+		w.Header().Set("Cache-Control", "no-store")
 		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), userIDKey, userID)))
 	})
 }

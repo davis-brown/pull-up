@@ -55,6 +55,7 @@ func (s *Server) Routes() http.Handler {
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(sentryReporter)
+	r.Use(securityHeaders)
 	// Auth is Bearer-token based (no cookies), so a permissive default is
 	// fine; tighten with CORS_ORIGINS=https://app.example.com in production.
 	r.Use(cors.Handler(cors.Options{
@@ -69,6 +70,7 @@ func (s *Server) Routes() http.Handler {
 	})
 
 	r.Route("/api/v1", func(r chi.Router) {
+		r.Use(limitBody)
 		r.Group(func(r chi.Router) {
 			// Brute-force guard: covers register, login, refresh, logout, oauth.
 			if s.cfg.RateLimitAuthPerMin > 0 {
