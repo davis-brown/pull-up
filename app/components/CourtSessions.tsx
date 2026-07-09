@@ -26,10 +26,12 @@ function SessionRow({
   session,
   courtId,
   courtName,
+  highlighted,
 }: {
   session: CourtSession;
   courtId: string;
   courtName: string;
+  highlighted?: boolean;
 }) {
   const t = useTheme();
   const { user } = useAuth();
@@ -42,11 +44,32 @@ function SessionRow({
   const mine = session.created_by === user?.id;
 
   return (
-    <View style={[styles.row, { borderTopColor: t.colors.border }]}>
+    <View
+      style={[
+        styles.row,
+        {
+          borderTopColor: t.colors.border,
+          ...(highlighted
+            ? {
+                borderWidth: 1,
+                borderTopWidth: 1,
+                borderColor: t.colors.accent,
+                borderRadius: t.radius.md,
+                paddingHorizontal: t.spacing.sm,
+              }
+            : null),
+        },
+      ]}
+    >
       <View style={styles.rowBody}>
         <Text style={[t.type.bodyMedium, { color: t.colors.textPrimary }]}>
           {sessionTimeLabel(session.starts_at)}
         </Text>
+        {highlighted ? (
+          <Text style={[t.type.caption, { color: t.colors.accent, marginTop: 2 }]}>
+            Shared with you
+          </Text>
+        ) : null}
         <Text style={[t.type.caption, { color: t.colors.textSecondary, marginTop: 2 }]}>
           {session.going_count} going  ·  planned by {mine ? "you" : session.created_by_name}
         </Text>
@@ -121,7 +144,15 @@ function SessionRow({
   );
 }
 
-export function CourtSessions({ courtId, courtName }: { courtId: string; courtName: string }) {
+export function CourtSessions({
+  courtId,
+  courtName,
+  highlightId,
+}: {
+  courtId: string;
+  courtName: string;
+  highlightId?: string | null;
+}) {
   const t = useTheme();
   const router = useRouter();
   const { data: sessions } = useCourtSessions(courtId);
@@ -135,9 +166,20 @@ export function CourtSessions({ courtId, courtName }: { courtId: string; courtNa
         </Pressable>
       </View>
       {(sessions?.length ?? 0) > 0 ? (
-        sessions!.map((s) => (
-          <SessionRow key={s.id} session={s} courtId={courtId} courtName={courtName} />
-        ))
+        (() => {
+          const ordered = [...(sessions ?? [])].sort((a, b) =>
+            a.id === highlightId ? -1 : b.id === highlightId ? 1 : 0,
+          );
+          return ordered.map((s) => (
+            <SessionRow
+              key={s.id}
+              session={s}
+              courtId={courtId}
+              courtName={courtName}
+              highlighted={s.id === highlightId}
+            />
+          ));
+        })()
       ) : (
         <Text style={[t.type.caption, { color: t.colors.textMuted, marginTop: t.spacing.sm }]}>
           Nothing planned. Set a time and get a run going.
