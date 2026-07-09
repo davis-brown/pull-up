@@ -1,5 +1,12 @@
 import type { ExpoConfig } from "expo/config";
 
+// Host for universal links (iOS) / app links (Android), from the same origin
+// used to build share links. Falls back to the production domain.
+const webHost = (process.env.EXPO_PUBLIC_WEB_URL ?? "https://pullup.app").replace(
+  /^https?:\/\//,
+  "",
+).replace(/\/+$/, "");
+
 // Maps: MapLibre + OpenFreeMap tiles — no API keys or tokens required.
 const config: ExpoConfig = {
   name: "pull-up",
@@ -14,6 +21,7 @@ const config: ExpoConfig = {
     bundleIdentifier: "com.pullup.app",
     supportsTablet: false,
     usesAppleSignIn: true,
+    associatedDomains: [`applinks:${webHost}`],
     infoPlist: {
       NSLocationWhenInUseUsageDescription:
         "pull-up uses your location to show nearby courts and to verify you're at a court when you check in.",
@@ -26,6 +34,14 @@ const config: ExpoConfig = {
   },
   android: {
     package: "com.pullup.app",
+    intentFilters: [
+      {
+        action: "VIEW",
+        autoVerify: true,
+        data: [{ scheme: "https", host: webHost, pathPrefix: "/court" }],
+        category: ["BROWSABLE", "DEFAULT"],
+      },
+    ],
     permissions: [
       "ACCESS_COARSE_LOCATION",
       "ACCESS_FINE_LOCATION",
