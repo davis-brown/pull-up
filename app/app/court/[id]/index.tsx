@@ -108,7 +108,7 @@ export default function CourtDetailScreen() {
     }
   };
 
-  if (courtError) {
+  if (courtError && !court) {
     return (
       <View style={[styles.center, { backgroundColor: t.colors.background }]}>
         <QueryError error={courtError} onRetry={() => void refetch()} />
