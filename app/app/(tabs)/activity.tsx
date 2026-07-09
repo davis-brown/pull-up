@@ -10,6 +10,8 @@ import {
   View,
 } from "react-native";
 import { useQuery } from "@tanstack/react-query";
+import { EmptyState } from "@/components/EmptyState";
+import { QueryError } from "@/components/QueryError";
 import { Card } from "@/components/ui";
 import { api } from "@/lib/api";
 import { FALLBACK_CENTER, tryGetPosition, type Coords } from "@/lib/location";
@@ -33,7 +35,7 @@ export default function ActivityScreen() {
     void tryGetPosition().then((p) => setPos(p ?? FALLBACK_CENTER));
   }, []);
 
-  const { data, isLoading, refetch, isRefetching } = useQuery({
+  const { data, isLoading, error, refetch, isRefetching } = useQuery({
     queryKey: ["courts", "nearby", pos],
     enabled: pos != null,
     refetchInterval: 45_000,
@@ -53,6 +55,14 @@ export default function ActivityScreen() {
     );
   }
 
+  if (error && !data) {
+    return (
+      <View style={[styles.center, { flex: 1, backgroundColor: t.colors.background }]}>
+        <QueryError error={error} onRetry={() => void refetch()} />
+      </View>
+    );
+  }
+
   return (
     <FlatList
       data={data ?? []}
@@ -67,17 +77,13 @@ export default function ActivityScreen() {
         />
       }
       ListEmptyComponent={
-        <View style={styles.center}>
-          <Text
-            style={[
-              t.type.body,
-              styles.emptyText,
-              { color: t.colors.textSecondary, marginTop: t.spacing.xxl },
-            ]}
-          >
-            No courts within 10 km yet. Add the first one from the map tab.
-          </Text>
-        </View>
+        <EmptyState
+          icon="map-outline"
+          title="No courts within 10 km yet"
+          body="Know a court around here? Put it on the map."
+          actionTitle="Open the map"
+          onAction={() => router.push("/")}
+        />
       }
       renderItem={({ item }) => {
         const live = item.active_count > 0;
@@ -140,7 +146,6 @@ export default function ActivityScreen() {
 
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
-  emptyText: { textAlign: "center" },
   cardHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
