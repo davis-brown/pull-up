@@ -9,6 +9,9 @@ export interface OgConfig {
   API_URL: string;
 }
 
+// Fallback preview image when a court has no photos (bundled with the web app).
+export const BRAND_IMAGE_URL = "https://pullup.app/icon.png";
+
 // Apple App Site Association — served at /.well-known/apple-app-site-association
 // as application/json (no file extension).
 export function aasaBody(cfg: OgConfig): unknown {
@@ -31,4 +34,56 @@ export function assetlinksBody(cfg: OgConfig): unknown {
       },
     },
   ];
+}
+
+export function liveStatusLine(activeCount: number): string {
+  return activeCount > 0
+    ? `${activeCount} playing right now`
+    : "See who's playing pickup here";
+}
+
+function escapeAttr(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+export function ogMetaTags(input: {
+  name: string;
+  description: string;
+  imageUrl: string;
+  link: string;
+}): string {
+  const title = escapeAttr(input.name);
+  const desc = escapeAttr(input.description);
+  const img = escapeAttr(input.imageUrl);
+  const url = escapeAttr(input.link);
+  return [
+    `<meta property="og:title" content="${title}">`,
+    `<meta property="og:description" content="${desc}">`,
+    `<meta property="og:image" content="${img}">`,
+    `<meta property="og:url" content="${url}">`,
+    `<meta property="og:type" content="website">`,
+    `<meta name="twitter:card" content="summary_large_image">`,
+    `<meta name="twitter:title" content="${title}">`,
+    `<meta name="twitter:description" content="${desc}">`,
+    `<meta name="twitter:image" content="${img}">`,
+  ].join("");
+}
+
+export function appBannerTag(cfg: OgConfig): string {
+  return `<meta name="apple-itunes-app" content="app-id=${cfg.APPLE_APP_STORE_ID}">`;
+}
+
+// Resolves the preview image: first uploaded photo (via the API origin),
+// else the first external (Commons) photo, else the brand fallback.
+export function courtImageUrl(
+  cfg: OgConfig,
+  photos: { photos: Array<{ storage_key: string }>; external: Array<{ image_url: string }> },
+): string {
+  if (photos.photos[0]) return `${cfg.API_URL}/photos/${photos.photos[0].storage_key}`;
+  if (photos.external[0]) return photos.external[0].image_url;
+  return BRAND_IMAGE_URL;
 }
