@@ -185,3 +185,24 @@ export interface AdminAction {
   target_id: string;
   target_name: string;
 }
+
+export interface Profile {
+  id: string;
+  display_name: string;
+  avatar_url: string | null;
+  reputation: number;
+  member_since: string;
+  check_in_count: number;
+  courts_added_count: number;
+  follower_count: number;
+  following_count: number;
+  streak_days: number;
+  is_following: boolean;
+  follows_you: boolean;
+}
+
+export interface FollowUser {
+  id: string;
+  display_name: string;
+  avatar_url: string | null;
+}

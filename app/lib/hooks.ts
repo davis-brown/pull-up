@@ -22,9 +22,12 @@ import type {
   ExternalPhoto,
   Flag,
   FlagEntityType,
+  FollowUser,
   PhotoStatus,
+  Profile,
   RunQuality,
   Surface,
+  User,
 } from "./types";
 
 export function photoURL(storageKey: string): string {
@@ -429,6 +432,73 @@ export function useSetBlocked() {
 export function useDeleteAccount() {
   return useMutation({
     mutationFn: () => api<void>("/me", { method: "DELETE" }),
+  });
+}
+
+export function useProfile(id: string | undefined) {
+  return useQuery({
+    queryKey: ["users", id],
+    enabled: !!id,
+    queryFn: () => api<Profile>(`/users/${id}`),
+  });
+}
+
+export function useFollowers(id: string | undefined) {
+  return useQuery({
+    queryKey: ["users", id, "followers"],
+    enabled: !!id,
+    queryFn: async () => (await api<{ users: FollowUser[] }>(`/users/${id}/followers`)).users,
+  });
+}
+
+export function useFollowing(id: string | undefined) {
+  return useQuery({
+    queryKey: ["users", id, "following"],
+    enabled: !!id,
+    queryFn: async () => (await api<{ users: FollowUser[] }>(`/users/${id}/following`)).users,
+  });
+}
+
+export function useSetFollow(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (follow: boolean) =>
+      api<{ following: boolean; follower_count: number }>(`/users/${id}/follow`, {
+        method: follow ? "PUT" : "DELETE",
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["users", id] });
+    },
+  });
+}
+
+export function useUploadAvatar() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (asset: { uri: string; mimeType?: string }) => {
+      const created = await api<{ avatar_url: string; upload_path: string }>("/me/avatar", {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+      const blob = await (await fetch(asset.uri)).blob();
+      const res = await fetch(`${API_URL}${created.upload_path}`, {
+        method: "PUT",
+        headers: { "Content-Type": asset.mimeType ?? "image/jpeg" },
+        body: blob,
+      });
+      if (!res.ok) throw new Error(`avatar upload failed (${res.status})`);
+      await api<User>("/me", { method: "PATCH", body: JSON.stringify({ avatar_url: created.avatar_url }) });
+      return created.avatar_url;
+    },
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["me"] }),
+  });
+}
+
+export function useClearAvatar() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => api<void>("/me/avatar", { method: "DELETE" }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["me"] }),
   });
 }
 
