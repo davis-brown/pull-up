@@ -7,7 +7,19 @@ import (
 	"testing"
 
 	"github.com/google/uuid"
+
+	"github.com/davisbrown/pull-up/server/internal/store/gen"
 )
+
+// mustUUID parses s as a UUID or fails the test.
+func mustUUID(t *testing.T, s string) uuid.UUID {
+	t.Helper()
+	id, err := uuid.Parse(s)
+	if err != nil {
+		t.Fatalf("parse uuid %q: %v", s, err)
+	}
+	return id
+}
 
 func TestGetProfilePublic(t *testing.T) {
 	ts, _ := newTestServer(t)
@@ -189,5 +201,29 @@ func TestAdminClearAvatar(t *testing.T) {
 	}
 	if count != 1 {
 		t.Errorf("admin_actions rows with action=clear_avatar for target = %d, want 1", count)
+	}
+}
+
+func TestFollowerGetsRunNotification(t *testing.T) {
+	ts, st := newTestServer(t)
+	planner := registerUser(t, ts, "planner@test.local", "Planner")
+	follower := registerUser(t, ts, "follower2@test.local", "Follower")
+
+	// follower follows planner and registers a push token; is NOT a favoriter.
+	doJSON(t, ts, http.MethodPut, "/users/"+planner.User.ID+"/follow", follower.AccessToken, nil).Body.Close()
+	doJSON(t, ts, http.MethodPost, "/me/push-token", follower.AccessToken, map[string]any{"token": "ExpoTok[follower]"}).Body.Close()
+
+	court := createTestCourt(t, ts, planner.AccessToken, "Notify Court", ruckerLat, ruckerLng)
+
+	// Query the notify set directly (deterministic; avoids asserting on the
+	// real push transport).
+	toks, err := st.Queries.ListSessionNotifyTokens(context.Background(), gen.ListSessionNotifyTokensParams{
+		Actor: mustUUID(t, planner.User.ID), CourtID: mustUUID(t, court.ID),
+	})
+	if err != nil {
+		t.Fatalf("notify tokens: %v", err)
+	}
+	if len(toks) != 1 || toks[0] != "ExpoTok[follower]" {
+		t.Errorf("notify tokens = %v, want [ExpoTok[follower]]", toks)
 	}
 }

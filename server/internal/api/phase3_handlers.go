@@ -224,13 +224,14 @@ func (s *Server) handleSessionAttendees(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, map[string]any{"attendees": attendees})
 }
 
-// notifySessionPlanned pings favoriters of the court (except the planner).
+// notifySessionPlanned pings favoriters of the court and followers of the
+// planner (except the planner), deduplicated.
 func (s *Server) notifySessionPlanned(courtID uuid.UUID, courtName string, actor uuid.UUID, startsAt time.Time) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	tokens, err := s.store.Queries.ListFavoriterPushTokens(ctx, gen.ListFavoriterPushTokensParams{
-		CourtID: courtID, UserID: actor,
+	tokens, err := s.store.Queries.ListSessionNotifyTokens(ctx, gen.ListSessionNotifyTokensParams{
+		Actor: actor, CourtID: courtID,
 	})
 	if err != nil || len(tokens) == 0 {
 		return
