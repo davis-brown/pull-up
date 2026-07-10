@@ -63,6 +63,17 @@ FROM push_tokens pt
 JOIN favorites f ON f.user_id = pt.user_id
 WHERE f.court_id = $1 AND pt.user_id <> $2;
 
+-- name: ListSessionNotifyTokens :many
+-- Push tokens to notify about a planned run: the court's favoriters plus the
+-- planner's followers, excluding the planner. Deduped by DISTINCT token.
+SELECT DISTINCT pt.token
+FROM push_tokens pt
+WHERE pt.user_id <> sqlc.arg('actor')
+  AND (
+    pt.user_id IN (SELECT user_id FROM favorites WHERE court_id = sqlc.arg('court_id'))
+    OR pt.user_id IN (SELECT follower_id FROM follows WHERE followee_id = sqlc.arg('actor'))
+  );
+
 -- OAuth ---------------------------------------------------------------------
 
 -- name: GetUserByOAuth :one
