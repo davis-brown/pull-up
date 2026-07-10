@@ -13,6 +13,7 @@ const entityLabels: Record<FlagEntityType, string> = {
   report: "crowd report",
   message: "message",
   session: "planned run",
+  user: "player",
 };
 
 export default function FlagScreen() {

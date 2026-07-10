@@ -75,6 +75,9 @@ function ThemedApp() {
           name="court/new"
           options={{ title: "Add a court", presentation: "modal" }}
         />
+        <Stack.Screen name="user/[id]/index" options={{ title: "Player" }} />
+        <Stack.Screen name="user/[id]/followers" options={{ title: "Followers" }} />
+        <Stack.Screen name="user/[id]/following" options={{ title: "Following" }} />
         <Stack.Screen name="flag" options={{ title: "Report", presentation: "modal" }} />
         <Stack.Screen name="admin/index" options={{ title: "Moderation" }} />
         <Stack.Screen
