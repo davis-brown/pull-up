@@ -127,6 +127,12 @@ type Flag struct {
 	ResolvedBy *uuid.UUID `json:"resolved_by"`
 }
 
+type Follow struct {
+	FollowerID uuid.UUID `json:"follower_id"`
+	FolloweeID uuid.UUID `json:"followee_id"`
+	CreatedAt  time.Time `json:"created_at"`
+}
+
 type PushToken struct {
 	Token     string    `json:"token"`
 	UserID    uuid.UUID `json:"user_id"`

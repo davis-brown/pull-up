@@ -60,7 +60,7 @@ func testStore(t *testing.T) *store.Store {
 	}
 	// Isolate each run.
 	if _, err := st.Pool.Exec(ctx,
-		"TRUNCATE users, refresh_tokens, courts, check_ins, crowd_reports, court_votes, court_photos, flags, seed_regions, sessions, session_rsvps, court_messages CASCADE"); err != nil {
+		"TRUNCATE users, refresh_tokens, courts, check_ins, crowd_reports, court_votes, court_photos, flags, seed_regions, sessions, session_rsvps, court_messages, follows CASCADE"); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 	return st
@@ -588,5 +588,46 @@ func TestComplianceBlockAndDelete(t *testing.T) {
 	}
 	if got.SubmittedBy != nil {
 		t.Error("submitted_by not detached")
+	}
+}
+
+func TestFollowGraph(t *testing.T) {
+	st := testStore(t)
+	ctx := context.Background()
+	a := createUser(t, st, "follower@test.local")
+	b := createUser(t, st, "followee@test.local")
+
+	if err := st.Queries.Follow(ctx, gen.FollowParams{FollowerID: a, FolloweeID: b}); err != nil {
+		t.Fatalf("follow: %v", err)
+	}
+	// Idempotent.
+	if err := st.Queries.Follow(ctx, gen.FollowParams{FollowerID: a, FolloweeID: b}); err != nil {
+		t.Fatalf("follow again: %v", err)
+	}
+	following, err := st.Queries.IsFollowing(ctx, gen.IsFollowingParams{FollowerID: a, FolloweeID: b})
+	if err != nil || !following {
+		t.Fatalf("IsFollowing = %v, %v; want true", following, err)
+	}
+	if n, _ := st.Queries.CountFollowers(ctx, b); n != 1 {
+		t.Errorf("followers of b = %d, want 1", n)
+	}
+	if n, _ := st.Queries.CountFollowing(ctx, a); n != 1 {
+		t.Errorf("following of a = %d, want 1", n)
+	}
+	followers, err := st.Queries.ListFollowers(ctx, gen.ListFollowersParams{FolloweeID: b, Limit: 10})
+	if err != nil || len(followers) != 1 || followers[0].ID != a {
+		t.Fatalf("ListFollowers = %+v, err=%v", followers, err)
+	}
+	followees, err := st.Queries.ListFollowing(ctx, gen.ListFollowingParams{FollowerID: a, Limit: 10})
+	if err != nil || len(followees) != 1 || followees[0].ID != b {
+		t.Fatalf("ListFollowing = %+v, err=%v", followees, err)
+	}
+	// DeleteFollowsBetween severs both directions.
+	if err := st.Queries.DeleteFollowsBetween(ctx, gen.DeleteFollowsBetweenParams{FollowerID: a, FolloweeID: b}); err != nil {
+		t.Fatalf("delete between: %v", err)
+	}
+	following, _ = st.Queries.IsFollowing(ctx, gen.IsFollowingParams{FollowerID: a, FolloweeID: b})
+	if following {
+		t.Error("still following after DeleteFollowsBetween")
 	}
 }
