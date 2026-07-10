@@ -115,6 +115,7 @@ func (s *Server) Routes() http.Handler {
 			r.Get("/me/check-ins", s.handleCheckInHistory)
 			r.Get("/me/favorites", s.handleListFavorites)
 			r.Post("/me/push-token", s.handleRegisterPushToken)
+			r.Get("/feed", s.handleGetFeed)
 
 			r.Post("/courts", s.handleCreateCourt)
 			r.Post("/courts/{id}/vote", s.handleVoteCourt)
