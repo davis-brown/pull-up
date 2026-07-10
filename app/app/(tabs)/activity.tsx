@@ -89,6 +89,7 @@ export default function ActivityScreen() {
           <FeedHeader
             friendsHere={feed.data?.friends_here ?? []}
             runs={feed.data?.upcoming_runs ?? []}
+            loading={feed.isLoading}
           />
         ) : null
       }
