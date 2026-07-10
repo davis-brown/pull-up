@@ -1,9 +1,12 @@
 package api_test
 
 import (
+	"context"
 	"net/http"
 	"strings"
 	"testing"
+
+	"github.com/google/uuid"
 )
 
 func TestGetProfilePublic(t *testing.T) {
@@ -129,5 +132,62 @@ func TestAvatarUploadAndClear(t *testing.T) {
 		AvatarURL *string `json:"avatar_url"`
 	}](t, resp); p.AvatarURL != nil {
 		t.Errorf("avatar not cleared after DELETE")
+	}
+}
+
+// TestAdminClearAvatar regression-tests the admin_actions CHECK constraint:
+// handleAdminClearAvatar writes an audit row with action='clear_avatar',
+// which the original migration's CHECK (action IN ('promote','demote'))
+// rejected. The handler only logs that error (established pattern), so the
+// endpoint still returned 204 while the audit row silently never landed.
+// This asserts the row actually exists, which fails against the
+// pre-00009_admin_action_clear_avatar.sql constraint even though the HTTP
+// response looks fine.
+func TestAdminClearAvatar(t *testing.T) {
+	ts, st := newTestServer(t)
+	admin := registerUser(t, ts, "clearavataradmin@test.local", "ClearAvatarAdmin")
+	bootstrapAdmin(t, st, admin.User.ID)
+	target := registerUser(t, ts, "clearavatartarget@test.local", "ClearAvatarTarget")
+
+	// Give the target an avatar to clear.
+	doJSON(t, ts, http.MethodPatch, "/me", target.AccessToken, map[string]any{
+		"avatar_url": "/photos/avatars/seed.jpg",
+	}).Body.Close()
+	resp := doJSON(t, ts, http.MethodGet, "/users/"+target.User.ID, "", nil)
+	if p := decodeJSON[struct {
+		AvatarURL *string `json:"avatar_url"`
+	}](t, resp); p.AvatarURL == nil {
+		t.Fatalf("avatar not set on target before admin clear")
+	}
+
+	// Admin clears it.
+	resp = doJSON(t, ts, http.MethodPost, "/admin/users/"+target.User.ID+"/avatar/clear", admin.AccessToken, nil)
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("admin clear avatar: status %d: %s", resp.StatusCode, readBody(t, resp))
+	}
+	resp.Body.Close()
+
+	resp = doJSON(t, ts, http.MethodGet, "/users/"+target.User.ID, "", nil)
+	if p := decodeJSON[struct {
+		AvatarURL *string `json:"avatar_url"`
+	}](t, resp); p.AvatarURL != nil {
+		t.Errorf("avatar not cleared after admin clear: %v", *p.AvatarURL)
+	}
+
+	// The audit row is the actual point of this test: it must exist, which
+	// requires the admin_actions CHECK constraint to permit 'clear_avatar'.
+	targetID, err := uuid.Parse(target.User.ID)
+	if err != nil {
+		t.Fatalf("parse target id: %v", err)
+	}
+	var count int
+	if err := st.Pool.QueryRow(context.Background(),
+		"SELECT count(*) FROM admin_actions WHERE action='clear_avatar' AND target_user_id=$1",
+		targetID,
+	).Scan(&count); err != nil {
+		t.Fatalf("query admin_actions: %v", err)
+	}
+	if count != 1 {
+		t.Errorf("admin_actions rows with action=clear_avatar for target = %d, want 1", count)
 	}
 }
