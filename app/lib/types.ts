@@ -130,6 +130,19 @@ export interface CourtSession {
   my_rsvp: "" | "going" | "out";
 }
 
+export interface FeedRun extends CourtSession {
+  court_name: string;
+}
+
+export interface FriendPresence {
+  id: string;
+  display_name: string;
+  avatar_url: string | null;
+  court_id: string;
+  court_name: string;
+  since: string;
+}
+
 export interface CourtMessage {
   id: string;
   court_id: string;

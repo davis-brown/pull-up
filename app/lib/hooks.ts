@@ -20,9 +20,11 @@ import type {
   CourtSummary,
   CrowdReport,
   ExternalPhoto,
+  FeedRun,
   Flag,
   FlagEntityType,
   FollowUser,
+  FriendPresence,
   PhotoStatus,
   Profile,
   RunQuality,
@@ -499,6 +501,17 @@ export function useClearAvatar() {
   return useMutation({
     mutationFn: () => api<void>("/me/avatar", { method: "DELETE" }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["me"] }),
+  });
+}
+
+export function useFeed() {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ["feed"],
+    enabled: !!user,
+    refetchInterval: 45_000,
+    queryFn: () =>
+      api<{ friends_here: FriendPresence[]; upcoming_runs: FeedRun[] }>("/feed"),
   });
 }
 
