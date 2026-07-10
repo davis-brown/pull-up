@@ -35,9 +35,8 @@ func TestGuestReadAccess(t *testing.T) {
 		if resp.StatusCode != http.StatusOK {
 			t.Errorf("GET %s unauthenticated: status %d, want 200: %s",
 				path, resp.StatusCode, readBody(t, resp))
-		} else {
-			resp.Body.Close()
 		}
+		resp.Body.Close()
 	}
 }
 
