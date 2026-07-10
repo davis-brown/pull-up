@@ -591,6 +591,60 @@ func TestComplianceBlockAndDelete(t *testing.T) {
 	}
 }
 
+// insertCheckInDaysAgo inserts a check-in whose created_at falls on the UTC
+// calendar day `daysAgo` days before today (0 = today, 1 = yesterday, ...),
+// computed in SQL so the test is stable regardless of when it runs.
+func insertCheckInDaysAgo(t *testing.T, st *store.Store, courtID, userID uuid.UUID, daysAgo int) {
+	t.Helper()
+	ctx := context.Background()
+	_, err := st.Pool.Exec(ctx, `
+		INSERT INTO check_ins (court_id, user_id, source, created_at, expires_at)
+		VALUES (
+			$1, $2, 'manual',
+			(((now() AT TIME ZONE 'UTC')::date - (INTERVAL '1 day' * $3::int) + INTERVAL '12 hours') AT TIME ZONE 'UTC'),
+			(((now() AT TIME ZONE 'UTC')::date - (INTERVAL '1 day' * $3::int) + INTERVAL '14 hours') AT TIME ZONE 'UTC')
+		)`, courtID, userID, daysAgo)
+	if err != nil {
+		t.Fatalf("insert check-in %d days ago: %v", daysAgo, err)
+	}
+}
+
+func TestCurrentStreakDays(t *testing.T) {
+	st := testStore(t)
+	ctx := context.Background()
+	owner := createUser(t, st, "streak-owner@test.local")
+	court := createCourt(t, st, "Streak Court", ruckerLat, ruckerLng, owner)
+
+	cases := []struct {
+		name     string
+		email    string
+		daysAgo  []int
+		wantDays int32
+	}{
+		{"today+yesterday+2ago", "streak-a@test.local", []int{0, 1, 2}, 3},
+		{"today+2ago gap yesterday", "streak-b@test.local", []int{0, 2}, 1},
+		{"only yesterday", "streak-c@test.local", []int{1}, 1},
+		{"only 2ago lapsed", "streak-d@test.local", []int{2}, 0},
+		{"same day twice", "streak-e@test.local", []int{0, 0}, 1},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			uid := createUser(t, st, tc.email)
+			for _, d := range tc.daysAgo {
+				insertCheckInDaysAgo(t, st, court.ID, uid, d)
+			}
+			got, err := st.Queries.CurrentStreakDays(ctx, uid)
+			if err != nil {
+				t.Fatalf("CurrentStreakDays: %v", err)
+			}
+			if got != tc.wantDays {
+				t.Errorf("CurrentStreakDays(%s) = %d, want %d", tc.name, got, tc.wantDays)
+			}
+		})
+	}
+}
+
 func TestFollowGraph(t *testing.T) {
 	st := testStore(t)
 	ctx := context.Background()

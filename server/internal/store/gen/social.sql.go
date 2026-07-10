@@ -41,20 +41,21 @@ WITH days AS (
     WHERE user_id = $1
 ), ranked AS (
     SELECT d,
-        (CURRENT_DATE - d) AS offset_days,
+        ((now() AT TIME ZONE 'UTC')::date - d) AS offset_days,
         row_number() OVER (ORDER BY d DESC) - 1 AS rn
     FROM days
 )
 SELECT count(*)::int AS streak_days
 FROM ranked
-WHERE offset_days = rn
+WHERE offset_days - (SELECT min(offset_days) FROM ranked) = rn
   AND (SELECT min(offset_days) FROM ranked) <= 1
 `
 
 // Consecutive UTC days ending today or yesterday with >=1 geo-verified
-// check-in. Distinct check-in days are numbered densely; a day is "in the
-// streak" when its offset-from-today equals its dense rank-1, anchored only
-// if the most recent day is today (0) or yesterday (1).
+// check-in. Distinct check-in days are numbered densely from the most recent;
+// a day is in the streak when its offset-from-today, re-based against the most
+// recent check-in day's offset (the anchor), equals its dense rank. The anchor
+// must be today (0) or yesterday (1), else the streak has lapsed (0).
 func (q *Queries) CurrentStreakDays(ctx context.Context, userID uuid.UUID) (int32, error) {
 	row := q.db.QueryRow(ctx, currentStreakDays, userID)
 	var streak_days int32
