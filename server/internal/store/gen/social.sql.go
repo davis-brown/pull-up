@@ -176,6 +176,86 @@ func (q *Queries) IsFollowing(ctx context.Context, arg IsFollowingParams) (bool,
 	return following, err
 }
 
+const listFeedRuns = `-- name: ListFeedRuns :many
+SELECT
+    s.id, s.court_id, c.name AS court_name,
+    s.created_by, u.display_name AS created_by_name,
+    s.starts_at, s.note, s.created_at,
+    g.going_count,
+    coalesce(mine.status, '') AS my_rsvp
+FROM sessions s
+JOIN users u ON u.id = s.created_by
+JOIN courts c ON c.id = s.court_id
+LEFT JOIN LATERAL (
+    SELECT count(*)::int AS going_count
+    FROM session_rsvps r
+    WHERE r.session_id = s.id AND r.status = 'going'
+) g ON true
+LEFT JOIN session_rsvps mine
+    ON mine.session_id = s.id AND mine.user_id = $1
+WHERE s.canceled_at IS NULL
+  AND s.starts_at > now() - interval '2 hours'
+  AND s.starts_at < now() + interval '7 days'
+  AND s.created_by <> $1
+  AND (
+      s.created_by IN (SELECT followee_id FROM follows WHERE follower_id = $1)
+      OR s.court_id IN (SELECT court_id FROM favorites WHERE user_id = $1)
+  )
+  AND NOT EXISTS (
+      SELECT 1 FROM blocked_users b
+      WHERE b.blocker_id = $1 AND b.blocked_id = s.created_by
+  )
+ORDER BY s.starts_at
+LIMIT 50
+`
+
+type ListFeedRunsRow struct {
+	ID            uuid.UUID `json:"id"`
+	CourtID       uuid.UUID `json:"court_id"`
+	CourtName     string    `json:"court_name"`
+	CreatedBy     uuid.UUID `json:"created_by"`
+	CreatedByName string    `json:"created_by_name"`
+	StartsAt      time.Time `json:"starts_at"`
+	Note          *string   `json:"note"`
+	CreatedAt     time.Time `json:"created_at"`
+	GoingCount    int32     `json:"going_count"`
+	MyRsvp        string    `json:"my_rsvp"`
+}
+
+// Upcoming runs for the viewer's feed: future, non-canceled sessions planned by
+// someone the viewer follows OR at a court the viewer favorited. Excludes the
+// viewer's own runs and blocked planners; deduped by session; soonest first.
+func (q *Queries) ListFeedRuns(ctx context.Context, viewerID uuid.UUID) ([]ListFeedRunsRow, error) {
+	rows, err := q.db.Query(ctx, listFeedRuns, viewerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListFeedRunsRow
+	for rows.Next() {
+		var i ListFeedRunsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.CourtID,
+			&i.CourtName,
+			&i.CreatedBy,
+			&i.CreatedByName,
+			&i.StartsAt,
+			&i.Note,
+			&i.CreatedAt,
+			&i.GoingCount,
+			&i.MyRsvp,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listFollowers = `-- name: ListFollowers :many
 SELECT u.id, u.display_name, u.avatar_url, f.created_at
 FROM follows f
@@ -257,6 +337,68 @@ func (q *Queries) ListFollowing(ctx context.Context, arg ListFollowingParams) ([
 			&i.DisplayName,
 			&i.AvatarUrl,
 			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listFriendsCheckedIn = `-- name: ListFriendsCheckedIn :many
+SELECT
+    u.id, u.display_name, u.avatar_url,
+    ci.court_id, c.name AS court_name,
+    ci.created_at AS since
+FROM check_ins ci
+JOIN users u ON u.id = ci.user_id
+JOIN courts c ON c.id = ci.court_id
+WHERE ci.checked_out_at IS NULL
+  AND ci.expires_at > now()
+  AND ci.user_id <> $1
+  AND EXISTS (SELECT 1 FROM follows f WHERE f.follower_id = $1 AND f.followee_id = ci.user_id)
+  AND EXISTS (SELECT 1 FROM follows f WHERE f.follower_id = ci.user_id AND f.followee_id = $1)
+  AND NOT EXISTS (
+      SELECT 1 FROM blocked_users b
+      WHERE (b.blocker_id = $1 AND b.blocked_id = ci.user_id)
+         OR (b.blocker_id = ci.user_id AND b.blocked_id = $1)
+  )
+ORDER BY ci.created_at DESC
+LIMIT 50
+`
+
+type ListFriendsCheckedInRow struct {
+	ID          uuid.UUID `json:"id"`
+	DisplayName string    `json:"display_name"`
+	AvatarUrl   *string   `json:"avatar_url"`
+	CourtID     uuid.UUID `json:"court_id"`
+	CourtName   string    `json:"court_name"`
+	Since       time.Time `json:"since"`
+}
+
+// Mutual-follow friends with an active check-in right now. "Friends" = a follows
+// row in both directions. Excludes the viewer and any blocked pair. This is the
+// only place a user's live court + check-in time is exposed, and only under
+// mutual follow (the phase-7 consent rule).
+func (q *Queries) ListFriendsCheckedIn(ctx context.Context, viewerID uuid.UUID) ([]ListFriendsCheckedInRow, error) {
+	rows, err := q.db.Query(ctx, listFriendsCheckedIn, viewerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListFriendsCheckedInRow
+	for rows.Next() {
+		var i ListFriendsCheckedInRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.DisplayName,
+			&i.AvatarUrl,
+			&i.CourtID,
+			&i.CourtName,
+			&i.Since,
 		); err != nil {
 			return nil, err
 		}
