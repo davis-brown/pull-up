@@ -57,7 +57,7 @@ export default function ActivityScreen() {
 
   if (error && !data) {
     return (
-      <View style={[styles.center, { flex: 1, backgroundColor: t.colors.background }]}>
+      <View style={[styles.center, { backgroundColor: t.colors.background }]}>
         <QueryError error={error} onRetry={() => void refetch()} />
       </View>
     );
