@@ -685,3 +685,89 @@ func TestFollowGraph(t *testing.T) {
 		t.Error("still following after DeleteFollowsBetween")
 	}
 }
+
+func TestFeedFriendsHere(t *testing.T) {
+	st := testStore(t)
+	ctx := context.Background()
+	viewer := createUser(t, st, "feed-viewer@test.local")
+	friend := createUser(t, st, "feed-friend@test.local")
+	stranger := createUser(t, st, "feed-stranger@test.local")
+	court := createCourt(t, st, "Feed Court", ruckerLat, ruckerLng, viewer)
+
+	// Mutual follow between viewer and friend; one-directional to stranger.
+	for _, p := range []gen.FollowParams{
+		{FollowerID: viewer, FolloweeID: friend},
+		{FollowerID: friend, FolloweeID: viewer},
+		{FollowerID: viewer, FolloweeID: stranger},
+	} {
+		if err := st.Queries.Follow(ctx, p); err != nil {
+			t.Fatalf("follow %+v: %v", p, err)
+		}
+	}
+
+	dm := float32(1)
+	for _, uid := range []uuid.UUID{friend, stranger} {
+		if _, err := st.Queries.CreateCheckIn(ctx, gen.CreateCheckInParams{
+			CourtID: court.ID, UserID: uid, Source: "manual", Lng: ruckerLng, Lat: ruckerLat, DistanceM: &dm,
+		}); err != nil {
+			t.Fatalf("check in %v: %v", uid, err)
+		}
+	}
+
+	rows, err := st.Queries.ListFriendsCheckedIn(ctx, viewer)
+	if err != nil {
+		t.Fatalf("friends here: %v", err)
+	}
+	if len(rows) != 1 || rows[0].ID != friend {
+		t.Fatalf("friends_here = %+v, want only the mutual friend", rows)
+	}
+	if rows[0].CourtName != "Feed Court" {
+		t.Errorf("court name = %q, want Feed Court", rows[0].CourtName)
+	}
+}
+
+func TestFeedRuns(t *testing.T) {
+	st := testStore(t)
+	ctx := context.Background()
+	viewer := createUser(t, st, "runs-viewer@test.local")
+	followed := createUser(t, st, "runs-followed@test.local")
+	stranger := createUser(t, st, "runs-stranger@test.local")
+	favCourt := createCourt(t, st, "Fav Court", ruckerLat, ruckerLng, viewer)
+	otherCourt := createCourt(t, st, "Other Court", ruckerLat+0.05, ruckerLng, followed)
+
+	if err := st.Queries.Follow(ctx, gen.FollowParams{FollowerID: viewer, FolloweeID: followed}); err != nil {
+		t.Fatalf("follow: %v", err)
+	}
+	if err := st.Queries.AddFavorite(ctx, gen.AddFavoriteParams{UserID: viewer, CourtID: favCourt.ID}); err != nil {
+		t.Fatalf("favorite: %v", err)
+	}
+
+	future := time.Now().Add(3 * time.Hour)
+	mkSession := func(courtID, planner uuid.UUID) {
+		if _, err := st.Queries.CreateSession(ctx, gen.CreateSessionParams{
+			CourtID: courtID, CreatedBy: planner, StartsAt: future, Note: nil,
+		}); err != nil {
+			t.Fatalf("create session: %v", err)
+		}
+	}
+	mkSession(otherCourt.ID, followed) // in feed: followed planner
+	mkSession(favCourt.ID, stranger)   // in feed: favorited court
+	mkSession(favCourt.ID, viewer)     // excluded: own run
+	mkSession(otherCourt.ID, stranger) // excluded: neither
+
+	rows, err := st.Queries.ListFeedRuns(ctx, viewer)
+	if err != nil {
+		t.Fatalf("feed runs: %v", err)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("feed runs = %d, want 2", len(rows))
+	}
+	for _, r := range rows {
+		if r.CreatedBy == viewer {
+			t.Errorf("own run leaked into feed: %+v", r)
+		}
+		if r.CourtName == "" {
+			t.Errorf("missing court_name: %+v", r)
+		}
+	}
+}
