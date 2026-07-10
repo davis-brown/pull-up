@@ -41,3 +41,33 @@ LIMIT $2;
 DELETE FROM follows
 WHERE (follower_id = $1 AND followee_id = $2)
    OR (follower_id = $2 AND followee_id = $1);
+
+-- name: GetProfileStats :one
+SELECT
+    u.id, u.display_name, u.avatar_url, u.reputation, u.created_at AS member_since,
+    (SELECT count(*) FROM check_ins ci WHERE ci.user_id = u.id)::int AS check_in_count,
+    (SELECT count(*) FROM courts c WHERE c.submitted_by = u.id AND c.status = 'verified')::int AS courts_added_count,
+    (SELECT count(*) FROM follows f WHERE f.followee_id = u.id)::int AS follower_count,
+    (SELECT count(*) FROM follows f WHERE f.follower_id = u.id)::int AS following_count
+FROM users u
+WHERE u.id = $1;
+
+-- name: CurrentStreakDays :one
+-- Consecutive UTC days ending today or yesterday with >=1 geo-verified
+-- check-in. Distinct check-in days are numbered densely; a day is "in the
+-- streak" when its offset-from-today equals its dense rank-1, anchored only
+-- if the most recent day is today (0) or yesterday (1).
+WITH days AS (
+    SELECT DISTINCT (date_trunc('day', created_at AT TIME ZONE 'UTC'))::date AS d
+    FROM check_ins
+    WHERE user_id = $1
+), ranked AS (
+    SELECT d,
+        (CURRENT_DATE - d) AS offset_days,
+        row_number() OVER (ORDER BY d DESC) - 1 AS rn
+    FROM days
+)
+SELECT count(*)::int AS streak_days
+FROM ranked
+WHERE offset_days = rn
+  AND (SELECT min(offset_days) FROM ranked) <= 1;
