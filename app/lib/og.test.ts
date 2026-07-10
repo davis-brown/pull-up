@@ -65,6 +65,10 @@ describe("ogMetaTags", () => {
     const t = ogMetaTags({ name: 'A "B" Court', description: "d", imageUrl: "i", link: "l" });
     expect(t).toContain('content="A &quot;B&quot; Court"');
   });
+  it("escapes single quotes in the name", () => {
+    const t = ogMetaTags({ name: "O'Neal Court", description: "d", imageUrl: "i", link: "l" });
+    expect(t).toContain("O&#39;Neal Court");
+  });
 });
 
 describe("appBannerTag", () => {
@@ -76,17 +80,16 @@ describe("appBannerTag", () => {
 });
 
 describe("courtImageUrl", () => {
+  const fallback = "https://web.example/favicon.png";
   it("uses the first uploaded photo via the API origin", () => {
-    expect(courtImageUrl(cfg, { photos: [{ storage_key: "k1" }], external: [] })).toBe(
+    expect(courtImageUrl(cfg, { photos: [{ storage_key: "k1" }], external: [] }, fallback)).toBe(
       "https://api.example.com/photos/k1",
     );
   });
-  it("falls back to an external photo, then the brand image", () => {
+  it("falls back to an external photo, then the provided fallback url", () => {
     expect(
-      courtImageUrl(cfg, { photos: [], external: [{ image_url: "https://ex/e.jpg" }] }),
+      courtImageUrl(cfg, { photos: [], external: [{ image_url: "https://ex/e.jpg" }] }, fallback),
     ).toBe("https://ex/e.jpg");
-    expect(courtImageUrl(cfg, { photos: [], external: [] })).toBe(
-      "https://pullup.app/icon.png",
-    );
+    expect(courtImageUrl(cfg, { photos: [], external: [] }, fallback)).toBe(fallback);
   });
 });
