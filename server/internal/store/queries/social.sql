@@ -79,3 +79,63 @@ SELECT count(*)::int AS streak_days
 FROM ranked
 WHERE offset_days - (SELECT min(offset_days) FROM ranked) = rn
   AND (SELECT min(offset_days) FROM ranked) <= 1;
+
+-- name: ListFriendsCheckedIn :many
+-- Mutual-follow friends with an active check-in right now. "Friends" = a follows
+-- row in both directions. Excludes the viewer and any blocked pair. This is the
+-- only place a user's live court + check-in time is exposed, and only under
+-- mutual follow (the phase-7 consent rule).
+SELECT
+    u.id, u.display_name, u.avatar_url,
+    ci.court_id, c.name AS court_name,
+    ci.created_at AS since
+FROM check_ins ci
+JOIN users u ON u.id = ci.user_id
+JOIN courts c ON c.id = ci.court_id
+WHERE ci.checked_out_at IS NULL
+  AND ci.expires_at > now()
+  AND ci.user_id <> sqlc.arg('viewer_id')
+  AND EXISTS (SELECT 1 FROM follows f WHERE f.follower_id = sqlc.arg('viewer_id') AND f.followee_id = ci.user_id)
+  AND EXISTS (SELECT 1 FROM follows f WHERE f.follower_id = ci.user_id AND f.followee_id = sqlc.arg('viewer_id'))
+  AND NOT EXISTS (
+      SELECT 1 FROM blocked_users b
+      WHERE (b.blocker_id = sqlc.arg('viewer_id') AND b.blocked_id = ci.user_id)
+         OR (b.blocker_id = ci.user_id AND b.blocked_id = sqlc.arg('viewer_id'))
+  )
+ORDER BY ci.created_at DESC
+LIMIT 50;
+
+-- name: ListFeedRuns :many
+-- Upcoming runs for the viewer's feed: future, non-canceled sessions planned by
+-- someone the viewer follows OR at a court the viewer favorited. Excludes the
+-- viewer's own runs and blocked planners; deduped by session; soonest first.
+SELECT
+    s.id, s.court_id, c.name AS court_name,
+    s.created_by, u.display_name AS created_by_name,
+    s.starts_at, s.note, s.created_at,
+    g.going_count,
+    coalesce(mine.status, '') AS my_rsvp
+FROM sessions s
+JOIN users u ON u.id = s.created_by
+JOIN courts c ON c.id = s.court_id
+LEFT JOIN LATERAL (
+    SELECT count(*)::int AS going_count
+    FROM session_rsvps r
+    WHERE r.session_id = s.id AND r.status = 'going'
+) g ON true
+LEFT JOIN session_rsvps mine
+    ON mine.session_id = s.id AND mine.user_id = sqlc.arg('viewer_id')
+WHERE s.canceled_at IS NULL
+  AND s.starts_at > now() - interval '2 hours'
+  AND s.starts_at < now() + interval '7 days'
+  AND s.created_by <> sqlc.arg('viewer_id')
+  AND (
+      s.created_by IN (SELECT followee_id FROM follows WHERE follower_id = sqlc.arg('viewer_id'))
+      OR s.court_id IN (SELECT court_id FROM favorites WHERE user_id = sqlc.arg('viewer_id'))
+  )
+  AND NOT EXISTS (
+      SELECT 1 FROM blocked_users b
+      WHERE b.blocker_id = sqlc.arg('viewer_id') AND b.blocked_id = s.created_by
+  )
+ORDER BY s.starts_at
+LIMIT 50;
