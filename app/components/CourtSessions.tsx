@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useRouter, type Href } from "expo-router";
 import { useState } from "react";
 import { Pressable, Share, StyleSheet, Text, View } from "react-native";
 import { useSignInDetour } from "@/components/SignInCta";
@@ -34,6 +34,7 @@ function SessionRow({
   highlighted?: boolean;
 }) {
   const t = useTheme();
+  const router = useRouter();
   const { user } = useAuth();
   const detour = useSignInDetour();
   const rsvp = useRSVP(courtId);
@@ -72,7 +73,17 @@ function SessionRow({
           </Text>
         ) : null}
         <Text style={[t.type.caption, { color: t.colors.textSecondary, marginTop: 2 }]}>
-          {session.going_count} going  ·  planned by {mine ? "you" : session.created_by_name}
+          {session.going_count} going  ·  planned by{" "}
+          {mine ? (
+            "you"
+          ) : (
+            <Text
+              style={{ fontWeight: "600" }}
+              onPress={() => router.push(`/user/${session.created_by}` as Href)}
+            >
+              {session.created_by_name}
+            </Text>
+          )}
         </Text>
         {session.note ? (
           <Text
