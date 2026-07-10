@@ -91,6 +91,8 @@ func (s *Server) Routes() http.Handler {
 		r.Get("/courts/{id}/messages", s.handleListMessages)
 		r.Get("/sessions/{id}/attendees", s.handleSessionAttendees)
 		r.Get("/users/{id}", s.handleGetProfile) // public profile; personalizes via optional bearer
+		r.Get("/users/{id}/followers", s.handleListFollowers)
+		r.Get("/users/{id}/following", s.handleListFollowing)
 
 		// Authenticated routes.
 		r.Group(func(r chi.Router) {
@@ -105,6 +107,8 @@ func (s *Server) Routes() http.Handler {
 			r.Get("/me/blocked", s.handleListBlocked)
 			r.Put("/users/{id}/block", s.handleBlockUser)
 			r.Delete("/users/{id}/block", s.handleUnblockUser)
+			r.Put("/users/{id}/follow", s.handleFollow)
+			r.Delete("/users/{id}/follow", s.handleUnfollow)
 			r.Get("/me/check-ins/current", s.handleCurrentCheckIn)
 			r.Get("/me/check-ins", s.handleCheckInHistory)
 			r.Get("/me/favorites", s.handleListFavorites)
