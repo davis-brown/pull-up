@@ -1,8 +1,11 @@
 import { useFocusEffect, useRouter } from "expo-router";
+import * as ImagePicker from "expo-image-picker";
 import { useCallback, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { Button, Card, Chip, ErrorText } from "@/components/ui";
+import { Avatar } from "@/components/Avatar";
+import { Button, Card, Chip, ErrorText, Field } from "@/components/ui";
 import { SignInScreenCta } from "@/components/SignInCta";
+import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import {
   geofencingSupported,
@@ -14,11 +17,14 @@ import {
   useBlockedUsers,
   useCheckInHistory,
   useCheckOut,
+  useClearAvatar,
   useCurrentCheckIn,
   useDeleteAccount,
   useSetBlocked,
+  useUploadAvatar,
 } from "@/lib/hooks";
 import { useTheme, useThemePreference, type ThemePreference } from "@/lib/theme";
+import type { User } from "@/lib/types";
 
 const appearanceOptions: Array<{ value: ThemePreference; label: string }> = [
   { value: "system", label: "System" },
@@ -51,10 +57,15 @@ export default function ProfileScreen() {
 }
 
 function ProfileContent() {
-  const { user, signOut } = useAuth();
+  const { user, signOut, refreshUser } = useAuth();
   const router = useRouter();
   const t = useTheme();
   const { preference, setPreference } = useThemePreference();
+  const uploadAvatar = useUploadAvatar();
+  const clearAvatar = useClearAvatar();
+  const [nameDraft, setNameDraft] = useState(user?.display_name ?? "");
+  const [savingName, setSavingName] = useState(false);
+  const [profileError, setProfileError] = useState<string | null>(null);
   const { data } = useCurrentCheckIn();
   const checkOut = useCheckOut();
   const checkIn = data?.check_in ?? null;
@@ -98,21 +109,89 @@ function ProfileContent() {
     });
   };
 
+  const changePhoto = async () => {
+    setProfileError(null);
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: "images",
+      quality: 0.7,
+      allowsEditing: true,
+      aspect: [1, 1],
+    });
+    const asset = result.assets?.[0];
+    if (result.canceled || !asset) return;
+    uploadAvatar.mutate(
+      { uri: asset.uri, mimeType: asset.mimeType ?? "image/jpeg" },
+      { onSuccess: () => void refreshUser(), onError: (e) => setProfileError(e.message) },
+    );
+  };
+
+  const removePhoto = () => {
+    setProfileError(null);
+    clearAvatar.mutate(undefined, {
+      onSuccess: () => void refreshUser(),
+      onError: (e) => setProfileError(e.message),
+    });
+  };
+
+  const saveName = async () => {
+    const name = nameDraft.trim();
+    if (!name || name === user?.display_name) return;
+    setProfileError(null);
+    setSavingName(true);
+    try {
+      await api<User>("/me", { method: "PATCH", body: JSON.stringify({ display_name: name }) });
+      await refreshUser();
+    } catch (e) {
+      setProfileError(e instanceof Error ? e.message : "Could not save your name.");
+    } finally {
+      setSavingName(false);
+    }
+  };
+
   return (
     <ScrollView
       style={{ backgroundColor: t.colors.background }}
       contentContainerStyle={{ padding: t.spacing.lg }}
     >
       <Card>
-        <Text style={[t.type.title, { color: t.colors.textPrimary }]}>
-          {user?.display_name}
-        </Text>
-        <Text style={[t.type.caption, { color: t.colors.textSecondary, marginTop: 2 }]}>
+        <View style={styles.avatarRow}>
+          <Avatar
+            avatarUrl={user?.avatar_url ?? null}
+            displayName={user?.display_name ?? ""}
+            seed={user?.id ?? ""}
+            size={64}
+          />
+          <View style={styles.avatarActions}>
+            <Pressable onPress={() => void changePhoto()} hitSlop={6} disabled={uploadAvatar.isPending}>
+              <Text style={[t.type.caption, { color: t.colors.accent }]}>
+                {uploadAvatar.isPending ? "Uploading…" : "Change photo"}
+              </Text>
+            </Pressable>
+            {user?.avatar_url ? (
+              <Pressable onPress={removePhoto} hitSlop={6} disabled={clearAvatar.isPending}>
+                <Text style={[t.type.caption, { color: t.colors.textMuted }]}>Remove photo</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        </View>
+        <Field
+          label="Display name"
+          value={nameDraft}
+          onChangeText={setNameDraft}
+          autoCapitalize="words"
+          maxLength={40}
+          placeholder="Your name"
+        />
+        {nameDraft.trim() && nameDraft.trim() !== user?.display_name ? (
+          <Button title="Save name" variant="secondary" busy={savingName} onPress={() => void saveName()} />
+        ) : null}
+        <Text style={[t.type.caption, { color: t.colors.textSecondary, marginTop: t.spacing.sm }]}>
           {user?.email}
         </Text>
-        <Text style={[t.type.caption, { color: t.colors.textSecondary, marginTop: t.spacing.sm }]}>
+        <Text style={[t.type.caption, { color: t.colors.textSecondary, marginTop: 2 }]}>
           Reputation {user?.reputation ?? 0}
         </Text>
+        <ErrorText message={profileError} />
       </Card>
 
       {checkIn && (
@@ -303,6 +382,8 @@ function ProfileContent() {
 
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
+  avatarRow: { flexDirection: "row", alignItems: "center", gap: 16, marginBottom: 8 },
+  avatarActions: { gap: 8 },
   chips: { flexDirection: "row", flexWrap: "wrap", marginBottom: -8 },
   historyRow: {
     flexDirection: "row",
