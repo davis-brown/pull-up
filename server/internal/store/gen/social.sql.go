@@ -12,6 +12,26 @@ import (
 	"github.com/google/uuid"
 )
 
+const areBlocked = `-- name: AreBlocked :one
+SELECT EXISTS (
+    SELECT 1 FROM blocked_users
+    WHERE (blocker_id = $1 AND blocked_id = $2)
+       OR (blocker_id = $2 AND blocked_id = $1)
+)::bool AS blocked
+`
+
+type AreBlockedParams struct {
+	BlockerID uuid.UUID `json:"blocker_id"`
+	BlockedID uuid.UUID `json:"blocked_id"`
+}
+
+func (q *Queries) AreBlocked(ctx context.Context, arg AreBlockedParams) (bool, error) {
+	row := q.db.QueryRow(ctx, areBlocked, arg.BlockerID, arg.BlockedID)
+	var blocked bool
+	err := row.Scan(&blocked)
+	return blocked, err
+}
+
 const countFollowers = `-- name: CountFollowers :one
 SELECT count(*)::int AS count FROM follows WHERE followee_id = $1
 `

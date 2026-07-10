@@ -37,6 +37,13 @@ WHERE f.follower_id = $1
 ORDER BY f.created_at DESC
 LIMIT $2;
 
+-- name: AreBlocked :one
+SELECT EXISTS (
+    SELECT 1 FROM blocked_users
+    WHERE (blocker_id = $1 AND blocked_id = $2)
+       OR (blocker_id = $2 AND blocked_id = $1)
+)::bool AS blocked;
+
 -- name: DeleteFollowsBetween :exec
 DELETE FROM follows
 WHERE (follower_id = $1 AND followee_id = $2)
