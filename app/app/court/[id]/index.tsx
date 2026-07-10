@@ -165,7 +165,7 @@ export default function CourtDetailScreen() {
               onPress={() =>
                 void Share.share({
                   message: courtShareMessage(court.name, buildCourtLink(court.id)),
-                })
+                }).catch(() => {})
               }
               hitSlop={10}
               style={{ marginRight: t.spacing.md }}
