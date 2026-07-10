@@ -11,9 +11,12 @@ import {
 } from "react-native";
 import { useQuery } from "@tanstack/react-query";
 import { EmptyState } from "@/components/EmptyState";
+import { FeedHeader } from "@/components/FeedHeader";
 import { QueryError } from "@/components/QueryError";
 import { Card } from "@/components/ui";
 import { api } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
+import { useFeed } from "@/lib/hooks";
 import { FALLBACK_CENTER, tryGetPosition, type Coords } from "@/lib/location";
 import { useTheme } from "@/lib/theme";
 import type { CourtSummary } from "@/lib/types";
@@ -30,6 +33,8 @@ export default function ActivityScreen() {
   const router = useRouter();
   const t = useTheme();
   const [pos, setPos] = useState<Coords | null>(null);
+  const { user } = useAuth();
+  const feed = useFeed();
 
   useEffect(() => {
     void tryGetPosition().then((p) => setPos(p ?? FALLBACK_CENTER));
@@ -72,9 +77,20 @@ export default function ActivityScreen() {
       refreshControl={
         <RefreshControl
           refreshing={isRefetching}
-          onRefresh={() => void refetch()}
+          onRefresh={() => {
+            void refetch();
+            void feed.refetch();
+          }}
           tintColor={t.colors.accent}
         />
+      }
+      ListHeaderComponent={
+        user ? (
+          <FeedHeader
+            friendsHere={feed.data?.friends_here ?? []}
+            runs={feed.data?.upcoming_runs ?? []}
+          />
+        ) : null
       }
       ListEmptyComponent={
         <EmptyState
