@@ -363,6 +363,43 @@ func (q *Queries) ListOpenFlags(ctx context.Context) ([]ListOpenFlagsRow, error)
 	return items, nil
 }
 
+const listSessionNotifyTokens = `-- name: ListSessionNotifyTokens :many
+SELECT DISTINCT pt.token
+FROM push_tokens pt
+WHERE pt.user_id <> $1
+  AND (
+    pt.user_id IN (SELECT user_id FROM favorites WHERE court_id = $2)
+    OR pt.user_id IN (SELECT follower_id FROM follows WHERE followee_id = $1)
+  )
+`
+
+type ListSessionNotifyTokensParams struct {
+	Actor   uuid.UUID `json:"actor"`
+	CourtID uuid.UUID `json:"court_id"`
+}
+
+// Push tokens to notify about a planned run: the court's favoriters plus the
+// planner's followers, excluding the planner. Deduped by DISTINCT token.
+func (q *Queries) ListSessionNotifyTokens(ctx context.Context, arg ListSessionNotifyTokensParams) ([]string, error) {
+	rows, err := q.db.Query(ctx, listSessionNotifyTokens, arg.Actor, arg.CourtID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var token string
+		if err := rows.Scan(&token); err != nil {
+			return nil, err
+		}
+		items = append(items, token)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listUserCheckInHistory = `-- name: ListUserCheckInHistory :many
 
 SELECT ci.id, ci.court_id, c.name AS court_name, ci.source, ci.created_at, ci.checked_out_at, ci.expires_at
