@@ -9,9 +9,6 @@ export interface OgConfig {
   API_URL: string;
 }
 
-// Fallback preview image when a court has no photos (bundled with the web app).
-export const BRAND_IMAGE_URL = "https://pullup.app/icon.png";
-
 // Apple App Site Association — served at /.well-known/apple-app-site-association
 // as application/json (no file extension).
 export function aasaBody(cfg: OgConfig): unknown {
@@ -47,7 +44,8 @@ function escapeAttr(s: string): string {
     .replace(/&/g, "&amp;")
     .replace(/"/g, "&quot;")
     .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
+    .replace(/>/g, "&gt;")
+    .replace(/'/g, "&#39;");
 }
 
 export function ogMetaTags(input: {
@@ -78,12 +76,13 @@ export function appBannerTag(cfg: OgConfig): string {
 }
 
 // Resolves the preview image: first uploaded photo (via the API origin),
-// else the first external (Commons) photo, else the brand fallback.
+// else the first external (Commons) photo, else the caller-provided fallback.
 export function courtImageUrl(
   cfg: OgConfig,
   photos: { photos: Array<{ storage_key: string }>; external: Array<{ image_url: string }> },
+  fallbackUrl: string,
 ): string {
   if (photos.photos[0]) return `${cfg.API_URL}/photos/${photos.photos[0].storage_key}`;
   if (photos.external[0]) return photos.external[0].image_url;
-  return BRAND_IMAGE_URL;
+  return fallbackUrl;
 }

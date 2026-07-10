@@ -93,7 +93,7 @@ function SessionRow({
                 sessionTimeLabel(session.starts_at),
                 buildCourtLink(courtId, session.id),
               ),
-            })
+            }).catch(() => {})
           }
           hitSlop={8}
           style={styles.cancelButton}

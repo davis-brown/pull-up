@@ -69,7 +69,7 @@ async function injectCourtPreview(
       ogMetaTags({
         name: court.name,
         description: liveStatusLine(court.active_count),
-        imageUrl: courtImageUrl(env, photos),
+        imageUrl: courtImageUrl(env, photos, `${url.origin}/favicon.png`),
         link,
       }) + appBannerTag(env);
 
