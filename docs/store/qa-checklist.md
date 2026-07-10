@@ -91,3 +91,22 @@ Requires production builds and the association files live on the real domain
 - [ ] Report a profile (flag entity "user"); an admin can clear the avatar
 - [ ] Guest (signed out) can view a profile and its lists; Follow shows a
       "Sign in to follow" CTA
+
+## Runs feed & friends presence (phase 7)
+
+- [ ] Signed out: the Activity tab shows only the nearby-courts list (no feed
+      header), exactly as before
+- [ ] Signed in with no follows/favorites: the Activity tab shows the "Follow
+      players and favorite courts to fill your feed" prompt above the list
+- [ ] Follow a player who plans a run (or favorite that court): the run appears
+      under "Upcoming runs"; tapping it opens the court with the run highlighted
+- [ ] Your own upcoming runs do NOT appear in your feed
+- [ ] Mutual follow (you both follow each other) + the friend checks in: they
+      appear under "Friends here now" with court + "Xm ago"; tapping opens the
+      court
+- [ ] A one-directional follow (only you follow them) does NOT surface their
+      live check-in
+- [ ] Block a friend: they disappear from "Friends here now" and their runs
+      leave your feed
+- [ ] Pull-to-refresh on the Activity tab refreshes both the feed and the
+      nearby list
