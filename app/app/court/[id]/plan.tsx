@@ -69,7 +69,9 @@ export default function PlanSessionScreen() {
               sessionTimeLabel(session.starts_at),
               buildCourtLink(id ?? "", session.id),
             ),
-          }).finally(() => router.back());
+          })
+            .catch(() => {})
+            .finally(() => router.back());
         },
         onError: (e) => setError(e.message),
       },
