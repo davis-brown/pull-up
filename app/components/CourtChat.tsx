@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useRouter, type Href } from "expo-router";
 import { useState } from "react";
 import {
   ActivityIndicator,
@@ -53,18 +53,28 @@ export function CourtChat({ courtId }: { courtId: string }) {
             const mine = m.user_id === user?.id;
             return (
               <View key={m.id} style={styles.message}>
-                <Pressable
-                  onPress={() => user && !mine && setActionsFor(actionsFor === m.id ? null : m.id)}
-                  disabled={mine || !user}
-                >
-                  <Text style={[t.type.caption, { color: t.colors.textMuted }]}>
-                    <Text style={{ fontWeight: "600", color: mine ? t.colors.accent : t.colors.textSecondary }}>
+                <View style={styles.headerRow}>
+                  <Pressable onPress={() => router.push(`/user/${m.user_id}` as Href)} hitSlop={4}>
+                    <Text
+                      style={[
+                        t.type.caption,
+                        { fontWeight: "600", color: mine ? t.colors.accent : t.colors.textSecondary },
+                      ]}
+                    >
                       {mine ? "You" : m.display_name}
                     </Text>
-                    {"  ·  "}
-                    {messageTimeLabel(m.created_at)}
-                  </Text>
-                </Pressable>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => user && !mine && setActionsFor(actionsFor === m.id ? null : m.id)}
+                    disabled={mine || !user}
+                    hitSlop={4}
+                  >
+                    <Text style={[t.type.caption, { color: t.colors.textMuted }]}>
+                      {"  ·  "}
+                      {messageTimeLabel(m.created_at)}
+                    </Text>
+                  </Pressable>
+                </View>
                 <Text style={[t.type.body, { color: t.colors.textPrimary, marginTop: 1 }]}>
                   {m.body}
                 </Text>
@@ -154,6 +164,7 @@ export function CourtChat({ courtId }: { courtId: string }) {
 
 const styles = StyleSheet.create({
   message: { paddingVertical: 5 },
+  headerRow: { flexDirection: "row", alignItems: "center" },
   actionsRow: { flexDirection: "row", gap: 18, marginTop: 4 },
   inputRow: { flexDirection: "row", alignItems: "flex-end", gap: 8 },
   input: {
