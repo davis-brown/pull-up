@@ -8,7 +8,7 @@ import CourtMap from "@/components/CourtMap/CourtMap";
 import type { CourtPin } from "@/components/CourtMap/types";
 import { GetTheAppBanner } from "@/components/GetTheAppBanner";
 import { PermissionPrimer } from "@/components/PermissionPrimer";
-import { locationPrimerDone, markLocationPrimerDone } from "@/lib/first-run";
+import { locationPrimerDone, markLocationPrimerDone, onboardingSeen } from "@/lib/first-run";
 import { useCourtsInBBox, type BBox } from "@/lib/hooks";
 import { FALLBACK_CENTER, tryGetPosition, type Coords } from "@/lib/location";
 import { useTheme } from "@/lib/theme";
@@ -24,6 +24,13 @@ export default function MapScreen() {
 
   useEffect(() => {
     void (async () => {
+      // On first launch the root layout redirects to onboarding; don't pop the
+      // location primer (or an OS prompt) over a screen that's about to unmount.
+      // The effect re-runs when the user returns to the map after onboarding.
+      if (!(await onboardingSeen())) {
+        setCenter(FALLBACK_CENTER);
+        return;
+      }
       if (Platform.OS !== "web") {
         const perms = await Location.getForegroundPermissionsAsync();
         if (!perms.granted && perms.canAskAgain && !(await locationPrimerDone())) {
