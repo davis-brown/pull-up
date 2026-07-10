@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -50,8 +51,8 @@ func Load() (*Config, error) {
 		GoogleClientIDs:      getenv("GOOGLE_CLIENT_IDS", ""),
 		AppleAudiences:       getenv("APPLE_AUDIENCES", ""),
 		SentryDSN:            os.Getenv("SENTRY_DSN"),
-		RateLimitAuthPerMin:  10,
-		RateLimitWritePerMin: 60,
+		RateLimitAuthPerMin:  getenvInt("RATE_LIMIT_AUTH_PER_MIN", 10),
+		RateLimitWritePerMin: getenvInt("RATE_LIMIT_WRITE_PER_MIN", 60),
 	}
 	if c.DatabaseURL == "" {
 		return nil, fmt.Errorf("DATABASE_URL is required")
@@ -68,6 +69,15 @@ func Load() (*Config, error) {
 func getenv(key, fallback string) string {
 	if v := os.Getenv(key); v != "" {
 		return v
+	}
+	return fallback
+}
+
+func getenvInt(key string, fallback int) int {
+	if v := os.Getenv(key); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			return n
+		}
 	}
 	return fallback
 }
