@@ -72,3 +72,22 @@ Requires production builds and the association files live on the real domain
 - [ ] Web app (mobile browser) shows the "get the app" banner; "Get it" opens
       the store; the close button dismisses it and it stays dismissed on reload
 - [ ] iOS Safari shows the native Smart App Banner on a court page
+
+## Social & player identity (phase 6)
+
+- [ ] Tapping a name in court chat, the checked-in list, and "planned by"
+      opens that player's profile
+- [ ] A profile shows aggregate stats only — no court names, no check-in
+      times, no location history anywhere on it
+- [ ] Follow a user; the follower/following counts and lists update; unfollow
+      works and is idempotent
+- [ ] Following count/list respects blocking: block a followed user → the
+      follow disappears both ways and the Follow button is gone
+- [ ] Plan a run; a follower who is NOT a court favoriter receives exactly one
+      "run planned" push (no duplicate for someone who is both)
+- [ ] Set an avatar from Profile → Edit; it appears on your profile, in chat,
+      and in follower lists; remove it → falls back to initials
+- [ ] Edit display name from Profile; it updates across surfaces
+- [ ] Report a profile (flag entity "user"); an admin can clear the avatar
+- [ ] Guest (signed out) can view a profile and its lists; Follow shows a
+      "Sign in to follow" CTA
