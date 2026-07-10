@@ -2,6 +2,7 @@ package api_test
 
 import (
 	"net/http"
+	"strings"
 	"testing"
 )
 
@@ -93,4 +94,40 @@ func TestFollowBlockedRejected(t *testing.T) {
 		t.Errorf("follow while blocked: status %d, want 409", resp.StatusCode)
 	}
 	resp.Body.Close()
+}
+
+func TestAvatarUploadAndClear(t *testing.T) {
+	ts, _ := newTestServer(t)
+	u := registerUser(t, ts, "avatar@test.local", "Avatar")
+
+	resp := doJSON(t, ts, http.MethodPost, "/me/avatar", u.AccessToken, nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("create avatar upload: status %d: %s", resp.StatusCode, readBody(t, resp))
+	}
+	body := decodeJSON[struct {
+		AvatarURL  string `json:"avatar_url"`
+		UploadPath string `json:"upload_path"`
+	}](t, resp)
+	if !strings.HasPrefix(body.AvatarURL, "/photos/avatars/") {
+		t.Errorf("avatar_url = %q, want /photos/avatars/ prefix", body.AvatarURL)
+	}
+	if !strings.Contains(body.UploadPath, "avatars/") || !strings.Contains(body.UploadPath, "sig=") {
+		t.Errorf("upload_path missing avatars key or signature: %q", body.UploadPath)
+	}
+
+	// PATCH sets it, DELETE clears it.
+	doJSON(t, ts, http.MethodPatch, "/me", u.AccessToken, map[string]any{"avatar_url": body.AvatarURL}).Body.Close()
+	resp = doJSON(t, ts, http.MethodGet, "/users/"+u.User.ID, "", nil)
+	if p := decodeJSON[struct {
+		AvatarURL *string `json:"avatar_url"`
+	}](t, resp); p.AvatarURL == nil || *p.AvatarURL != body.AvatarURL {
+		t.Errorf("avatar not set after PATCH")
+	}
+	doJSON(t, ts, http.MethodDelete, "/me/avatar", u.AccessToken, nil).Body.Close()
+	resp = doJSON(t, ts, http.MethodGet, "/users/"+u.User.ID, "", nil)
+	if p := decodeJSON[struct {
+		AvatarURL *string `json:"avatar_url"`
+	}](t, resp); p.AvatarURL != nil {
+		t.Errorf("avatar not cleared after DELETE")
+	}
 }
