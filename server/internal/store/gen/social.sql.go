@@ -34,6 +34,34 @@ func (q *Queries) CountFollowing(ctx context.Context, followerID uuid.UUID) (int
 	return count, err
 }
 
+const currentStreakDays = `-- name: CurrentStreakDays :one
+WITH days AS (
+    SELECT DISTINCT (date_trunc('day', created_at AT TIME ZONE 'UTC'))::date AS d
+    FROM check_ins
+    WHERE user_id = $1
+), ranked AS (
+    SELECT d,
+        (CURRENT_DATE - d) AS offset_days,
+        row_number() OVER (ORDER BY d DESC) - 1 AS rn
+    FROM days
+)
+SELECT count(*)::int AS streak_days
+FROM ranked
+WHERE offset_days = rn
+  AND (SELECT min(offset_days) FROM ranked) <= 1
+`
+
+// Consecutive UTC days ending today or yesterday with >=1 geo-verified
+// check-in. Distinct check-in days are numbered densely; a day is "in the
+// streak" when its offset-from-today equals its dense rank-1, anchored only
+// if the most recent day is today (0) or yesterday (1).
+func (q *Queries) CurrentStreakDays(ctx context.Context, userID uuid.UUID) (int32, error) {
+	row := q.db.QueryRow(ctx, currentStreakDays, userID)
+	var streak_days int32
+	err := row.Scan(&streak_days)
+	return streak_days, err
+}
+
 const deleteFollowsBetween = `-- name: DeleteFollowsBetween :exec
 DELETE FROM follows
 WHERE (follower_id = $1 AND followee_id = $2)
@@ -66,6 +94,46 @@ type FollowParams struct {
 func (q *Queries) Follow(ctx context.Context, arg FollowParams) error {
 	_, err := q.db.Exec(ctx, follow, arg.FollowerID, arg.FolloweeID)
 	return err
+}
+
+const getProfileStats = `-- name: GetProfileStats :one
+SELECT
+    u.id, u.display_name, u.avatar_url, u.reputation, u.created_at AS member_since,
+    (SELECT count(*) FROM check_ins ci WHERE ci.user_id = u.id)::int AS check_in_count,
+    (SELECT count(*) FROM courts c WHERE c.submitted_by = u.id AND c.status = 'verified')::int AS courts_added_count,
+    (SELECT count(*) FROM follows f WHERE f.followee_id = u.id)::int AS follower_count,
+    (SELECT count(*) FROM follows f WHERE f.follower_id = u.id)::int AS following_count
+FROM users u
+WHERE u.id = $1
+`
+
+type GetProfileStatsRow struct {
+	ID               uuid.UUID `json:"id"`
+	DisplayName      string    `json:"display_name"`
+	AvatarUrl        *string   `json:"avatar_url"`
+	Reputation       int32     `json:"reputation"`
+	MemberSince      time.Time `json:"member_since"`
+	CheckInCount     int32     `json:"check_in_count"`
+	CourtsAddedCount int32     `json:"courts_added_count"`
+	FollowerCount    int32     `json:"follower_count"`
+	FollowingCount   int32     `json:"following_count"`
+}
+
+func (q *Queries) GetProfileStats(ctx context.Context, id uuid.UUID) (GetProfileStatsRow, error) {
+	row := q.db.QueryRow(ctx, getProfileStats, id)
+	var i GetProfileStatsRow
+	err := row.Scan(
+		&i.ID,
+		&i.DisplayName,
+		&i.AvatarUrl,
+		&i.Reputation,
+		&i.MemberSince,
+		&i.CheckInCount,
+		&i.CourtsAddedCount,
+		&i.FollowerCount,
+		&i.FollowingCount,
+	)
+	return i, err
 }
 
 const isFollowing = `-- name: IsFollowing :one
