@@ -121,8 +121,14 @@ func (s *Server) handleListSessions(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid court id")
 		return
 	}
+	viewer := s.optionalUserID(r)
+	if viewer != uuid.Nil {
+		// Response is personalized (my_rsvp per viewer); never let a shared
+		// cache serve one signed-in user's RSVP state to another.
+		w.Header().Set("Cache-Control", "no-store")
+	}
 	rows, err := s.store.Queries.ListUpcomingSessions(r.Context(), gen.ListUpcomingSessionsParams{
-		CourtID: courtID, ViewerID: s.optionalUserID(r),
+		CourtID: courtID, ViewerID: viewer,
 	})
 	if err != nil {
 		s.internalError(w, "list sessions", err)

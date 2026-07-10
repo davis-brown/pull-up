@@ -70,7 +70,11 @@ func TestWriteLimiterSkipsReads(t *testing.T) {
 	}
 	do(t, ts, http.MethodPost, "/x", "203.0.113.9")
 	do(t, ts, http.MethodPost, "/x", "203.0.113.9")
-	if resp := do(t, ts, http.MethodPost, "/x", "203.0.113.9"); resp.StatusCode != http.StatusTooManyRequests {
+	resp := do(t, ts, http.MethodPost, "/x", "203.0.113.9")
+	if resp.StatusCode != http.StatusTooManyRequests {
 		t.Fatalf("3rd POST: status %d, want 429", resp.StatusCode)
+	}
+	if resp.Header.Get("Retry-After") == "" {
+		t.Error("write-limiter 429 response missing Retry-After header")
 	}
 }
