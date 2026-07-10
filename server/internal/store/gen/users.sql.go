@@ -12,6 +12,15 @@ import (
 	"github.com/google/uuid"
 )
 
+const clearUserAvatar = `-- name: ClearUserAvatar :exec
+UPDATE users SET avatar_url = NULL WHERE id = $1
+`
+
+func (q *Queries) ClearUserAvatar(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, clearUserAvatar, id)
+	return err
+}
+
 const createRefreshToken = `-- name: CreateRefreshToken :one
 INSERT INTO refresh_tokens (user_id, token_hash, expires_at)
 VALUES ($1, $2, $3)
