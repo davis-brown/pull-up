@@ -21,6 +21,8 @@ interface AuthState {
     displayName?: string,
   ) => Promise<void>;
   signOut: () => Promise<void>;
+  // Re-fetch the signed-in user after a profile edit (avatar, display name).
+  refreshUser: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthState | null>(null);
@@ -70,8 +72,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   };
 
+  const refreshUser = async () => {
+    setUser(await api<User>("/me"));
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, signIn, signUp, oauthSignIn, signOut }}>
+    <AuthContext.Provider
+      value={{ user, loading, signIn, signUp, oauthSignIn, signOut, refreshUser }}
+    >
       {children}
     </AuthContext.Provider>
   );

@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import * as Notifications from "expo-notifications";
-import { Stack, useLocalSearchParams, useRouter } from "expo-router";
+import { Stack, useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useState } from "react";
 import {
   ActivityIndicator,
@@ -347,7 +347,13 @@ export default function CourtDetailScreen() {
               key={ci.id}
               style={[t.type.caption, { color: t.colors.textSecondary, paddingVertical: 2 }]}
             >
-              {ci.display_name}  ·  since{" "}
+              <Text
+                style={{ fontWeight: "600" }}
+                onPress={() => router.push(`/user/${ci.user_id}` as Href)}
+              >
+                {ci.display_name}
+              </Text>
+              {"  ·  since "}
               {new Date(ci.created_at).toLocaleTimeString([], {
                 hour: "2-digit",
                 minute: "2-digit",
