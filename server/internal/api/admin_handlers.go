@@ -93,6 +93,24 @@ func (s *Server) handleAdminSetUserAdmin(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, http.StatusOK, map[string]any{"user": user})
 }
 
+func (s *Server) handleAdminClearAvatar(w http.ResponseWriter, r *http.Request) {
+	targetID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid user id")
+		return
+	}
+	if err := s.store.Queries.ClearUserAvatar(r.Context(), targetID); err != nil {
+		s.internalError(w, "admin clear avatar", err)
+		return
+	}
+	if err := s.store.Queries.CreateAdminAction(r.Context(), gen.CreateAdminActionParams{
+		ActorID: userID(r), Action: "clear_avatar", TargetUserID: targetID,
+	}); err != nil {
+		s.log.Error("create admin action", "err", err)
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (s *Server) handleAdminListActions(w http.ResponseWriter, r *http.Request) {
 	actions, err := s.store.Queries.ListAdminActions(r.Context())
 	if err != nil {

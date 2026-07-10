@@ -71,6 +71,10 @@ async function verifyUploadSig(
   return diff === 0;
 }
 
+function isAllowedKey(key: string): boolean {
+  return key.startsWith("courts/") || key.startsWith("avatars/");
+}
+
 async function handlePhotos(request: Request, env: Env, url: URL): Promise<Response> {
   if (!env.PHOTOS) {
     return Response.json({ error: "photo storage not enabled" }, { status: 503 });
@@ -81,7 +85,7 @@ async function handlePhotos(request: Request, env: Env, url: URL): Promise<Respo
     const key = url.pathname.slice("/photos/upload/".length);
     const exp = url.searchParams.get("exp") ?? "";
     const sig = url.searchParams.get("sig") ?? "";
-    if (!key.startsWith("courts/") || !(await verifyUploadSig(env.JWT_SECRET, key, exp, sig))) {
+    if (!isAllowedKey(key) || !(await verifyUploadSig(env.JWT_SECRET, key, exp, sig))) {
       return Response.json({ error: "invalid or expired upload signature" }, { status: 403 });
     }
     const length = Number(request.headers.get("content-length") ?? "0");
@@ -100,7 +104,7 @@ async function handlePhotos(request: Request, env: Env, url: URL): Promise<Respo
   // GET /photos/<key> — public read.
   if (request.method === "GET") {
     const key = url.pathname.slice("/photos/".length);
-    if (!key.startsWith("courts/")) {
+    if (!isAllowedKey(key)) {
       return Response.json({ error: "not found" }, { status: 404 });
     }
     const object = await env.PHOTOS.get(key);

@@ -2,9 +2,12 @@ package api
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"github.com/davisbrown/pull-up/server/internal/store/gen"
@@ -53,4 +56,23 @@ func (s *Server) handlePatchMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, user)
+}
+
+func (s *Server) handleCreateAvatarUpload(w http.ResponseWriter, r *http.Request) {
+	uid := userID(r)
+	key := fmt.Sprintf("avatars/%s/%s.jpg", uid, uuid.NewString())
+	exp := time.Now().Add(uploadURLTTL).Unix()
+	writeJSON(w, http.StatusOK, map[string]any{
+		"avatar_url": "/photos/" + key,
+		"upload_path": fmt.Sprintf("/photos/upload/%s?exp=%d&sig=%s",
+			key, exp, signUpload(s.cfg.JWTSecret, key, exp)),
+	})
+}
+
+func (s *Server) handleDeleteAvatar(w http.ResponseWriter, r *http.Request) {
+	if err := s.store.Queries.ClearUserAvatar(r.Context(), userID(r)); err != nil {
+		s.internalError(w, "clear avatar", err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
