@@ -60,7 +60,7 @@ func testStore(t *testing.T) *store.Store {
 	}
 	// Isolate each run.
 	if _, err := st.Pool.Exec(ctx,
-		"TRUNCATE users, refresh_tokens, courts, check_ins, crowd_reports, court_votes, court_photos, flags, seed_regions, sessions, session_rsvps, court_messages, follows CASCADE"); err != nil {
+		"TRUNCATE users, refresh_tokens, courts, check_ins, crowd_reports, court_votes, court_photos, flags, seed_regions, sessions, session_rsvps, court_messages, follows, favorites, blocked_users CASCADE"); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 	return st

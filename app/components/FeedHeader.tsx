@@ -14,14 +14,19 @@ import type { FeedRun, FriendPresence } from "@/lib/types";
 export function FeedHeader({
   friendsHere,
   runs,
+  loading,
 }: {
   friendsHere: FriendPresence[];
   runs: FeedRun[];
+  loading?: boolean;
 }) {
   const t = useTheme();
   const router = useRouter();
 
   if (friendsHere.length === 0 && runs.length === 0) {
+    // Nothing to show yet while the feed is still loading — avoid flashing the
+    // "fill your feed" prompt to a user who actually has feed content.
+    if (loading) return null;
     return (
       <Text style={[t.type.caption, { color: t.colors.textMuted, marginBottom: t.spacing.md }]}>
         Follow players and favorite courts to fill your feed.
@@ -39,7 +44,7 @@ export function FeedHeader({
           {friendsHere.map((f) => (
             <Pressable
               key={`${f.id}-${f.court_id}`}
-              style={styles.friendRow}
+              style={[styles.friendRow, { gap: t.spacing.md }]}
               onPress={() => router.push(`/court/${f.court_id}` as Href)}
             >
               <Avatar avatarUrl={f.avatar_url} displayName={f.display_name} seed={f.id} size={36} />
@@ -83,6 +88,6 @@ export function FeedHeader({
 }
 
 const styles = StyleSheet.create({
-  friendRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 6 },
+  friendRow: { flexDirection: "row", alignItems: "center", paddingVertical: 6 },
   friendText: { flex: 1 },
 });
