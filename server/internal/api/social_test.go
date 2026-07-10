@@ -33,3 +33,64 @@ func TestGetProfilePublic(t *testing.T) {
 	}
 	resp.Body.Close()
 }
+
+func TestFollowFlow(t *testing.T) {
+	ts, _ := newTestServer(t)
+	a := registerUser(t, ts, "a@test.local", "A")
+	b := registerUser(t, ts, "b@test.local", "B")
+
+	// Self-follow → 400.
+	resp := doJSON(t, ts, http.MethodPut, "/users/"+a.User.ID+"/follow", a.AccessToken, nil)
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("self-follow: status %d, want 400", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	// Follow b.
+	resp = doJSON(t, ts, http.MethodPut, "/users/"+b.User.ID+"/follow", a.AccessToken, nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("follow: status %d: %s", resp.StatusCode, readBody(t, resp))
+	}
+	resp.Body.Close()
+
+	// b's profile shows follower_count 1, follows_you true for a.
+	resp = doJSON(t, ts, http.MethodGet, "/users/"+b.User.ID, a.AccessToken, nil)
+	p := decodeJSON[struct {
+		FollowerCount int  `json:"follower_count"`
+		IsFollowing   bool `json:"is_following"`
+	}](t, resp)
+	if p.FollowerCount != 1 || !p.IsFollowing {
+		t.Errorf("after follow: %+v", p)
+	}
+
+	// Unfollow is idempotent.
+	for i := 0; i < 2; i++ {
+		resp = doJSON(t, ts, http.MethodDelete, "/users/"+b.User.ID+"/follow", a.AccessToken, nil)
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("unfollow %d: status %d", i, resp.StatusCode)
+		}
+		resp.Body.Close()
+	}
+}
+
+func TestFollowBlockedRejected(t *testing.T) {
+	ts, _ := newTestServer(t)
+	a := registerUser(t, ts, "ab@test.local", "A")
+	b := registerUser(t, ts, "bb@test.local", "B")
+
+	// a follows b, then b blocks a → edge severed and re-follow rejected.
+	doJSON(t, ts, http.MethodPut, "/users/"+b.User.ID+"/follow", a.AccessToken, nil).Body.Close()
+	doJSON(t, ts, http.MethodPut, "/users/"+a.User.ID+"/block", b.AccessToken, nil).Body.Close()
+
+	resp := doJSON(t, ts, http.MethodGet, "/users/"+b.User.ID, "", nil)
+	if p := decodeJSON[struct {
+		FollowerCount int `json:"follower_count"`
+	}](t, resp); p.FollowerCount != 0 {
+		t.Errorf("block did not sever follow: follower_count %d", p.FollowerCount)
+	}
+	resp = doJSON(t, ts, http.MethodPut, "/users/"+b.User.ID+"/follow", a.AccessToken, nil)
+	if resp.StatusCode != http.StatusConflict {
+		t.Errorf("follow while blocked: status %d, want 409", resp.StatusCode)
+	}
+	resp.Body.Close()
+}

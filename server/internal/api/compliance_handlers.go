@@ -70,6 +70,11 @@ func (s *Server) handleBlockUser(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, "block user", err)
 		return
 	}
+	if err := s.store.Queries.DeleteFollowsBetween(r.Context(),
+		gen.DeleteFollowsBetweenParams{FollowerID: uid, FolloweeID: targetID}); err != nil {
+		s.internalError(w, "sever follows", err)
+		return
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
