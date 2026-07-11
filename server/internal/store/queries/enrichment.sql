@@ -21,6 +21,15 @@ INSERT INTO external_photos (court_id, source, source_id, image_url, page_url, a
 VALUES ($1, $2, $3, $4, $5, $6)
 ON CONFLICT (source, source_id) DO NOTHING;
 
+-- name: SetCourtAmenitiesIfNull :exec
+-- Fill amenity booleans only where still unknown (never clobber crowd/OSM values).
+UPDATE courts SET
+    drinking_water = coalesce(drinking_water, sqlc.narg('drinking_water')),
+    toilets        = coalesce(toilets, sqlc.narg('toilets')),
+    parking        = coalesce(parking, sqlc.narg('parking')),
+    updated_at     = now()
+WHERE id = sqlc.arg('id');
+
 -- name: ListExternalPhotos :many
 SELECT id, source, source_id, image_url, page_url, attribution, created_at
 FROM external_photos

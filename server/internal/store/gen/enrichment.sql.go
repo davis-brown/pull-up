@@ -133,3 +133,30 @@ func (q *Queries) SetCourtAddressIfNull(ctx context.Context, arg SetCourtAddress
 	_, err := q.db.Exec(ctx, setCourtAddressIfNull, arg.ID, arg.Address)
 	return err
 }
+
+const setCourtAmenitiesIfNull = `-- name: SetCourtAmenitiesIfNull :exec
+UPDATE courts SET
+    drinking_water = coalesce(drinking_water, $1),
+    toilets        = coalesce(toilets, $2),
+    parking        = coalesce(parking, $3),
+    updated_at     = now()
+WHERE id = $4
+`
+
+type SetCourtAmenitiesIfNullParams struct {
+	DrinkingWater *bool     `json:"drinking_water"`
+	Toilets       *bool     `json:"toilets"`
+	Parking       *bool     `json:"parking"`
+	ID            uuid.UUID `json:"id"`
+}
+
+// Fill amenity booleans only where still unknown (never clobber crowd/OSM values).
+func (q *Queries) SetCourtAmenitiesIfNull(ctx context.Context, arg SetCourtAmenitiesIfNullParams) error {
+	_, err := q.db.Exec(ctx, setCourtAmenitiesIfNull,
+		arg.DrinkingWater,
+		arg.Toilets,
+		arg.Parking,
+		arg.ID,
+	)
+	return err
+}

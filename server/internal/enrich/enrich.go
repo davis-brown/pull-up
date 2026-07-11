@@ -105,10 +105,27 @@ func (e *Enricher) enrich(ctx context.Context, id uuid.UUID) {
 	}
 	e.log.Info("enriched court", "court", id, "needed_address", claim.NeedsAddress, "photos", len(photos))
 
+	water, toilets, parking := e.nearbyAmenities(ctx, claim.Lat, claim.Lng)
+	if water || toilets || parking {
+		wp, tp, pp := boolPtrIfTrue(water), boolPtrIfTrue(toilets), boolPtrIfTrue(parking)
+		if err := e.queries.SetCourtAmenitiesIfNull(ctx, gen.SetCourtAmenitiesIfNullParams{
+			ID: id, DrinkingWater: wp, Toilets: tp, Parking: pp,
+		}); err != nil {
+			e.log.Error("set amenities", "court", id, "err", err)
+		}
+	}
+
 	select {
 	case <-ctx.Done():
 	case <-time.After(courtesyDelay):
 	}
+}
+
+func boolPtrIfTrue(b bool) *bool {
+	if b {
+		return &b
+	}
+	return nil
 }
 
 func (e *Enricher) getJSON(ctx context.Context, rawURL string, dst any) error {
@@ -249,4 +266,41 @@ func (e *Enricher) commonsPhotos(ctx context.Context, lat, lng float64) []common
 		})
 	}
 	return out
+}
+
+// --- Overpass (OSM) amenities -----------------------------------------------
+
+type overpassElement struct {
+	Tags map[string]string `json:"tags"`
+}
+type overpassResponse struct {
+	Elements []overpassElement `json:"elements"`
+}
+
+// parseOverpassAmenities reports which of water/toilets/parking appear.
+func parseOverpassAmenities(els []overpassElement) (water, toilets, parking bool) {
+	for _, e := range els {
+		switch e.Tags["amenity"] {
+		case "drinking_water":
+			water = true
+		case "toilets":
+			toilets = true
+		case "parking":
+			parking = true
+		}
+	}
+	return
+}
+
+// nearbyAmenities queries Overpass for water/toilets/parking within ~150 m.
+func (e *Enricher) nearbyAmenities(ctx context.Context, lat, lng float64) (water, toilets, parking bool) {
+	q := fmt.Sprintf(
+		`[out:json][timeout:20];(nwr[amenity=drinking_water](around:150,%f,%f);nwr[amenity=toilets](around:150,%f,%f);nwr[amenity=parking](around:150,%f,%f););out tags;`,
+		lat, lng, lat, lng, lat, lng)
+	var resp overpassResponse
+	if err := e.getJSON(ctx, "https://overpass-api.de/api/interpreter?data="+url.QueryEscape(q), &resp); err != nil {
+		e.log.Warn("overpass amenities", "err", err)
+		return false, false, false
+	}
+	return parseOverpassAmenities(resp.Elements)
 }
