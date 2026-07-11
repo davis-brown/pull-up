@@ -134,7 +134,7 @@ func (q *Queries) GetUserAdmin(ctx context.Context, id uuid.UUID) (bool, error) 
 
 const getUserByOAuth = `-- name: GetUserByOAuth :one
 
-SELECT id, email, display_name, avatar_url, reputation, created_at, is_admin
+SELECT id, email, display_name, avatar_url, reputation, created_at, is_admin, is_private
 FROM users
 WHERE auth_provider = $1 AND oauth_subject = $2
 `
@@ -152,6 +152,7 @@ type GetUserByOAuthRow struct {
 	Reputation  int32     `json:"reputation"`
 	CreatedAt   time.Time `json:"created_at"`
 	IsAdmin     bool      `json:"is_admin"`
+	IsPrivate   bool      `json:"is_private"`
 }
 
 // OAuth ---------------------------------------------------------------------
@@ -166,6 +167,7 @@ func (q *Queries) GetUserByOAuth(ctx context.Context, arg GetUserByOAuthParams) 
 		&i.Reputation,
 		&i.CreatedAt,
 		&i.IsAdmin,
+		&i.IsPrivate,
 	)
 	return i, err
 }

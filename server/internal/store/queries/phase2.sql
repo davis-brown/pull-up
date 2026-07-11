@@ -80,7 +80,7 @@ SELECT token FROM push_tokens WHERE user_id = $1;
 -- OAuth ---------------------------------------------------------------------
 
 -- name: GetUserByOAuth :one
-SELECT id, email, display_name, avatar_url, reputation, created_at, is_admin
+SELECT id, email, display_name, avatar_url, reputation, created_at, is_admin, is_private
 FROM users
 WHERE auth_provider = $1 AND oauth_subject = $2;
 
