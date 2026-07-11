@@ -121,6 +121,7 @@ func (s *Server) Routes() http.Handler {
 			r.Get("/feed", s.handleGetFeed)
 
 			r.Post("/courts", s.handleCreateCourt)
+			r.Patch("/courts/{id}/attributes", s.handlePatchCourtAttributes)
 			r.Post("/courts/{id}/vote", s.handleVoteCourt)
 			r.Post("/courts/{id}/check-ins", s.handleCheckIn)
 			r.Post("/courts/{id}/reports", s.handleCreateReport)

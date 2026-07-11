@@ -177,3 +177,31 @@ func TestVoteCourtRejection(t *testing.T) {
 		}
 	}
 }
+
+func TestPatchCourtAttributes(t *testing.T) {
+	ts, _ := newTestServer(t)
+	u := registerUser(t, ts, "attr@test.local", "Attr")
+	c := createTestCourt(t, ts, u.AccessToken, "Attr Court", ruckerLat, ruckerLng)
+
+	// Requires auth.
+	resp := doJSON(t, ts, http.MethodPatch, "/courts/"+c.ID+"/attributes", "", map[string]any{"lighting": true})
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("no-auth patch: status %d, want 401", resp.StatusCode)
+	}
+	resp.Body.Close()
+	// Invalid surface → 400.
+	resp = doJSON(t, ts, http.MethodPatch, "/courts/"+c.ID+"/attributes", u.AccessToken, map[string]any{"surface": "lava"})
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("bad surface: status %d, want 400", resp.StatusCode)
+	}
+	resp.Body.Close()
+	// Valid update reflected in GET.
+	doJSON(t, ts, http.MethodPatch, "/courts/"+c.ID+"/attributes", u.AccessToken, map[string]any{"lighting": true, "drinking_water": true}).Body.Close()
+	resp = doJSON(t, ts, http.MethodGet, "/courts/"+c.ID, "", nil)
+	if p := decodeJSON[struct {
+		Lighting      *bool `json:"lighting"`
+		DrinkingWater *bool `json:"drinking_water"`
+	}](t, resp); p.Lighting == nil || !*p.Lighting || p.DrinkingWater == nil || !*p.DrinkingWater {
+		t.Errorf("attributes not persisted")
+	}
+}
