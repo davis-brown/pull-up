@@ -37,29 +37,43 @@ type CheckIn struct {
 }
 
 type Court struct {
-	ID           uuid.UUID  `json:"id"`
-	Name         string     `json:"name"`
-	Location     string     `json:"location"`
-	Address      *string    `json:"address"`
-	HoopCount    *int16     `json:"hoop_count"`
-	Indoor       bool       `json:"indoor"`
-	Surface      *string    `json:"surface"`
-	Lighting     *bool      `json:"lighting"`
-	IsPublic     bool       `json:"is_public"`
-	Source       string     `json:"source"`
-	OsmType      *string    `json:"osm_type"`
-	OsmID        *int64     `json:"osm_id"`
-	Status       string     `json:"status"`
-	SubmittedBy  *uuid.UUID `json:"submitted_by"`
-	CreatedAt    time.Time  `json:"created_at"`
-	UpdatedAt    time.Time  `json:"updated_at"`
-	Access       *string    `json:"access"`
-	Fee          *bool      `json:"fee"`
-	Covered      *bool      `json:"covered"`
-	OpeningHours *string    `json:"opening_hours"`
-	Website      *string    `json:"website"`
-	Description  *string    `json:"description"`
-	EnrichedAt   *time.Time `json:"enriched_at"`
+	ID            uuid.UUID  `json:"id"`
+	Name          string     `json:"name"`
+	Location      string     `json:"location"`
+	Address       *string    `json:"address"`
+	HoopCount     *int16     `json:"hoop_count"`
+	Indoor        bool       `json:"indoor"`
+	Surface       *string    `json:"surface"`
+	Lighting      *bool      `json:"lighting"`
+	IsPublic      bool       `json:"is_public"`
+	Source        string     `json:"source"`
+	OsmType       *string    `json:"osm_type"`
+	OsmID         *int64     `json:"osm_id"`
+	Status        string     `json:"status"`
+	SubmittedBy   *uuid.UUID `json:"submitted_by"`
+	CreatedAt     time.Time  `json:"created_at"`
+	UpdatedAt     time.Time  `json:"updated_at"`
+	Access        *string    `json:"access"`
+	Fee           *bool      `json:"fee"`
+	Covered       *bool      `json:"covered"`
+	OpeningHours  *string    `json:"opening_hours"`
+	Website       *string    `json:"website"`
+	Description   *string    `json:"description"`
+	EnrichedAt    *time.Time `json:"enriched_at"`
+	DrinkingWater *bool      `json:"drinking_water"`
+	Toilets       *bool      `json:"toilets"`
+	Parking       *bool      `json:"parking"`
+	Fenced        *bool      `json:"fenced"`
+}
+
+type CourtAttributeEdit struct {
+	ID        uuid.UUID `json:"id"`
+	CourtID   uuid.UUID `json:"court_id"`
+	EditorID  uuid.UUID `json:"editor_id"`
+	Field     string    `json:"field"`
+	OldValue  *string   `json:"old_value"`
+	NewValue  *string   `json:"new_value"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 type CourtMessage struct {
