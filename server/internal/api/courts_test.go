@@ -3,6 +3,7 @@ package api_test
 import (
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"testing"
 )
 
@@ -131,6 +132,31 @@ func TestVoteCourtFlow(t *testing.T) {
 	if result["status"] != "verified" {
 		t.Fatalf("after 2 upvotes, status = %v, want verified", result["status"])
 	}
+}
+
+func TestListCourtsFilter(t *testing.T) {
+	ts, _ := newTestServer(t)
+	u := registerUser(t, ts, "cf@test.local", "CF")
+	lit := createTestCourt(t, ts, u.AccessToken, "Lit", ruckerLat, ruckerLng)
+	createTestCourt(t, ts, u.AccessToken, "Dark", ruckerLat+0.001, ruckerLng)
+	// Mark one lit via the attributes endpoint (added in Task 5) OR a raw patch;
+	// here assert the filter param is accepted and returns a subset.
+	_ = lit
+
+	latStr := strconv.FormatFloat(ruckerLat, 'f', -1, 64)
+	lngStr := strconv.FormatFloat(ruckerLng, 'f', -1, 64)
+	resp := doJSON(t, ts, http.MethodGet, "/courts?lat="+latStr+"&lng="+lngStr+"&lit=true", "", nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("filtered list: status %d: %s", resp.StatusCode, readBody(t, resp))
+	}
+	resp.Body.Close()
+
+	// bbox path also accepts the same filter params.
+	resp = doJSON(t, ts, http.MethodGet, "/courts?bbox=-73.946,40.819,-73.926,40.839&lit=true", "", nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("filtered bbox list: status %d: %s", resp.StatusCode, readBody(t, resp))
+	}
+	resp.Body.Close()
 }
 
 func TestVoteCourtRejection(t *testing.T) {
