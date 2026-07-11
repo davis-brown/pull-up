@@ -227,3 +227,25 @@ func TestFollowerGetsRunNotification(t *testing.T) {
 		t.Errorf("notify tokens = %v, want [ExpoTok[follower]]", toks)
 	}
 }
+
+func TestSetPrivateFlag(t *testing.T) {
+	ts, _ := newTestServer(t)
+	u := registerUser(t, ts, "private@test.local", "Private User")
+
+	// Default public.
+	resp := doJSON(t, ts, http.MethodGet, "/me", u.AccessToken, nil)
+	if me := decodeJSON[struct {
+		IsPrivate bool `json:"is_private"`
+	}](t, resp); me.IsPrivate {
+		t.Fatalf("new account should be public")
+	}
+
+	// Toggle private.
+	doJSON(t, ts, http.MethodPatch, "/me", u.AccessToken, map[string]any{"is_private": true}).Body.Close()
+	resp = doJSON(t, ts, http.MethodGet, "/me", u.AccessToken, nil)
+	if me := decodeJSON[struct {
+		IsPrivate bool `json:"is_private"`
+	}](t, resp); !me.IsPrivate {
+		t.Errorf("is_private did not persist")
+	}
+}

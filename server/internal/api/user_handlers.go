@@ -31,6 +31,7 @@ func (s *Server) handleGetMe(w http.ResponseWriter, r *http.Request) {
 type patchMeRequest struct {
 	DisplayName *string `json:"display_name"`
 	AvatarURL   *string `json:"avatar_url"`
+	IsPrivate   *bool   `json:"is_private"`
 }
 
 func (s *Server) handlePatchMe(w http.ResponseWriter, r *http.Request) {
@@ -50,6 +51,7 @@ func (s *Server) handlePatchMe(w http.ResponseWriter, r *http.Request) {
 		ID:          userID(r),
 		DisplayName: req.DisplayName,
 		AvatarUrl:   req.AvatarURL,
+		IsPrivate:   req.IsPrivate,
 	})
 	if err != nil {
 		s.internalError(w, "update user", err)
