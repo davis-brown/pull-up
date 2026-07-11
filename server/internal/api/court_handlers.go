@@ -4,6 +4,7 @@ import (
 	"errors"
 	"math"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -23,7 +24,7 @@ const (
 	// a vote counts 1-3x depending on the voter's reputation tier).
 	verifyUpvotes = 2
 	// rejectNetVotes hides a court (also weighted).
-	rejectNetVotes = -3
+	rejectNetVotes   = -3
 	maxSearchRadiusM = 50_000.0
 
 	// Reputation awards.
@@ -50,6 +51,11 @@ type courtSummary struct {
 	ActiveCount  int32         `json:"active_count"`
 	DistanceM    *float64      `json:"distance_m,omitempty"`
 	LatestReport *latestReport `json:"latest_report"`
+
+	DrinkingWater *bool `json:"drinking_water"`
+	Toilets       *bool `json:"toilets"`
+	Parking       *bool `json:"parking"`
+	Fenced        *bool `json:"fenced"`
 }
 
 type latestReport struct {
@@ -63,6 +69,29 @@ func newLatestReport(playerCount *int16, runQuality *string, createdAt time.Time
 		return nil
 	}
 	return &latestReport{PlayerCount: playerCount, RunQuality: runQuality, CreatedAt: createdAt}
+}
+
+// optBool returns a *bool for "true"/"false" query values, nil when absent/invalid.
+func optBool(q url.Values, key string) *bool {
+	switch q.Get(key) {
+	case "true":
+		b := true
+		return &b
+	case "false":
+		b := false
+		return &b
+	default:
+		return nil
+	}
+}
+
+func optSurface(q url.Values) *string {
+	switch s := q.Get("surface"); s {
+	case "asphalt", "concrete", "hardwood", "rubber", "other":
+		return &s
+	default:
+		return nil
+	}
 }
 
 func (s *Server) handleListCourts(w http.ResponseWriter, r *http.Request) {
@@ -90,7 +119,20 @@ func (s *Server) handleListCourts(w http.ResponseWriter, r *http.Request) {
 		}
 		radius = parsed
 	}
-	rows, err := s.store.Queries.CourtsNearby(r.Context(), gen.CourtsNearbyParams{Lng: lng, Lat: lat, RadiusM: radius})
+	rows, err := s.store.Queries.CourtsNearby(r.Context(), gen.CourtsNearbyParams{
+		Lng: lng, Lat: lat, RadiusM: radius,
+		Indoor:   optBool(q, "indoor"),
+		Lit:      optBool(q, "lit"),
+		HasHoops: optBool(q, "has_hoops"),
+		Public:   optBool(q, "public"),
+		Free:     optBool(q, "free"),
+		Covered:  optBool(q, "covered"),
+		Surface:  optSurface(q),
+		Water:    optBool(q, "water"),
+		Toilets:  optBool(q, "toilets"),
+		Parking:  optBool(q, "parking"),
+		Fenced:   optBool(q, "fenced"),
+	})
 	if err != nil {
 		s.internalError(w, "courts nearby", err)
 		return
@@ -106,8 +148,9 @@ func (s *Server) handleListCourts(w http.ResponseWriter, r *http.Request) {
 			ID: c.ID, Name: c.Name, Lat: c.Lat, Lng: c.Lng, Address: c.Address,
 			HoopCount: c.HoopCount, Indoor: c.Indoor, Surface: c.Surface, Lighting: c.Lighting,
 			IsPublic: c.IsPublic, Source: c.Source, Status: c.Status, ActiveCount: c.ActiveCount,
-			DistanceM:    &d,
-			LatestReport: newLatestReport(c.LatestPlayerCount, c.LatestRunQuality, c.LatestReportAt),
+			DistanceM:     &d,
+			LatestReport:  newLatestReport(c.LatestPlayerCount, c.LatestRunQuality, c.LatestReportAt),
+			DrinkingWater: c.DrinkingWater, Toilets: c.Toilets, Parking: c.Parking, Fenced: c.Fenced,
 		})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"courts": out})
@@ -128,8 +171,20 @@ func (s *Server) listCourtsInBBox(w http.ResponseWriter, r *http.Request, bbox s
 		}
 		vals[i] = v
 	}
+	q := r.URL.Query()
 	rows, err := s.store.Queries.CourtsInBBox(r.Context(), gen.CourtsInBBoxParams{
 		MinLng: vals[0], MinLat: vals[1], MaxLng: vals[2], MaxLat: vals[3],
+		Indoor:   optBool(q, "indoor"),
+		Lit:      optBool(q, "lit"),
+		HasHoops: optBool(q, "has_hoops"),
+		Public:   optBool(q, "public"),
+		Free:     optBool(q, "free"),
+		Covered:  optBool(q, "covered"),
+		Surface:  optSurface(q),
+		Water:    optBool(q, "water"),
+		Toilets:  optBool(q, "toilets"),
+		Parking:  optBool(q, "parking"),
+		Fenced:   optBool(q, "fenced"),
 	})
 	if err != nil {
 		s.internalError(w, "courts in bbox", err)
@@ -142,7 +197,8 @@ func (s *Server) listCourtsInBBox(w http.ResponseWriter, r *http.Request, bbox s
 			ID: c.ID, Name: c.Name, Lat: c.Lat, Lng: c.Lng, Address: c.Address,
 			HoopCount: c.HoopCount, Indoor: c.Indoor, Surface: c.Surface, Lighting: c.Lighting,
 			IsPublic: c.IsPublic, Source: c.Source, Status: c.Status, ActiveCount: c.ActiveCount,
-			LatestReport: newLatestReport(c.LatestPlayerCount, c.LatestRunQuality, c.LatestReportAt),
+			LatestReport:  newLatestReport(c.LatestPlayerCount, c.LatestRunQuality, c.LatestReportAt),
+			DrinkingWater: c.DrinkingWater, Toilets: c.Toilets, Parking: c.Parking, Fenced: c.Fenced,
 		})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"courts": out})
@@ -171,16 +227,16 @@ func (s *Server) handleGetCourt(w http.ResponseWriter, r *http.Request) {
 }
 
 type createCourtRequest struct {
-	Name             string   `json:"name"`
-	Lat              float64  `json:"lat"`
-	Lng              float64  `json:"lng"`
-	Address          *string  `json:"address"`
-	HoopCount        *int16   `json:"hoop_count"`
-	Indoor           bool     `json:"indoor"`
-	Surface          *string  `json:"surface"`
-	Lighting         *bool    `json:"lighting"`
-	IsPublic         *bool    `json:"is_public"`
-	IgnoreDuplicates bool     `json:"ignore_duplicates"`
+	Name             string  `json:"name"`
+	Lat              float64 `json:"lat"`
+	Lng              float64 `json:"lng"`
+	Address          *string `json:"address"`
+	HoopCount        *int16  `json:"hoop_count"`
+	Indoor           bool    `json:"indoor"`
+	Surface          *string `json:"surface"`
+	Lighting         *bool   `json:"lighting"`
+	IsPublic         *bool   `json:"is_public"`
+	IgnoreDuplicates bool    `json:"ignore_duplicates"`
 }
 
 func (s *Server) handleCreateCourt(w http.ResponseWriter, r *http.Request) {
@@ -216,7 +272,7 @@ func (s *Server) handleCreateCourt(w http.ResponseWriter, r *http.Request) {
 		}
 		if len(dupes) > 0 {
 			writeJSON(w, http.StatusConflict, map[string]any{
-				"error":            "possible duplicate courts nearby; retry with ignore_duplicates=true to create anyway",
+				"error":               "possible duplicate courts nearby; retry with ignore_duplicates=true to create anyway",
 				"possible_duplicates": dupes,
 			})
 			return
