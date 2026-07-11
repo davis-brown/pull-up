@@ -108,14 +108,14 @@ RETURNING id, name, ST_Y(location::geometry)::float8 AS lat, ST_X(location::geom
 
 -- name: UpsertOSMCourt :one
 INSERT INTO courts (name, location, hoop_count, indoor, surface, lighting,
-    access, fee, covered, opening_hours, website, description,
+    access, fee, covered, opening_hours, website, description, fenced,
     source, osm_type, osm_id, status)
 VALUES (
     sqlc.arg(name),
     ST_SetSRID(ST_MakePoint(sqlc.arg(lng)::float8, sqlc.arg(lat)::float8), 4326)::geography,
     sqlc.narg(hoop_count), sqlc.arg(indoor), sqlc.narg(surface), sqlc.narg(lighting),
     sqlc.narg(access), sqlc.narg(fee), sqlc.narg(covered),
-    sqlc.narg(opening_hours), sqlc.narg(website), sqlc.narg(description),
+    sqlc.narg(opening_hours), sqlc.narg(website), sqlc.narg(description), sqlc.narg(fenced),
     'osm', sqlc.arg(osm_type), sqlc.arg(osm_id), 'pending'
 )
 ON CONFLICT (osm_type, osm_id) DO UPDATE SET
@@ -131,6 +131,7 @@ ON CONFLICT (osm_type, osm_id) DO UPDATE SET
     opening_hours = EXCLUDED.opening_hours,
     website       = EXCLUDED.website,
     description   = EXCLUDED.description,
+    fenced        = EXCLUDED.fenced,
     updated_at    = now()
 RETURNING id, (xmax = 0) AS inserted;
 
