@@ -30,6 +30,10 @@ export interface CourtSummary {
   surface: Surface | null;
   lighting: boolean | null;
   is_public: boolean;
+  drinking_water: boolean | null;
+  toilets: boolean | null;
+  parking: boolean | null;
+  fenced: boolean | null;
   source: "user" | "osm";
   status: CourtStatus;
   active_count: number;
@@ -51,6 +55,10 @@ export interface CourtDetail {
   access: "public" | "private" | "customers" | null;
   fee: boolean | null;
   covered: boolean | null;
+  drinking_water: boolean | null;
+  toilets: boolean | null;
+  parking: boolean | null;
+  fenced: boolean | null;
   opening_hours: string | null;
   website: string | null;
   description: string | null;

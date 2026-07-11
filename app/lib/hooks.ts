@@ -5,6 +5,7 @@ import {
 } from "@tanstack/react-query";
 import { api, API_URL } from "./api";
 import { useAuth } from "./auth-context";
+import { filtersToQuery, type CourtFilters } from "./court-filters";
 import type {
   AdminAction,
   AdminUser,
@@ -44,16 +45,16 @@ export interface BBox {
   maxLat: number;
 }
 
-export function useCourtsInBBox(bbox: BBox | null) {
+export function useCourtsInBBox(bbox: BBox | null, filters?: CourtFilters) {
   return useQuery({
-    queryKey: ["courts", "bbox", bbox],
+    queryKey: ["courts", "bbox", bbox, filters],
     enabled: bbox != null,
     // Court activity moves on a minutes timescale; poll while focused.
     refetchInterval: 45_000,
     queryFn: async () => {
       const b = bbox!;
       const res = await api<{ courts: CourtSummary[] }>(
-        `/courts?bbox=${b.minLng},${b.minLat},${b.maxLng},${b.maxLat}`,
+        `/courts?bbox=${b.minLng},${b.minLat},${b.maxLng},${b.maxLat}${filtersToQuery(filters ?? {})}`,
       );
       return res.courts;
     },
@@ -543,6 +544,15 @@ export function useFeed() {
     refetchInterval: 45_000,
     queryFn: () =>
       api<{ friends_here: FriendPresence[]; upcoming_runs: FeedRun[] }>("/feed"),
+  });
+}
+
+export function usePatchCourtAttributes(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (attrs: Partial<CourtDetail>) =>
+      api<CourtDetail>(`/courts/${id}/attributes`, { method: "PATCH", body: JSON.stringify(attrs) }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["courts", id] }),
   });
 }
 
