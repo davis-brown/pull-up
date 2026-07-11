@@ -51,7 +51,7 @@ WHERE (follower_id = $1 AND followee_id = $2)
 
 -- name: GetProfileStats :one
 SELECT
-    u.id, u.display_name, u.avatar_url, u.reputation, u.created_at AS member_since,
+    u.id, u.display_name, u.avatar_url, u.is_private, u.reputation, u.created_at AS member_since,
     (SELECT count(*) FROM check_ins ci WHERE ci.user_id = u.id)::int AS check_in_count,
     (SELECT count(*) FROM courts c WHERE c.submitted_by = u.id AND c.status = 'verified')::int AS courts_added_count,
     (SELECT count(*) FROM follows f WHERE f.followee_id = u.id)::int AS follower_count,
@@ -104,6 +104,49 @@ WHERE ci.checked_out_at IS NULL
   )
 ORDER BY ci.created_at DESC
 LIMIT 50;
+
+-- name: CreateFollowRequest :exec
+INSERT INTO follow_requests (requester_id, target_id)
+VALUES (sqlc.arg('requester_id'), sqlc.arg('target_id'))
+ON CONFLICT DO NOTHING;
+
+-- name: DeleteFollowRequest :exec
+DELETE FROM follow_requests
+WHERE requester_id = sqlc.arg('requester_id') AND target_id = sqlc.arg('target_id');
+
+-- name: IsFollowRequested :one
+SELECT EXISTS (
+    SELECT 1 FROM follow_requests
+    WHERE requester_id = sqlc.arg('requester_id') AND target_id = sqlc.arg('target_id')
+)::bool AS requested;
+
+-- name: ListIncomingFollowRequests :many
+SELECT u.id, u.display_name, u.avatar_url, fr.created_at
+FROM follow_requests fr
+JOIN users u ON u.id = fr.requester_id
+WHERE fr.target_id = $1
+ORDER BY fr.created_at DESC
+LIMIT 100;
+
+-- name: AcceptFollowRequest :one
+-- Atomically move an accepted request into a follow edge. Returns accepted=1
+-- when a request existed (follow inserted, or already present), 0 otherwise.
+WITH del AS (
+    DELETE FROM follow_requests
+    WHERE requester_id = sqlc.arg('requester_id') AND target_id = sqlc.arg('target_id')
+    RETURNING requester_id, target_id
+), ins AS (
+    INSERT INTO follows (follower_id, followee_id)
+    SELECT requester_id, target_id FROM del
+    ON CONFLICT DO NOTHING
+    RETURNING 1
+)
+SELECT count(*)::int AS accepted FROM del;
+
+-- name: DeleteFollowRequestsBetween :exec
+DELETE FROM follow_requests
+WHERE (requester_id = $1 AND target_id = $2)
+   OR (requester_id = $2 AND target_id = $1);
 
 -- name: ListFeedRuns :many
 -- Upcoming runs for the viewer's feed: future, non-canceled sessions planned by
