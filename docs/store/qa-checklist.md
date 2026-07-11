@@ -110,3 +110,24 @@ Requires production builds and the association files live on the real domain
       leave your feed
 - [ ] Pull-to-refresh on the Activity tab refreshes both the feed and the
       nearby list
+
+## Private accounts & follow requests (phase 8)
+
+- [ ] Toggle "Private account" on in Profile → Edit; GET /me and your profile
+      reflect it; toggle off restores public behavior
+- [ ] From a second account, following a private user shows "Requested" (not
+      "Following"); the private user's follower count does not change
+- [ ] The private user sees the request under Profile → "Follow requests (N)";
+      Confirm makes the requester an accepted follower and the count increments;
+      Delete removes the request with no follow
+- [ ] A private account's profile hides check-ins / courts-added / streak from a
+      non-follower and shows "This account is private"; an accepted follower and
+      the owner see full stats
+- [ ] Followers/following lists of a private account are not viewable by a
+      non-follower (403 → the app shows the private notice)
+- [ ] Canceling a sent request (tap "Requested" again) clears it
+- [ ] Blocking a user with a pending request in either direction clears it
+- [ ] A follow request fires a push to the private user; accepting fires a push
+      to the requester; public follows fire no request push
+- [ ] Public accounts are unchanged: following is immediate, profile shows full
+      stats to everyone
