@@ -23,6 +23,7 @@ import type {
   FeedRun,
   Flag,
   FlagEntityType,
+  FollowRequest,
   FollowUser,
   FriendPresence,
   PhotoStatus,
@@ -465,12 +466,42 @@ export function useSetFollow(id: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (follow: boolean) =>
-      api<{ following: boolean; follower_count: number }>(`/users/${id}/follow`, {
+      api<{ following?: boolean; requested?: boolean; follower_count?: number }>(`/users/${id}/follow`, {
         method: follow ? "PUT" : "DELETE",
       }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["users", id] });
     },
+  });
+}
+
+export function useFollowRequests() {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ["me", "follow-requests"],
+    enabled: !!user,
+    queryFn: async () => (await api<{ requests: FollowRequest[] }>("/me/follow-requests")).requests,
+  });
+}
+
+export function useAcceptFollowRequest() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (requesterId: string) =>
+      api<void>(`/users/${requesterId}/follow-requests/accept`, { method: "POST" }),
+    onSuccess: (_data, requesterId) => {
+      void qc.invalidateQueries({ queryKey: ["me", "follow-requests"] });
+      void qc.invalidateQueries({ queryKey: ["users", requesterId] });
+    },
+  });
+}
+
+export function useRejectFollowRequest() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (requesterId: string) =>
+      api<void>(`/users/${requesterId}/follow-requests/reject`, { method: "POST" }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["me", "follow-requests"] }),
   });
 }
 

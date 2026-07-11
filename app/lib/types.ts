@@ -6,6 +6,7 @@ export interface User {
   reputation: number;
   created_at: string;
   is_admin: boolean;
+  is_private: boolean;
 }
 
 export interface LatestReport {
@@ -212,10 +213,19 @@ export interface Profile {
   streak_days: number;
   is_following: boolean;
   follows_you: boolean;
+  is_private: boolean;
+  has_requested: boolean;
 }
 
 export interface FollowUser {
   id: string;
   display_name: string;
   avatar_url: string | null;
+}
+
+export interface FollowRequest {
+  id: string;
+  display_name: string;
+  avatar_url: string | null;
+  created_at: string;
 }
