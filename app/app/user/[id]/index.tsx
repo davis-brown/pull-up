@@ -33,6 +33,7 @@ export default function ProfileScreen() {
   }
 
   const isSelf = user?.id === profile.id;
+  const isPrivateLocked = profile.is_private && !isSelf && !profile.is_following;
   const memberSince = new Date(profile.member_since).toLocaleDateString([], {
     month: "long",
     year: "numeric",
@@ -54,24 +55,37 @@ export default function ProfileScreen() {
         </Text>
       </View>
 
-      <Card>
-        <View style={styles.statRow}>
-          <Stat label="Check-ins" value={profile.check_in_count} />
-          <Stat label="Courts added" value={profile.courts_added_count} />
-          <Stat label="Day streak" value={profile.streak_days} />
-        </View>
-      </Card>
+      {isPrivateLocked ? (
+        <Card>
+          <Text style={[t.type.bodyMedium, { color: t.colors.textPrimary, textAlign: "center" }]}>
+            This account is private
+          </Text>
+          <Text style={[t.type.caption, { color: t.colors.textSecondary, textAlign: "center", marginTop: 4 }]}>
+            Follow to see their check-ins, courts, and streak.
+          </Text>
+        </Card>
+      ) : (
+        <>
+          <Card>
+            <View style={styles.statRow}>
+              <Stat label="Check-ins" value={profile.check_in_count} />
+              <Stat label="Courts added" value={profile.courts_added_count} />
+              <Stat label="Day streak" value={profile.streak_days} />
+            </View>
+          </Card>
 
-      <View style={styles.countRow}>
-        <Pressable style={styles.countItem} onPress={() => router.push(`/user/${id}/followers` as Href)}>
-          <Text style={[t.type.heading, { color: t.colors.textPrimary }]}>{profile.follower_count}</Text>
-          <Text style={[t.type.caption, { color: t.colors.textSecondary }]}>Followers</Text>
-        </Pressable>
-        <Pressable style={styles.countItem} onPress={() => router.push(`/user/${id}/following` as Href)}>
-          <Text style={[t.type.heading, { color: t.colors.textPrimary }]}>{profile.following_count}</Text>
-          <Text style={[t.type.caption, { color: t.colors.textSecondary }]}>Following</Text>
-        </Pressable>
-      </View>
+          <View style={styles.countRow}>
+            <Pressable style={styles.countItem} onPress={() => router.push(`/user/${id}/followers` as Href)}>
+              <Text style={[t.type.heading, { color: t.colors.textPrimary }]}>{profile.follower_count}</Text>
+              <Text style={[t.type.caption, { color: t.colors.textSecondary }]}>Followers</Text>
+            </Pressable>
+            <Pressable style={styles.countItem} onPress={() => router.push(`/user/${id}/following` as Href)}>
+              <Text style={[t.type.heading, { color: t.colors.textPrimary }]}>{profile.following_count}</Text>
+              <Text style={[t.type.caption, { color: t.colors.textSecondary }]}>Following</Text>
+            </Pressable>
+          </View>
+        </>
+      )}
 
       <View style={{ marginTop: t.spacing.md }}>
         {isSelf ? (
@@ -80,10 +94,10 @@ export default function ProfileScreen() {
           <SignInAction label="Sign in to follow" />
         ) : (
           <Button
-            title={profile.is_following ? "Following" : "Follow"}
-            variant={profile.is_following ? "secondary" : "primary"}
+            title={profile.is_following ? "Following" : profile.has_requested ? "Requested" : profile.is_private ? "Request to follow" : "Follow"}
+            variant={profile.is_following || profile.has_requested ? "secondary" : "primary"}
             busy={setFollow.isPending}
-            onPress={() => setFollow.mutate(!profile.is_following)}
+            onPress={() => setFollow.mutate(!(profile.is_following || profile.has_requested))}
           />
         )}
         {!isSelf && (
