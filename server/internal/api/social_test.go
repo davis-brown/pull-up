@@ -297,3 +297,50 @@ func TestFollowPrivateAccountRequests(t *testing.T) {
 		t.Errorf("after accept: %+v, want count 1 + is_following", p)
 	}
 }
+
+func TestPrivateProfileHidesActivity(t *testing.T) {
+	ts, _ := newTestServer(t)
+	owner := registerUser(t, ts, "powner@test.local", "Owner")
+	viewer := registerUser(t, ts, "pviewer@test.local", "Viewer")
+	doJSON(t, ts, http.MethodPatch, "/me", owner.AccessToken, map[string]any{"is_private": true}).Body.Close()
+
+	// Non-follower sees limited profile: is_private true, activity zeroed, list 403.
+	resp := doJSON(t, ts, http.MethodGet, "/users/"+owner.User.ID, viewer.AccessToken, nil)
+	p := decodeJSON[struct {
+		IsPrivate    bool `json:"is_private"`
+		CheckInCount int  `json:"check_in_count"`
+		StreakDays   int  `json:"streak_days"`
+	}](t, resp)
+	if !p.IsPrivate || p.CheckInCount != 0 || p.StreakDays != 0 {
+		t.Errorf("private profile not gated for non-follower: %+v", p)
+	}
+	resp = doJSON(t, ts, http.MethodGet, "/users/"+owner.User.ID+"/followers", viewer.AccessToken, nil)
+	if resp.StatusCode != http.StatusForbidden {
+		t.Errorf("followers list for private account: status %d, want 403", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	// Owner sees their own full profile (not gated).
+	resp = doJSON(t, ts, http.MethodGet, "/users/"+owner.User.ID, owner.AccessToken, nil)
+	if p := decodeJSON[struct {
+		IsPrivate bool `json:"is_private"`
+	}](t, resp); !p.IsPrivate {
+		t.Errorf("owner should still see is_private true on self")
+	}
+}
+
+func TestBlockClearsPendingRequest(t *testing.T) {
+	ts, _ := newTestServer(t)
+	a := registerUser(t, ts, "bpa@test.local", "A")
+	b := registerUser(t, ts, "bpb@test.local", "B")
+	doJSON(t, ts, http.MethodPatch, "/me", b.AccessToken, map[string]any{"is_private": true}).Body.Close()
+	doJSON(t, ts, http.MethodPut, "/users/"+b.User.ID+"/follow", a.AccessToken, nil).Body.Close() // request
+	// B blocks A → request cleared.
+	doJSON(t, ts, http.MethodPut, "/users/"+a.User.ID+"/block", b.AccessToken, nil).Body.Close()
+	resp := doJSON(t, ts, http.MethodGet, "/me/follow-requests", b.AccessToken, nil)
+	if reqs := decodeJSON[struct {
+		Requests []map[string]any `json:"requests"`
+	}](t, resp); len(reqs.Requests) != 0 {
+		t.Errorf("block did not clear pending request: %+v", reqs)
+	}
+}
