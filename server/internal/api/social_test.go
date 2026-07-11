@@ -249,3 +249,51 @@ func TestSetPrivateFlag(t *testing.T) {
 		t.Errorf("is_private did not persist")
 	}
 }
+
+func TestFollowPrivateAccountRequests(t *testing.T) {
+	ts, _ := newTestServer(t)
+	a := registerUser(t, ts, "reqa@test.local", "A")
+	b := registerUser(t, ts, "reqb@test.local", "B")
+	// B goes private.
+	doJSON(t, ts, http.MethodPatch, "/me", b.AccessToken, map[string]any{"is_private": true}).Body.Close()
+
+	// A follows B → request, not a follow.
+	resp := doJSON(t, ts, http.MethodPut, "/users/"+b.User.ID+"/follow", a.AccessToken, nil)
+	if body := decodeJSON[struct {
+		Requested bool `json:"requested"`
+	}](t, resp); !body.Requested {
+		t.Fatalf("private follow should return requested:true")
+	}
+	// B's follower count is still 0 (pending is not a follow).
+	resp = doJSON(t, ts, http.MethodGet, "/users/"+b.User.ID, a.AccessToken, nil)
+	if p := decodeJSON[struct {
+		FollowerCount int  `json:"follower_count"`
+		HasRequested  bool `json:"has_requested"`
+	}](t, resp); p.FollowerCount != 0 || !p.HasRequested {
+		t.Errorf("after request: %+v, want count 0 + has_requested", p)
+	}
+
+	// B sees the incoming request and accepts it.
+	resp = doJSON(t, ts, http.MethodGet, "/me/follow-requests", b.AccessToken, nil)
+	if reqs := decodeJSON[struct {
+		Requests []struct {
+			ID string `json:"id"`
+		} `json:"requests"`
+	}](t, resp); len(reqs.Requests) != 1 || reqs.Requests[0].ID != a.User.ID {
+		t.Fatalf("B's incoming requests wrong: %+v", reqs)
+	}
+	resp = doJSON(t, ts, http.MethodPost, "/users/"+a.User.ID+"/follow-requests/accept", b.AccessToken, nil)
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("accept: status %d", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	// Now A is an accepted follower.
+	resp = doJSON(t, ts, http.MethodGet, "/users/"+b.User.ID, a.AccessToken, nil)
+	if p := decodeJSON[struct {
+		FollowerCount int  `json:"follower_count"`
+		IsFollowing   bool `json:"is_following"`
+	}](t, resp); p.FollowerCount != 1 || !p.IsFollowing {
+		t.Errorf("after accept: %+v, want count 1 + is_following", p)
+	}
+}
