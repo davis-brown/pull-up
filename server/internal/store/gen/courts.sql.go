@@ -513,15 +513,15 @@ func (q *Queries) UpsertCourtVote(ctx context.Context, arg UpsertCourtVoteParams
 
 const upsertOSMCourt = `-- name: UpsertOSMCourt :one
 INSERT INTO courts (name, location, hoop_count, indoor, surface, lighting,
-    access, fee, covered, opening_hours, website, description,
+    access, fee, covered, opening_hours, website, description, fenced,
     source, osm_type, osm_id, status)
 VALUES (
     $1,
     ST_SetSRID(ST_MakePoint($2::float8, $3::float8), 4326)::geography,
     $4, $5, $6, $7,
     $8, $9, $10,
-    $11, $12, $13,
-    'osm', $14, $15, 'pending'
+    $11, $12, $13, $14,
+    'osm', $15, $16, 'pending'
 )
 ON CONFLICT (osm_type, osm_id) DO UPDATE SET
     name          = EXCLUDED.name,
@@ -536,6 +536,7 @@ ON CONFLICT (osm_type, osm_id) DO UPDATE SET
     opening_hours = EXCLUDED.opening_hours,
     website       = EXCLUDED.website,
     description   = EXCLUDED.description,
+    fenced        = EXCLUDED.fenced,
     updated_at    = now()
 RETURNING id, (xmax = 0) AS inserted
 `
@@ -554,6 +555,7 @@ type UpsertOSMCourtParams struct {
 	OpeningHours *string `json:"opening_hours"`
 	Website      *string `json:"website"`
 	Description  *string `json:"description"`
+	Fenced       *bool   `json:"fenced"`
 	OsmType      *string `json:"osm_type"`
 	OsmID        *int64  `json:"osm_id"`
 }
@@ -578,6 +580,7 @@ func (q *Queries) UpsertOSMCourt(ctx context.Context, arg UpsertOSMCourtParams) 
 		arg.OpeningHours,
 		arg.Website,
 		arg.Description,
+		arg.Fenced,
 		arg.OsmType,
 		arg.OsmID,
 	)

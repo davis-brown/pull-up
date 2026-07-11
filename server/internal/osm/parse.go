@@ -23,6 +23,7 @@ type Court struct {
 	OpeningHours *string
 	Website      *string
 	Description  *string
+	Fenced       *bool
 }
 
 type overpassResponse struct {
@@ -73,6 +74,7 @@ func ParseCourts(body []byte) ([]Court, error) {
 			OpeningHours: nonEmpty(el.Tags["opening_hours"], 200),
 			Website:      website(el.Tags),
 			Description:  nonEmpty(el.Tags["description"], 500),
+			Fenced:       parseFenced(el.Tags),
 		})
 	}
 	return courts, nil
@@ -162,6 +164,18 @@ func website(tags map[string]string) *string {
 			(strings.HasPrefix(*w, "http://") || strings.HasPrefix(*w, "https://")) {
 			return w
 		}
+	}
+	return nil
+}
+
+// parseFenced reads either fenced=yes/no or barrier=fence on the pitch.
+func parseFenced(tags map[string]string) *bool {
+	if v := parseYesNo(tags["fenced"]); v != nil {
+		return v
+	}
+	if tags["barrier"] == "fence" {
+		b := true
+		return &b
 	}
 	return nil
 }

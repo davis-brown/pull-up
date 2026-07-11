@@ -133,3 +133,22 @@ func TestParseEnrichmentTags(t *testing.T) {
 		t.Errorf("bad values not nil: access=%v website=%v", courts2[0].Access, courts2[0].Website)
 	}
 }
+
+func ptrBool(b bool) *bool { return &b }
+
+func TestParseFenced(t *testing.T) {
+	cases := []struct {
+		tags map[string]string
+		want *bool
+	}{
+		{map[string]string{"leisure": "pitch", "sport": "basketball", "fenced": "yes"}, ptrBool(true)},
+		{map[string]string{"leisure": "pitch", "sport": "basketball", "barrier": "fence"}, ptrBool(true)},
+		{map[string]string{"leisure": "pitch", "sport": "basketball"}, nil},
+	}
+	for _, c := range cases {
+		got := parseFenced(c.tags)
+		if (got == nil) != (c.want == nil) || (got != nil && *got != *c.want) {
+			t.Errorf("parseFenced(%v) = %v, want %v", c.tags, got, c.want)
+		}
+	}
+}

@@ -146,6 +146,7 @@ func (s *Seeder) importTile(ctx context.Context, tile Tile) {
 			HoopCount: c.HoopCount, Indoor: c.Indoor, Surface: c.Surface, Lighting: c.Lighting,
 			Access: c.Access, Fee: c.Fee, Covered: c.Covered,
 			OpeningHours: c.OpeningHours, Website: c.Website, Description: c.Description,
+			Fenced:  c.Fenced,
 			OsmType: &c.OSMType, OsmID: &c.OSMID,
 		}); err != nil {
 			s.log.Error("upsert osm court", "tile", tile, "err", err)
