@@ -60,7 +60,7 @@ func testStore(t *testing.T) *store.Store {
 	}
 	// Isolate each run.
 	if _, err := st.Pool.Exec(ctx,
-		"TRUNCATE users, refresh_tokens, courts, check_ins, crowd_reports, court_votes, court_photos, flags, seed_regions, sessions, session_rsvps, court_messages, follows, favorites, blocked_users CASCADE"); err != nil {
+		"TRUNCATE users, refresh_tokens, courts, check_ins, crowd_reports, court_votes, court_photos, flags, seed_regions, sessions, session_rsvps, court_messages, follows, favorites, blocked_users, follow_requests CASCADE"); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 	return st
@@ -769,5 +769,45 @@ func TestFeedRuns(t *testing.T) {
 		if r.CourtName == "" {
 			t.Errorf("missing court_name: %+v", r)
 		}
+	}
+}
+
+func TestFollowRequestLifecycle(t *testing.T) {
+	st := testStore(t)
+	ctx := context.Background()
+	requester := createUser(t, st, "req@test.local")
+	target := createUser(t, st, "tgt@test.local")
+
+	// Create request (idempotent).
+	for i := 0; i < 2; i++ {
+		if err := st.Queries.CreateFollowRequest(ctx, gen.CreateFollowRequestParams{
+			RequesterID: requester, TargetID: target,
+		}); err != nil {
+			t.Fatalf("create request %d: %v", i, err)
+		}
+	}
+	got, err := st.Queries.IsFollowRequested(ctx, gen.IsFollowRequestedParams{RequesterID: requester, TargetID: target})
+	if err != nil || !got {
+		t.Fatalf("IsFollowRequested = %v, %v; want true", got, err)
+	}
+	// No follow edge exists yet.
+	if f, _ := st.Queries.IsFollowing(ctx, gen.IsFollowingParams{FollowerID: requester, FolloweeID: target}); f {
+		t.Fatal("pending request must not create a follow edge")
+	}
+
+	// Accept: request → follow, atomically.
+	n, err := st.Queries.AcceptFollowRequest(ctx, gen.AcceptFollowRequestParams{RequesterID: requester, TargetID: target})
+	if err != nil || n != 1 {
+		t.Fatalf("AcceptFollowRequest = %d, %v; want 1", n, err)
+	}
+	if f, _ := st.Queries.IsFollowing(ctx, gen.IsFollowingParams{FollowerID: requester, FolloweeID: target}); !f {
+		t.Error("accept did not create the follow edge")
+	}
+	if got, _ := st.Queries.IsFollowRequested(ctx, gen.IsFollowRequestedParams{RequesterID: requester, TargetID: target}); got {
+		t.Error("request should be gone after accept")
+	}
+	// Accepting again is a no-op (0 rows).
+	if n, _ := st.Queries.AcceptFollowRequest(ctx, gen.AcceptFollowRequestParams{RequesterID: requester, TargetID: target}); n != 0 {
+		t.Errorf("second accept = %d, want 0", n)
 	}
 }
