@@ -10,12 +10,14 @@ import {
   View,
 } from "react-native";
 import { useQuery } from "@tanstack/react-query";
+import { CourtFilterBar } from "@/components/CourtFilterBar";
 import { EmptyState } from "@/components/EmptyState";
 import { FeedHeader } from "@/components/FeedHeader";
 import { QueryError } from "@/components/QueryError";
 import { Card } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import { filtersToQuery, type CourtFilters } from "@/lib/court-filters";
 import { useFeed } from "@/lib/hooks";
 import { FALLBACK_CENTER, tryGetPosition, type Coords } from "@/lib/location";
 import { useTheme } from "@/lib/theme";
@@ -33,6 +35,7 @@ export default function ActivityScreen() {
   const router = useRouter();
   const t = useTheme();
   const [pos, setPos] = useState<Coords | null>(null);
+  const [filters, setFilters] = useState<CourtFilters>({});
   const { user } = useAuth();
   const feed = useFeed();
 
@@ -41,12 +44,12 @@ export default function ActivityScreen() {
   }, []);
 
   const { data, isLoading, error, refetch, isRefetching } = useQuery({
-    queryKey: ["courts", "nearby", pos],
+    queryKey: ["courts", "nearby", pos, filters],
     enabled: pos != null,
     refetchInterval: 45_000,
     queryFn: async () => {
       const res = await api<{ courts: CourtSummary[] }>(
-        `/courts?lat=${pos!.lat}&lng=${pos!.lng}&radius_m=10000`,
+        `/courts?lat=${pos!.lat}&lng=${pos!.lng}&radius_m=10000${filtersToQuery(filters)}`,
       );
       return [...res.courts].sort((a, b) => b.active_count - a.active_count);
     },
@@ -85,13 +88,16 @@ export default function ActivityScreen() {
         />
       }
       ListHeaderComponent={
-        user ? (
-          <FeedHeader
-            friendsHere={feed.data?.friends_here ?? []}
-            runs={feed.data?.upcoming_runs ?? []}
-            loading={feed.isLoading}
-          />
-        ) : null
+        <>
+          <CourtFilterBar value={filters} onChange={setFilters} />
+          {user ? (
+            <FeedHeader
+              friendsHere={feed.data?.friends_here ?? []}
+              runs={feed.data?.upcoming_runs ?? []}
+              loading={feed.isLoading}
+            />
+          ) : null}
+        </>
       }
       ListEmptyComponent={
         <EmptyState
