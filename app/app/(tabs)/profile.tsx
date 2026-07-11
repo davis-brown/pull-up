@@ -1,4 +1,4 @@
-import { useFocusEffect, useRouter } from "expo-router";
+import { useFocusEffect, useRouter, type Href } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import { useCallback, useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
@@ -20,6 +20,7 @@ import {
   useClearAvatar,
   useCurrentCheckIn,
   useDeleteAccount,
+  useFollowRequests,
   useSetBlocked,
   useUploadAvatar,
 } from "@/lib/hooks";
@@ -77,6 +78,17 @@ function ProfileContent() {
   const deleteAccount = useDeleteAccount();
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const { data: followRequests } = useFollowRequests();
+
+  const togglePrivate = async (next: boolean) => {
+    setProfileError(null);
+    try {
+      await api<User>("/me", { method: "PATCH", body: JSON.stringify({ is_private: next }) });
+      await refreshUser();
+    } catch (e) {
+      setProfileError(e instanceof Error ? e.message : "Could not update privacy.");
+    }
+  };
 
   // Re-read on focus: the disclosure modal may have changed the mode.
   useFocusEffect(
@@ -192,7 +204,29 @@ function ProfileContent() {
           Reputation {user?.reputation ?? 0}
         </Text>
         <ErrorText message={profileError} />
+        <Pressable
+          onPress={() => void togglePrivate(!user?.is_private)}
+          style={[styles.privacyRow, { borderTopColor: t.colors.border }]}
+        >
+          <View style={{ flex: 1 }}>
+            <Text style={[t.type.bodyMedium, { color: t.colors.textPrimary }]}>Private account</Text>
+            <Text style={[t.type.caption, { color: t.colors.textSecondary }]}>
+              New followers must be approved; non-followers can't see your activity.
+            </Text>
+          </View>
+          <Text style={[t.type.bodyMedium, { color: user?.is_private ? t.colors.accent : t.colors.textMuted }]}>
+            {user?.is_private ? "On" : "Off"}
+          </Text>
+        </Pressable>
       </Card>
+
+      {(followRequests?.length ?? 0) > 0 && (
+        <Button
+          title={`Follow requests (${followRequests!.length})`}
+          variant="secondary"
+          onPress={() => router.push("/follow-requests" as Href)}
+        />
+      )}
 
       {checkIn && (
         <Card>
@@ -407,4 +441,5 @@ const styles = StyleSheet.create({
   liveRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   liveDot: { width: 8, height: 8, borderRadius: 4 },
   attribution: { textAlign: "center", lineHeight: 18 },
+  privacyRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingTop: 12, marginTop: 4, borderTopWidth: StyleSheet.hairlineWidth },
 });
