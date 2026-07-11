@@ -12,6 +12,34 @@ import (
 	"github.com/google/uuid"
 )
 
+const acceptFollowRequest = `-- name: AcceptFollowRequest :one
+WITH del AS (
+    DELETE FROM follow_requests
+    WHERE requester_id = $1 AND target_id = $2
+    RETURNING requester_id, target_id
+), ins AS (
+    INSERT INTO follows (follower_id, followee_id)
+    SELECT requester_id, target_id FROM del
+    ON CONFLICT DO NOTHING
+    RETURNING 1
+)
+SELECT count(*)::int AS accepted FROM del
+`
+
+type AcceptFollowRequestParams struct {
+	RequesterID uuid.UUID `json:"requester_id"`
+	TargetID    uuid.UUID `json:"target_id"`
+}
+
+// Atomically move an accepted request into a follow edge. Returns accepted=1
+// when a request existed (follow inserted, or already present), 0 otherwise.
+func (q *Queries) AcceptFollowRequest(ctx context.Context, arg AcceptFollowRequestParams) (int32, error) {
+	row := q.db.QueryRow(ctx, acceptFollowRequest, arg.RequesterID, arg.TargetID)
+	var accepted int32
+	err := row.Scan(&accepted)
+	return accepted, err
+}
+
 const areBlocked = `-- name: AreBlocked :one
 SELECT EXISTS (
     SELECT 1 FROM blocked_users
@@ -54,6 +82,22 @@ func (q *Queries) CountFollowing(ctx context.Context, followerID uuid.UUID) (int
 	return count, err
 }
 
+const createFollowRequest = `-- name: CreateFollowRequest :exec
+INSERT INTO follow_requests (requester_id, target_id)
+VALUES ($1, $2)
+ON CONFLICT DO NOTHING
+`
+
+type CreateFollowRequestParams struct {
+	RequesterID uuid.UUID `json:"requester_id"`
+	TargetID    uuid.UUID `json:"target_id"`
+}
+
+func (q *Queries) CreateFollowRequest(ctx context.Context, arg CreateFollowRequestParams) error {
+	_, err := q.db.Exec(ctx, createFollowRequest, arg.RequesterID, arg.TargetID)
+	return err
+}
+
 const currentStreakDays = `-- name: CurrentStreakDays :one
 WITH days AS (
     SELECT DISTINCT (date_trunc('day', created_at AT TIME ZONE 'UTC'))::date AS d
@@ -81,6 +125,37 @@ func (q *Queries) CurrentStreakDays(ctx context.Context, userID uuid.UUID) (int3
 	var streak_days int32
 	err := row.Scan(&streak_days)
 	return streak_days, err
+}
+
+const deleteFollowRequest = `-- name: DeleteFollowRequest :exec
+DELETE FROM follow_requests
+WHERE requester_id = $1 AND target_id = $2
+`
+
+type DeleteFollowRequestParams struct {
+	RequesterID uuid.UUID `json:"requester_id"`
+	TargetID    uuid.UUID `json:"target_id"`
+}
+
+func (q *Queries) DeleteFollowRequest(ctx context.Context, arg DeleteFollowRequestParams) error {
+	_, err := q.db.Exec(ctx, deleteFollowRequest, arg.RequesterID, arg.TargetID)
+	return err
+}
+
+const deleteFollowRequestsBetween = `-- name: DeleteFollowRequestsBetween :exec
+DELETE FROM follow_requests
+WHERE (requester_id = $1 AND target_id = $2)
+   OR (requester_id = $2 AND target_id = $1)
+`
+
+type DeleteFollowRequestsBetweenParams struct {
+	RequesterID uuid.UUID `json:"requester_id"`
+	TargetID    uuid.UUID `json:"target_id"`
+}
+
+func (q *Queries) DeleteFollowRequestsBetween(ctx context.Context, arg DeleteFollowRequestsBetweenParams) error {
+	_, err := q.db.Exec(ctx, deleteFollowRequestsBetween, arg.RequesterID, arg.TargetID)
+	return err
 }
 
 const deleteFollowsBetween = `-- name: DeleteFollowsBetween :exec
@@ -119,7 +194,7 @@ func (q *Queries) Follow(ctx context.Context, arg FollowParams) error {
 
 const getProfileStats = `-- name: GetProfileStats :one
 SELECT
-    u.id, u.display_name, u.avatar_url, u.reputation, u.created_at AS member_since,
+    u.id, u.display_name, u.avatar_url, u.is_private, u.reputation, u.created_at AS member_since,
     (SELECT count(*) FROM check_ins ci WHERE ci.user_id = u.id)::int AS check_in_count,
     (SELECT count(*) FROM courts c WHERE c.submitted_by = u.id AND c.status = 'verified')::int AS courts_added_count,
     (SELECT count(*) FROM follows f WHERE f.followee_id = u.id)::int AS follower_count,
@@ -132,6 +207,7 @@ type GetProfileStatsRow struct {
 	ID               uuid.UUID `json:"id"`
 	DisplayName      string    `json:"display_name"`
 	AvatarUrl        *string   `json:"avatar_url"`
+	IsPrivate        bool      `json:"is_private"`
 	Reputation       int32     `json:"reputation"`
 	MemberSince      time.Time `json:"member_since"`
 	CheckInCount     int32     `json:"check_in_count"`
@@ -147,6 +223,7 @@ func (q *Queries) GetProfileStats(ctx context.Context, id uuid.UUID) (GetProfile
 		&i.ID,
 		&i.DisplayName,
 		&i.AvatarUrl,
+		&i.IsPrivate,
 		&i.Reputation,
 		&i.MemberSince,
 		&i.CheckInCount,
@@ -155,6 +232,25 @@ func (q *Queries) GetProfileStats(ctx context.Context, id uuid.UUID) (GetProfile
 		&i.FollowingCount,
 	)
 	return i, err
+}
+
+const isFollowRequested = `-- name: IsFollowRequested :one
+SELECT EXISTS (
+    SELECT 1 FROM follow_requests
+    WHERE requester_id = $1 AND target_id = $2
+)::bool AS requested
+`
+
+type IsFollowRequestedParams struct {
+	RequesterID uuid.UUID `json:"requester_id"`
+	TargetID    uuid.UUID `json:"target_id"`
+}
+
+func (q *Queries) IsFollowRequested(ctx context.Context, arg IsFollowRequestedParams) (bool, error) {
+	row := q.db.QueryRow(ctx, isFollowRequested, arg.RequesterID, arg.TargetID)
+	var requested bool
+	err := row.Scan(&requested)
+	return requested, err
 }
 
 const isFollowing = `-- name: IsFollowing :one
@@ -399,6 +495,47 @@ func (q *Queries) ListFriendsCheckedIn(ctx context.Context, viewerID uuid.UUID) 
 			&i.CourtID,
 			&i.CourtName,
 			&i.Since,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listIncomingFollowRequests = `-- name: ListIncomingFollowRequests :many
+SELECT u.id, u.display_name, u.avatar_url, fr.created_at
+FROM follow_requests fr
+JOIN users u ON u.id = fr.requester_id
+WHERE fr.target_id = $1
+ORDER BY fr.created_at DESC
+LIMIT 100
+`
+
+type ListIncomingFollowRequestsRow struct {
+	ID          uuid.UUID `json:"id"`
+	DisplayName string    `json:"display_name"`
+	AvatarUrl   *string   `json:"avatar_url"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+func (q *Queries) ListIncomingFollowRequests(ctx context.Context, targetID uuid.UUID) ([]ListIncomingFollowRequestsRow, error) {
+	rows, err := q.db.Query(ctx, listIncomingFollowRequests, targetID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListIncomingFollowRequestsRow
+	for rows.Next() {
+		var i ListIncomingFollowRequestsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.DisplayName,
+			&i.AvatarUrl,
+			&i.CreatedAt,
 		); err != nil {
 			return nil, err
 		}
