@@ -1,7 +1,9 @@
 package api
 
 import (
+	"context"
 	"errors"
+	"fmt"
 	"math"
 	"net/http"
 	"net/url"
@@ -398,6 +400,159 @@ func (s *Server) handleCreateFlag(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusCreated)
+}
+
+type patchAttributesRequest struct {
+	Surface       *string `json:"surface"`
+	Lighting      *bool   `json:"lighting"`
+	Indoor        *bool   `json:"indoor"`
+	Covered       *bool   `json:"covered"`
+	HoopCount     *int16  `json:"hoop_count"`
+	Access        *string `json:"access"`
+	Fee           *bool   `json:"fee"`
+	DrinkingWater *bool   `json:"drinking_water"`
+	Toilets       *bool   `json:"toilets"`
+	Parking       *bool   `json:"parking"`
+	Fenced        *bool   `json:"fenced"`
+}
+
+var validAccesses = map[string]bool{"public": true, "private": true, "customers": true}
+
+func validSurface(v string) bool { return validSurfaces[v] }
+func validAccess(v string) bool  { return validAccesses[v] }
+
+// handlePatchCourtAttributes applies a structured crowd correction to a
+// court's attributes (last-writer-wins) and logs each changed field to the
+// court_attribute_edits audit table.
+func (s *Server) handlePatchCourtAttributes(w http.ResponseWriter, r *http.Request) {
+	courtID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid court id")
+		return
+	}
+	var req patchAttributesRequest
+	if !readJSON(w, r, &req) {
+		return
+	}
+	if req.Surface != nil && !validSurface(*req.Surface) {
+		writeError(w, http.StatusBadRequest, "invalid surface")
+		return
+	}
+	if req.Access != nil && !validAccess(*req.Access) {
+		writeError(w, http.StatusBadRequest, "invalid access")
+		return
+	}
+	if req.HoopCount != nil && (*req.HoopCount < 0 || *req.HoopCount > 20) {
+		writeError(w, http.StatusBadRequest, "hoop_count must be 0-20")
+		return
+	}
+	current, err := s.store.Queries.GetCourt(r.Context(), courtID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeError(w, http.StatusNotFound, "court not found")
+			return
+		}
+		s.internalError(w, "get court", err)
+		return
+	}
+	if _, err := s.store.Queries.UpdateCourtAttributes(r.Context(), gen.UpdateCourtAttributesParams{
+		ID: courtID, Surface: req.Surface, Lighting: req.Lighting, Indoor: req.Indoor,
+		Covered: req.Covered, HoopCount: req.HoopCount, Access: req.Access, Fee: req.Fee,
+		DrinkingWater: req.DrinkingWater, Toilets: req.Toilets, Parking: req.Parking, Fenced: req.Fenced,
+	}); err != nil {
+		s.internalError(w, "update attributes", err)
+		return
+	}
+	s.logAttributeEdits(r.Context(), courtID, userID(r), current, req)
+	s.handleGetCourt(w, r) // return the refreshed CourtDetail
+}
+
+// logAttributeEdits records an audit row for each request field that changed
+// the court's current value. Best-effort: failures are logged, not fatal.
+func (s *Server) logAttributeEdits(ctx context.Context, courtID, editorID uuid.UUID, current gen.GetCourtRow, req patchAttributesRequest) {
+	logField := func(field string, changed bool, oldVal, newVal string) {
+		if !changed {
+			return
+		}
+		if err := s.store.Queries.InsertCourtAttributeEdit(ctx, gen.InsertCourtAttributeEditParams{
+			CourtID: courtID, EditorID: editorID, Field: field, OldValue: &oldVal, NewValue: &newVal,
+		}); err != nil {
+			s.log.Error("insert court attribute edit", "field", field, "court_id", courtID, "err", err)
+		}
+	}
+	strOf := func(v *string) string {
+		if v == nil {
+			return ""
+		}
+		return *v
+	}
+	boolOf := func(v *bool) string {
+		if v == nil {
+			return ""
+		}
+		return fmt.Sprint(*v)
+	}
+	int16Of := func(v *int16) string {
+		if v == nil {
+			return ""
+		}
+		return fmt.Sprint(*v)
+	}
+
+	if req.Surface != nil {
+		logField("surface", !strPtrEq(req.Surface, current.Surface), strOf(current.Surface), *req.Surface)
+	}
+	if req.Lighting != nil {
+		logField("lighting", !boolPtrEq(req.Lighting, current.Lighting), boolOf(current.Lighting), fmt.Sprint(*req.Lighting))
+	}
+	if req.Indoor != nil {
+		logField("indoor", *req.Indoor != current.Indoor, fmt.Sprint(current.Indoor), fmt.Sprint(*req.Indoor))
+	}
+	if req.Covered != nil {
+		logField("covered", !boolPtrEq(req.Covered, current.Covered), boolOf(current.Covered), fmt.Sprint(*req.Covered))
+	}
+	if req.HoopCount != nil {
+		logField("hoop_count", !int16PtrEq(req.HoopCount, current.HoopCount), int16Of(current.HoopCount), fmt.Sprint(*req.HoopCount))
+	}
+	if req.Access != nil {
+		logField("access", !strPtrEq(req.Access, current.Access), strOf(current.Access), *req.Access)
+	}
+	if req.Fee != nil {
+		logField("fee", !boolPtrEq(req.Fee, current.Fee), boolOf(current.Fee), fmt.Sprint(*req.Fee))
+	}
+	if req.DrinkingWater != nil {
+		logField("drinking_water", !boolPtrEq(req.DrinkingWater, current.DrinkingWater), boolOf(current.DrinkingWater), fmt.Sprint(*req.DrinkingWater))
+	}
+	if req.Toilets != nil {
+		logField("toilets", !boolPtrEq(req.Toilets, current.Toilets), boolOf(current.Toilets), fmt.Sprint(*req.Toilets))
+	}
+	if req.Parking != nil {
+		logField("parking", !boolPtrEq(req.Parking, current.Parking), boolOf(current.Parking), fmt.Sprint(*req.Parking))
+	}
+	if req.Fenced != nil {
+		logField("fenced", !boolPtrEq(req.Fenced, current.Fenced), boolOf(current.Fenced), fmt.Sprint(*req.Fenced))
+	}
+}
+
+func strPtrEq(a, b *string) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return *a == *b
+}
+
+func boolPtrEq(a, b *bool) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return *a == *b
+}
+
+func int16PtrEq(a, b *int16) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return *a == *b
 }
 
 func validLatLng(lat, lng float64) bool {
