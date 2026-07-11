@@ -131,7 +131,7 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (GetUserByEm
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, email, display_name, avatar_url, reputation, created_at, is_admin
+SELECT id, email, display_name, avatar_url, reputation, created_at, is_admin, is_private
 FROM users
 WHERE id = $1
 `
@@ -144,6 +144,7 @@ type GetUserByIDRow struct {
 	Reputation  int32     `json:"reputation"`
 	CreatedAt   time.Time `json:"created_at"`
 	IsAdmin     bool      `json:"is_admin"`
+	IsPrivate   bool      `json:"is_private"`
 }
 
 func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (GetUserByIDRow, error) {
@@ -157,6 +158,7 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (GetUserByIDRow
 		&i.Reputation,
 		&i.CreatedAt,
 		&i.IsAdmin,
+		&i.IsPrivate,
 	)
 	return i, err
 }
@@ -184,14 +186,16 @@ func (q *Queries) RevokeRefreshToken(ctx context.Context, id uuid.UUID) error {
 const updateUser = `-- name: UpdateUser :one
 UPDATE users SET
     display_name = coalesce($1, display_name),
-    avatar_url   = coalesce($2, avatar_url)
-WHERE id = $3
-RETURNING id, email, display_name, avatar_url, reputation, created_at, is_admin
+    avatar_url   = coalesce($2, avatar_url),
+    is_private   = coalesce($3, is_private)
+WHERE id = $4
+RETURNING id, email, display_name, avatar_url, reputation, created_at, is_admin, is_private
 `
 
 type UpdateUserParams struct {
 	DisplayName *string   `json:"display_name"`
 	AvatarUrl   *string   `json:"avatar_url"`
+	IsPrivate   *bool     `json:"is_private"`
 	ID          uuid.UUID `json:"id"`
 }
 
@@ -203,10 +207,16 @@ type UpdateUserRow struct {
 	Reputation  int32     `json:"reputation"`
 	CreatedAt   time.Time `json:"created_at"`
 	IsAdmin     bool      `json:"is_admin"`
+	IsPrivate   bool      `json:"is_private"`
 }
 
 func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (UpdateUserRow, error) {
-	row := q.db.QueryRow(ctx, updateUser, arg.DisplayName, arg.AvatarUrl, arg.ID)
+	row := q.db.QueryRow(ctx, updateUser,
+		arg.DisplayName,
+		arg.AvatarUrl,
+		arg.IsPrivate,
+		arg.ID,
+	)
 	var i UpdateUserRow
 	err := row.Scan(
 		&i.ID,
@@ -216,6 +226,7 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (UpdateU
 		&i.Reputation,
 		&i.CreatedAt,
 		&i.IsAdmin,
+		&i.IsPrivate,
 	)
 	return i, err
 }
