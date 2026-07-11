@@ -4,7 +4,7 @@ VALUES ($1, $2, $3)
 RETURNING id, email, display_name, avatar_url, reputation, created_at, is_admin;
 
 -- name: GetUserByEmail :one
-SELECT id, email, password_hash, display_name, avatar_url, reputation, created_at, is_admin
+SELECT id, email, password_hash, display_name, avatar_url, reputation, created_at, is_admin, is_private
 FROM users
 WHERE email = $1;
 
