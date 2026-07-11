@@ -133,6 +133,12 @@ type Follow struct {
 	CreatedAt  time.Time `json:"created_at"`
 }
 
+type FollowRequest struct {
+	RequesterID uuid.UUID `json:"requester_id"`
+	TargetID    uuid.UUID `json:"target_id"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
 type PushToken struct {
 	Token     string    `json:"token"`
 	UserID    uuid.UUID `json:"user_id"`
@@ -188,4 +194,5 @@ type User struct {
 	AuthProvider string    `json:"auth_provider"`
 	OauthSubject *string   `json:"oauth_subject"`
 	IsAdmin      bool      `json:"is_admin"`
+	IsPrivate    bool      `json:"is_private"`
 }
