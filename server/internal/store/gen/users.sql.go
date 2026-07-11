@@ -98,7 +98,7 @@ func (q *Queries) GetRefreshTokenByHash(ctx context.Context, tokenHash string) (
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, email, password_hash, display_name, avatar_url, reputation, created_at, is_admin
+SELECT id, email, password_hash, display_name, avatar_url, reputation, created_at, is_admin, is_private
 FROM users
 WHERE email = $1
 `
@@ -112,6 +112,7 @@ type GetUserByEmailRow struct {
 	Reputation   int32     `json:"reputation"`
 	CreatedAt    time.Time `json:"created_at"`
 	IsAdmin      bool      `json:"is_admin"`
+	IsPrivate    bool      `json:"is_private"`
 }
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (GetUserByEmailRow, error) {
@@ -126,6 +127,7 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (GetUserByEm
 		&i.Reputation,
 		&i.CreatedAt,
 		&i.IsAdmin,
+		&i.IsPrivate,
 	)
 	return i, err
 }
