@@ -811,3 +811,30 @@ func TestFollowRequestLifecycle(t *testing.T) {
 		t.Errorf("second accept = %d, want 0", n)
 	}
 }
+
+func TestCourtFilters(t *testing.T) {
+	st := testStore(t)
+	ctx := context.Background()
+	uid := createUser(t, st, "filter@test.local")
+	lit := createCourt(t, st, "Lit Court", ruckerLat, ruckerLng, uid)
+	createCourt(t, st, "Dark Court", ruckerLat+0.001, ruckerLng, uid)
+	if _, err := st.Pool.Exec(ctx, "UPDATE courts SET lighting = true WHERE id = $1", lit.ID); err != nil {
+		t.Fatalf("set lighting: %v", err)
+	}
+
+	litArg := true
+	rows, err := st.Queries.CourtsNearby(ctx, gen.CourtsNearbyParams{
+		Lng: ruckerLng, Lat: ruckerLat, RadiusM: 5000, Lit: &litArg,
+	})
+	if err != nil {
+		t.Fatalf("nearby lit: %v", err)
+	}
+	if len(rows) != 1 || rows[0].ID != lit.ID {
+		t.Fatalf("lit filter returned %d rows, want only Lit Court", len(rows))
+	}
+	// No filter → both courts.
+	all, _ := st.Queries.CourtsNearby(ctx, gen.CourtsNearbyParams{Lng: ruckerLng, Lat: ruckerLat, RadiusM: 5000})
+	if len(all) != 2 {
+		t.Errorf("no-filter returned %d, want 2", len(all))
+	}
+}
