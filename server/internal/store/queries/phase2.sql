@@ -74,6 +74,9 @@ WHERE pt.user_id <> sqlc.arg('actor')
     OR pt.user_id IN (SELECT follower_id FROM follows WHERE followee_id = sqlc.arg('actor'))
   );
 
+-- name: ListUserPushTokens :many
+SELECT token FROM push_tokens WHERE user_id = $1;
+
 -- OAuth ---------------------------------------------------------------------
 
 -- name: GetUserByOAuth :one

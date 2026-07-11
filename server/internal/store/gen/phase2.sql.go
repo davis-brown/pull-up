@@ -449,6 +449,30 @@ func (q *Queries) ListUserCheckInHistory(ctx context.Context, userID uuid.UUID) 
 	return items, nil
 }
 
+const listUserPushTokens = `-- name: ListUserPushTokens :many
+SELECT token FROM push_tokens WHERE user_id = $1
+`
+
+func (q *Queries) ListUserPushTokens(ctx context.Context, userID uuid.UUID) ([]string, error) {
+	rows, err := q.db.Query(ctx, listUserPushTokens, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var token string
+		if err := rows.Scan(&token); err != nil {
+			return nil, err
+		}
+		items = append(items, token)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const removeFavorite = `-- name: RemoveFavorite :exec
 DELETE FROM favorites WHERE user_id = $1 AND court_id = $2
 `
