@@ -561,6 +561,30 @@ func (q *Queries) GetCourt(ctx context.Context, id uuid.UUID) (GetCourtRow, erro
 	return i, err
 }
 
+const insertCourtAttributeEdit = `-- name: InsertCourtAttributeEdit :exec
+INSERT INTO court_attribute_edits (court_id, editor_id, field, old_value, new_value)
+VALUES ($1, $2, $3, $4, $5)
+`
+
+type InsertCourtAttributeEditParams struct {
+	CourtID  uuid.UUID `json:"court_id"`
+	EditorID uuid.UUID `json:"editor_id"`
+	Field    string    `json:"field"`
+	OldValue *string   `json:"old_value"`
+	NewValue *string   `json:"new_value"`
+}
+
+func (q *Queries) InsertCourtAttributeEdit(ctx context.Context, arg InsertCourtAttributeEditParams) error {
+	_, err := q.db.Exec(ctx, insertCourtAttributeEdit,
+		arg.CourtID,
+		arg.EditorID,
+		arg.Field,
+		arg.OldValue,
+		arg.NewValue,
+	)
+	return err
+}
+
 const promoteCourtIfPending = `-- name: PromoteCourtIfPending :one
 UPDATE courts SET status = 'verified', updated_at = now()
 WHERE id = $1 AND status = 'pending'
@@ -589,6 +613,60 @@ type SetCourtStatusParams struct {
 func (q *Queries) SetCourtStatus(ctx context.Context, arg SetCourtStatusParams) error {
 	_, err := q.db.Exec(ctx, setCourtStatus, arg.ID, arg.Status)
 	return err
+}
+
+const updateCourtAttributes = `-- name: UpdateCourtAttributes :one
+UPDATE courts SET
+    surface        = coalesce($1, surface),
+    lighting       = coalesce($2, lighting),
+    indoor         = coalesce($3, indoor),
+    covered        = coalesce($4, covered),
+    hoop_count     = coalesce($5, hoop_count),
+    access         = coalesce($6, access),
+    fee            = coalesce($7, fee),
+    drinking_water = coalesce($8, drinking_water),
+    toilets        = coalesce($9, toilets),
+    parking        = coalesce($10, parking),
+    fenced         = coalesce($11, fenced),
+    updated_at     = now()
+WHERE id = $12
+RETURNING id
+`
+
+type UpdateCourtAttributesParams struct {
+	Surface       *string   `json:"surface"`
+	Lighting      *bool     `json:"lighting"`
+	Indoor        *bool     `json:"indoor"`
+	Covered       *bool     `json:"covered"`
+	HoopCount     *int16    `json:"hoop_count"`
+	Access        *string   `json:"access"`
+	Fee           *bool     `json:"fee"`
+	DrinkingWater *bool     `json:"drinking_water"`
+	Toilets       *bool     `json:"toilets"`
+	Parking       *bool     `json:"parking"`
+	Fenced        *bool     `json:"fenced"`
+	ID            uuid.UUID `json:"id"`
+}
+
+// Structured crowd correction: each arg is coalesced so only provided fields change.
+func (q *Queries) UpdateCourtAttributes(ctx context.Context, arg UpdateCourtAttributesParams) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, updateCourtAttributes,
+		arg.Surface,
+		arg.Lighting,
+		arg.Indoor,
+		arg.Covered,
+		arg.HoopCount,
+		arg.Access,
+		arg.Fee,
+		arg.DrinkingWater,
+		arg.Toilets,
+		arg.Parking,
+		arg.Fenced,
+		arg.ID,
+	)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
 }
 
 const upsertCourtVote = `-- name: UpsertCourtVote :exec

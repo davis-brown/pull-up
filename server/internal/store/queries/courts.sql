@@ -185,3 +185,25 @@ WHERE court_id = $1;
 -- name: CreateFlag :exec
 INSERT INTO flags (user_id, entity_type, entity_id, reason)
 VALUES ($1, $2, $3, $4);
+
+-- name: UpdateCourtAttributes :one
+-- Structured crowd correction: each arg is coalesced so only provided fields change.
+UPDATE courts SET
+    surface        = coalesce(sqlc.narg('surface'), surface),
+    lighting       = coalesce(sqlc.narg('lighting'), lighting),
+    indoor         = coalesce(sqlc.narg('indoor'), indoor),
+    covered        = coalesce(sqlc.narg('covered'), covered),
+    hoop_count     = coalesce(sqlc.narg('hoop_count'), hoop_count),
+    access         = coalesce(sqlc.narg('access'), access),
+    fee            = coalesce(sqlc.narg('fee'), fee),
+    drinking_water = coalesce(sqlc.narg('drinking_water'), drinking_water),
+    toilets        = coalesce(sqlc.narg('toilets'), toilets),
+    parking        = coalesce(sqlc.narg('parking'), parking),
+    fenced         = coalesce(sqlc.narg('fenced'), fenced),
+    updated_at     = now()
+WHERE id = sqlc.arg('id')
+RETURNING id;
+
+-- name: InsertCourtAttributeEdit :exec
+INSERT INTO court_attribute_edits (court_id, editor_id, field, old_value, new_value)
+VALUES ($1, $2, $3, $4, $5);
