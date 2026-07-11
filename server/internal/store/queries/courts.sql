@@ -4,6 +4,7 @@ SELECT
     ST_Y(c.location::geometry)::float8 AS lat,
     ST_X(c.location::geometry)::float8 AS lng,
     c.address, c.hoop_count, c.indoor, c.surface, c.lighting, c.is_public,
+    c.drinking_water, c.toilets, c.parking, c.fenced,
     c.source, c.status,
     ac.active_count,
     lr.player_count AS latest_player_count,
@@ -26,6 +27,17 @@ WHERE c.status <> 'rejected'
   AND c.location && ST_MakeEnvelope(
         sqlc.arg(min_lng)::float8, sqlc.arg(min_lat)::float8,
         sqlc.arg(max_lng)::float8, sqlc.arg(max_lat)::float8, 4326)::geography
+  AND (sqlc.narg('indoor')::bool   IS NULL OR c.indoor = sqlc.narg('indoor'))
+  AND (sqlc.narg('lit')::bool      IS NULL OR c.lighting = sqlc.narg('lit'))
+  AND (sqlc.narg('has_hoops')::bool IS NULL OR (sqlc.narg('has_hoops') = false) OR c.hoop_count > 0)
+  AND (sqlc.narg('public')::bool   IS NULL OR (sqlc.narg('public') = false) OR c.access IS NULL OR c.access = 'public')
+  AND (sqlc.narg('free')::bool     IS NULL OR (sqlc.narg('free') = false) OR c.fee IS NULL OR c.fee = false)
+  AND (sqlc.narg('covered')::bool  IS NULL OR c.covered = sqlc.narg('covered'))
+  AND (sqlc.narg('surface')::text  IS NULL OR c.surface = sqlc.narg('surface'))
+  AND (sqlc.narg('water')::bool    IS NULL OR (sqlc.narg('water') = false) OR c.drinking_water = true)
+  AND (sqlc.narg('toilets')::bool  IS NULL OR (sqlc.narg('toilets') = false) OR c.toilets = true)
+  AND (sqlc.narg('parking')::bool  IS NULL OR (sqlc.narg('parking') = false) OR c.parking = true)
+  AND (sqlc.narg('fenced')::bool   IS NULL OR (sqlc.narg('fenced') = false) OR c.fenced = true)
 LIMIT 200;
 
 -- name: CourtsNearby :many
@@ -34,6 +46,7 @@ SELECT
     ST_Y(c.location::geometry)::float8 AS lat,
     ST_X(c.location::geometry)::float8 AS lng,
     c.address, c.hoop_count, c.indoor, c.surface, c.lighting, c.is_public,
+    c.drinking_water, c.toilets, c.parking, c.fenced,
     c.source, c.status,
     ST_Distance(c.location, ST_SetSRID(ST_MakePoint(sqlc.arg(lng)::float8, sqlc.arg(lat)::float8), 4326)::geography)::float8 AS distance_m,
     ac.active_count,
@@ -55,6 +68,17 @@ LEFT JOIN LATERAL (
 ) lr ON true
 WHERE c.status <> 'rejected'
   AND ST_DWithin(c.location, ST_SetSRID(ST_MakePoint(sqlc.arg(lng)::float8, sqlc.arg(lat)::float8), 4326)::geography, sqlc.arg(radius_m)::float8)
+  AND (sqlc.narg('indoor')::bool   IS NULL OR c.indoor = sqlc.narg('indoor'))
+  AND (sqlc.narg('lit')::bool      IS NULL OR c.lighting = sqlc.narg('lit'))
+  AND (sqlc.narg('has_hoops')::bool IS NULL OR (sqlc.narg('has_hoops') = false) OR c.hoop_count > 0)
+  AND (sqlc.narg('public')::bool   IS NULL OR (sqlc.narg('public') = false) OR c.access IS NULL OR c.access = 'public')
+  AND (sqlc.narg('free')::bool     IS NULL OR (sqlc.narg('free') = false) OR c.fee IS NULL OR c.fee = false)
+  AND (sqlc.narg('covered')::bool  IS NULL OR c.covered = sqlc.narg('covered'))
+  AND (sqlc.narg('surface')::text  IS NULL OR c.surface = sqlc.narg('surface'))
+  AND (sqlc.narg('water')::bool    IS NULL OR (sqlc.narg('water') = false) OR c.drinking_water = true)
+  AND (sqlc.narg('toilets')::bool  IS NULL OR (sqlc.narg('toilets') = false) OR c.toilets = true)
+  AND (sqlc.narg('parking')::bool  IS NULL OR (sqlc.narg('parking') = false) OR c.parking = true)
+  AND (sqlc.narg('fenced')::bool   IS NULL OR (sqlc.narg('fenced') = false) OR c.fenced = true)
 ORDER BY distance_m
 LIMIT 100;
 
@@ -64,6 +88,7 @@ SELECT
     ST_Y(c.location::geometry)::float8 AS lat,
     ST_X(c.location::geometry)::float8 AS lng,
     c.address, c.hoop_count, c.indoor, c.surface, c.lighting, c.is_public,
+    c.drinking_water, c.toilets, c.parking, c.fenced,
     c.access, c.fee, c.covered, c.opening_hours, c.website, c.description,
     c.source, c.osm_type, c.osm_id, c.status, c.submitted_by, c.created_at,
     c.enriched_at,

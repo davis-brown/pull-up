@@ -37,6 +37,7 @@ SELECT
     ST_Y(c.location::geometry)::float8 AS lat,
     ST_X(c.location::geometry)::float8 AS lng,
     c.address, c.hoop_count, c.indoor, c.surface, c.lighting, c.is_public,
+    c.drinking_water, c.toilets, c.parking, c.fenced,
     c.source, c.status,
     ac.active_count,
     lr.player_count AS latest_player_count,
@@ -59,14 +60,36 @@ WHERE c.status <> 'rejected'
   AND c.location && ST_MakeEnvelope(
         $1::float8, $2::float8,
         $3::float8, $4::float8, 4326)::geography
+  AND ($5::bool   IS NULL OR c.indoor = $5)
+  AND ($6::bool      IS NULL OR c.lighting = $6)
+  AND ($7::bool IS NULL OR ($7 = false) OR c.hoop_count > 0)
+  AND ($8::bool   IS NULL OR ($8 = false) OR c.access IS NULL OR c.access = 'public')
+  AND ($9::bool     IS NULL OR ($9 = false) OR c.fee IS NULL OR c.fee = false)
+  AND ($10::bool  IS NULL OR c.covered = $10)
+  AND ($11::text  IS NULL OR c.surface = $11)
+  AND ($12::bool    IS NULL OR ($12 = false) OR c.drinking_water = true)
+  AND ($13::bool  IS NULL OR ($13 = false) OR c.toilets = true)
+  AND ($14::bool  IS NULL OR ($14 = false) OR c.parking = true)
+  AND ($15::bool   IS NULL OR ($15 = false) OR c.fenced = true)
 LIMIT 200
 `
 
 type CourtsInBBoxParams struct {
-	MinLng float64 `json:"min_lng"`
-	MinLat float64 `json:"min_lat"`
-	MaxLng float64 `json:"max_lng"`
-	MaxLat float64 `json:"max_lat"`
+	MinLng   float64 `json:"min_lng"`
+	MinLat   float64 `json:"min_lat"`
+	MaxLng   float64 `json:"max_lng"`
+	MaxLat   float64 `json:"max_lat"`
+	Indoor   *bool   `json:"indoor"`
+	Lit      *bool   `json:"lit"`
+	HasHoops *bool   `json:"has_hoops"`
+	Public   *bool   `json:"public"`
+	Free     *bool   `json:"free"`
+	Covered  *bool   `json:"covered"`
+	Surface  *string `json:"surface"`
+	Water    *bool   `json:"water"`
+	Toilets  *bool   `json:"toilets"`
+	Parking  *bool   `json:"parking"`
+	Fenced   *bool   `json:"fenced"`
 }
 
 type CourtsInBBoxRow struct {
@@ -80,6 +103,10 @@ type CourtsInBBoxRow struct {
 	Surface           *string   `json:"surface"`
 	Lighting          *bool     `json:"lighting"`
 	IsPublic          bool      `json:"is_public"`
+	DrinkingWater     *bool     `json:"drinking_water"`
+	Toilets           *bool     `json:"toilets"`
+	Parking           *bool     `json:"parking"`
+	Fenced            *bool     `json:"fenced"`
 	Source            string    `json:"source"`
 	Status            string    `json:"status"`
 	ActiveCount       int32     `json:"active_count"`
@@ -94,6 +121,17 @@ func (q *Queries) CourtsInBBox(ctx context.Context, arg CourtsInBBoxParams) ([]C
 		arg.MinLat,
 		arg.MaxLng,
 		arg.MaxLat,
+		arg.Indoor,
+		arg.Lit,
+		arg.HasHoops,
+		arg.Public,
+		arg.Free,
+		arg.Covered,
+		arg.Surface,
+		arg.Water,
+		arg.Toilets,
+		arg.Parking,
+		arg.Fenced,
 	)
 	if err != nil {
 		return nil, err
@@ -113,6 +151,10 @@ func (q *Queries) CourtsInBBox(ctx context.Context, arg CourtsInBBoxParams) ([]C
 			&i.Surface,
 			&i.Lighting,
 			&i.IsPublic,
+			&i.DrinkingWater,
+			&i.Toilets,
+			&i.Parking,
+			&i.Fenced,
 			&i.Source,
 			&i.Status,
 			&i.ActiveCount,
@@ -136,6 +178,7 @@ SELECT
     ST_Y(c.location::geometry)::float8 AS lat,
     ST_X(c.location::geometry)::float8 AS lng,
     c.address, c.hoop_count, c.indoor, c.surface, c.lighting, c.is_public,
+    c.drinking_water, c.toilets, c.parking, c.fenced,
     c.source, c.status,
     ST_Distance(c.location, ST_SetSRID(ST_MakePoint($1::float8, $2::float8), 4326)::geography)::float8 AS distance_m,
     ac.active_count,
@@ -157,14 +200,36 @@ LEFT JOIN LATERAL (
 ) lr ON true
 WHERE c.status <> 'rejected'
   AND ST_DWithin(c.location, ST_SetSRID(ST_MakePoint($1::float8, $2::float8), 4326)::geography, $3::float8)
+  AND ($4::bool   IS NULL OR c.indoor = $4)
+  AND ($5::bool      IS NULL OR c.lighting = $5)
+  AND ($6::bool IS NULL OR ($6 = false) OR c.hoop_count > 0)
+  AND ($7::bool   IS NULL OR ($7 = false) OR c.access IS NULL OR c.access = 'public')
+  AND ($8::bool     IS NULL OR ($8 = false) OR c.fee IS NULL OR c.fee = false)
+  AND ($9::bool  IS NULL OR c.covered = $9)
+  AND ($10::text  IS NULL OR c.surface = $10)
+  AND ($11::bool    IS NULL OR ($11 = false) OR c.drinking_water = true)
+  AND ($12::bool  IS NULL OR ($12 = false) OR c.toilets = true)
+  AND ($13::bool  IS NULL OR ($13 = false) OR c.parking = true)
+  AND ($14::bool   IS NULL OR ($14 = false) OR c.fenced = true)
 ORDER BY distance_m
 LIMIT 100
 `
 
 type CourtsNearbyParams struct {
-	Lng     float64 `json:"lng"`
-	Lat     float64 `json:"lat"`
-	RadiusM float64 `json:"radius_m"`
+	Lng      float64 `json:"lng"`
+	Lat      float64 `json:"lat"`
+	RadiusM  float64 `json:"radius_m"`
+	Indoor   *bool   `json:"indoor"`
+	Lit      *bool   `json:"lit"`
+	HasHoops *bool   `json:"has_hoops"`
+	Public   *bool   `json:"public"`
+	Free     *bool   `json:"free"`
+	Covered  *bool   `json:"covered"`
+	Surface  *string `json:"surface"`
+	Water    *bool   `json:"water"`
+	Toilets  *bool   `json:"toilets"`
+	Parking  *bool   `json:"parking"`
+	Fenced   *bool   `json:"fenced"`
 }
 
 type CourtsNearbyRow struct {
@@ -178,6 +243,10 @@ type CourtsNearbyRow struct {
 	Surface           *string   `json:"surface"`
 	Lighting          *bool     `json:"lighting"`
 	IsPublic          bool      `json:"is_public"`
+	DrinkingWater     *bool     `json:"drinking_water"`
+	Toilets           *bool     `json:"toilets"`
+	Parking           *bool     `json:"parking"`
+	Fenced            *bool     `json:"fenced"`
 	Source            string    `json:"source"`
 	Status            string    `json:"status"`
 	DistanceM         float64   `json:"distance_m"`
@@ -188,7 +257,22 @@ type CourtsNearbyRow struct {
 }
 
 func (q *Queries) CourtsNearby(ctx context.Context, arg CourtsNearbyParams) ([]CourtsNearbyRow, error) {
-	rows, err := q.db.Query(ctx, courtsNearby, arg.Lng, arg.Lat, arg.RadiusM)
+	rows, err := q.db.Query(ctx, courtsNearby,
+		arg.Lng,
+		arg.Lat,
+		arg.RadiusM,
+		arg.Indoor,
+		arg.Lit,
+		arg.HasHoops,
+		arg.Public,
+		arg.Free,
+		arg.Covered,
+		arg.Surface,
+		arg.Water,
+		arg.Toilets,
+		arg.Parking,
+		arg.Fenced,
+	)
 	if err != nil {
 		return nil, err
 	}
@@ -207,6 +291,10 @@ func (q *Queries) CourtsNearby(ctx context.Context, arg CourtsNearbyParams) ([]C
 			&i.Surface,
 			&i.Lighting,
 			&i.IsPublic,
+			&i.DrinkingWater,
+			&i.Toilets,
+			&i.Parking,
+			&i.Fenced,
 			&i.Source,
 			&i.Status,
 			&i.DistanceM,
@@ -384,6 +472,7 @@ SELECT
     ST_Y(c.location::geometry)::float8 AS lat,
     ST_X(c.location::geometry)::float8 AS lng,
     c.address, c.hoop_count, c.indoor, c.surface, c.lighting, c.is_public,
+    c.drinking_water, c.toilets, c.parking, c.fenced,
     c.access, c.fee, c.covered, c.opening_hours, c.website, c.description,
     c.source, c.osm_type, c.osm_id, c.status, c.submitted_by, c.created_at,
     c.enriched_at,
@@ -404,31 +493,35 @@ WHERE c.id = $1
 `
 
 type GetCourtRow struct {
-	ID           uuid.UUID  `json:"id"`
-	Name         string     `json:"name"`
-	Lat          float64    `json:"lat"`
-	Lng          float64    `json:"lng"`
-	Address      *string    `json:"address"`
-	HoopCount    *int16     `json:"hoop_count"`
-	Indoor       bool       `json:"indoor"`
-	Surface      *string    `json:"surface"`
-	Lighting     *bool      `json:"lighting"`
-	IsPublic     bool       `json:"is_public"`
-	Access       *string    `json:"access"`
-	Fee          *bool      `json:"fee"`
-	Covered      *bool      `json:"covered"`
-	OpeningHours *string    `json:"opening_hours"`
-	Website      *string    `json:"website"`
-	Description  *string    `json:"description"`
-	Source       string     `json:"source"`
-	OsmType      *string    `json:"osm_type"`
-	OsmID        *int64     `json:"osm_id"`
-	Status       string     `json:"status"`
-	SubmittedBy  *uuid.UUID `json:"submitted_by"`
-	CreatedAt    time.Time  `json:"created_at"`
-	EnrichedAt   *time.Time `json:"enriched_at"`
-	ActiveCount  int32      `json:"active_count"`
-	NetVotes     int32      `json:"net_votes"`
+	ID            uuid.UUID  `json:"id"`
+	Name          string     `json:"name"`
+	Lat           float64    `json:"lat"`
+	Lng           float64    `json:"lng"`
+	Address       *string    `json:"address"`
+	HoopCount     *int16     `json:"hoop_count"`
+	Indoor        bool       `json:"indoor"`
+	Surface       *string    `json:"surface"`
+	Lighting      *bool      `json:"lighting"`
+	IsPublic      bool       `json:"is_public"`
+	DrinkingWater *bool      `json:"drinking_water"`
+	Toilets       *bool      `json:"toilets"`
+	Parking       *bool      `json:"parking"`
+	Fenced        *bool      `json:"fenced"`
+	Access        *string    `json:"access"`
+	Fee           *bool      `json:"fee"`
+	Covered       *bool      `json:"covered"`
+	OpeningHours  *string    `json:"opening_hours"`
+	Website       *string    `json:"website"`
+	Description   *string    `json:"description"`
+	Source        string     `json:"source"`
+	OsmType       *string    `json:"osm_type"`
+	OsmID         *int64     `json:"osm_id"`
+	Status        string     `json:"status"`
+	SubmittedBy   *uuid.UUID `json:"submitted_by"`
+	CreatedAt     time.Time  `json:"created_at"`
+	EnrichedAt    *time.Time `json:"enriched_at"`
+	ActiveCount   int32      `json:"active_count"`
+	NetVotes      int32      `json:"net_votes"`
 }
 
 func (q *Queries) GetCourt(ctx context.Context, id uuid.UUID) (GetCourtRow, error) {
@@ -445,6 +538,10 @@ func (q *Queries) GetCourt(ctx context.Context, id uuid.UUID) (GetCourtRow, erro
 		&i.Surface,
 		&i.Lighting,
 		&i.IsPublic,
+		&i.DrinkingWater,
+		&i.Toilets,
+		&i.Parking,
+		&i.Fenced,
 		&i.Access,
 		&i.Fee,
 		&i.Covered,
