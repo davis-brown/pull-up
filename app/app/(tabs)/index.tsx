@@ -4,10 +4,12 @@ import { useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { CourtFilterBar } from "@/components/CourtFilterBar";
 import CourtMap from "@/components/CourtMap/CourtMap";
 import type { CourtPin } from "@/components/CourtMap/types";
 import { GetTheAppBanner } from "@/components/GetTheAppBanner";
 import { PermissionPrimer } from "@/components/PermissionPrimer";
+import type { CourtFilters } from "@/lib/court-filters";
 import { locationPrimerDone, markLocationPrimerDone, onboardingSeen } from "@/lib/first-run";
 import { useCourtsInBBox, type BBox } from "@/lib/hooks";
 import { FALLBACK_CENTER, tryGetPosition, type Coords } from "@/lib/location";
@@ -20,7 +22,9 @@ export default function MapScreen() {
   const [center, setCenter] = useState<Coords | null>(null);
   const [bbox, setBBox] = useState<BBox | null>(null);
   const [showLocationPrimer, setShowLocationPrimer] = useState(false);
-  const { data: courts } = useCourtsInBBox(bbox);
+  const [filters, setFilters] = useState<CourtFilters>({});
+  const [filterBarHeight, setFilterBarHeight] = useState(0);
+  const { data: courts } = useCourtsInBBox(bbox, filters);
 
   useEffect(() => {
     void (async () => {
@@ -94,12 +98,18 @@ export default function MapScreen() {
         onRegionChange={setBBox}
         onPinPress={(id) => router.push(`/court/${id}`)}
       />
+      <View
+        style={[styles.filterBar, { top: insets.top }]}
+        onLayout={(e) => setFilterBarHeight(e.nativeEvent.layout.height)}
+      >
+        <CourtFilterBar value={filters} onChange={setFilters} />
+      </View>
       {bbox != null && courts?.length === 0 && (
         <View
           style={[
             styles.banner,
             {
-              top: insets.top + 12,
+              top: insets.top + filterBarHeight + 12,
               backgroundColor: t.colors.surface,
               borderColor: t.colors.border,
               borderRadius: t.radius.full,
@@ -142,6 +152,11 @@ export default function MapScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   loading: { flex: 1, alignItems: "center", justifyContent: "center" },
+  filterBar: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+  },
   fab: {
     position: "absolute",
     right: 16,
