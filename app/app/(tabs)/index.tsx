@@ -10,6 +10,7 @@ import type { CourtPin } from "@/components/CourtMap/types";
 import { GetTheAppBanner } from "@/components/GetTheAppBanner";
 import { PermissionPrimer } from "@/components/PermissionPrimer";
 import type { CourtFilters } from "@/lib/court-filters";
+import { courtsDisplayState, viewportTooLarge } from "@/lib/court-seeding";
 import { locationPrimerDone, markLocationPrimerDone, onboardingSeen } from "@/lib/first-run";
 import { useCourtsInBBox, type BBox } from "@/lib/hooks";
 import { FALLBACK_CENTER, tryGetPosition, type Coords } from "@/lib/location";
@@ -25,7 +26,10 @@ export default function MapScreen() {
   const [filters, setFilters] = useState<CourtFilters>({});
   const [filterBarHeight, setFilterBarHeight] = useState(0);
   const { data } = useCourtsInBBox(bbox, filters);
-  const courts = data?.courts;
+  const courts = data?.courts ?? [];
+  const seeding = data?.seeding ?? false;
+  const tooLarge = bbox ? viewportTooLarge(bbox) : false;
+  const state = courtsDisplayState({ courtCount: courts.length, seeding, viewportTooLarge: tooLarge });
 
   useEffect(() => {
     void (async () => {
@@ -59,7 +63,7 @@ export default function MapScreen() {
 
   const pins = useMemo<CourtPin[]>(
     () =>
-      (courts ?? []).map((c) => ({
+      courts.map((c) => ({
         id: c.id,
         name: c.name,
         lat: c.lat,
@@ -105,7 +109,7 @@ export default function MapScreen() {
       >
         <CourtFilterBar value={filters} onChange={setFilters} />
       </View>
-      {bbox != null && courts?.length === 0 && (
+      {bbox != null && state !== "has-courts" && (
         <View
           style={[
             styles.banner,
@@ -117,8 +121,19 @@ export default function MapScreen() {
             },
           ]}
         >
+          {state === "seeding" && (
+            <ActivityIndicator
+              size="small"
+              color={t.colors.accent}
+              style={{ marginRight: t.spacing.xs }}
+            />
+          )}
           <Text style={[t.type.caption, { color: t.colors.textSecondary }]}>
-            No courts here yet — add the first one
+            {state === "seeding"
+              ? "Finding courts in this area…"
+              : state === "zoomed-out"
+                ? "Zoom in to load courts for this area"
+                : "No courts here yet — add the first one"}
           </Text>
         </View>
       )}
@@ -175,6 +190,8 @@ const styles = StyleSheet.create({
   banner: {
     position: "absolute",
     alignSelf: "center",
+    flexDirection: "row",
+    alignItems: "center",
     borderWidth: StyleSheet.hairlineWidth,
     paddingVertical: 8,
     paddingHorizontal: 16,
