@@ -34,11 +34,12 @@ const (
 	photoRadiusM = 120
 )
 
+const idlePoll = 30 * time.Second
+
 type Enricher struct {
 	queries *gen.Queries
 	log     *slog.Logger
 	client  *http.Client
-	queue   chan uuid.UUID
 }
 
 func New(queries *gen.Queries, log *slog.Logger) *Enricher {
@@ -46,45 +47,56 @@ func New(queries *gen.Queries, log *slog.Logger) *Enricher {
 		queries: queries,
 		log:     log,
 		client:  &http.Client{Timeout: requestTimeout},
-		queue:   make(chan uuid.UUID, 256),
 	}
 }
 
-// Request enqueues a court for enrichment. Non-blocking: when the queue is
-// full the request is dropped — the next detail view will re-enqueue it.
+// Request durably (and lazily) marks a viewed court for enrichment. Non-blocking.
 func (e *Enricher) Request(id uuid.UUID) {
-	select {
-	case e.queue <- id:
-	default:
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := e.queries.RequestEnrichment(ctx, id); err != nil {
+			e.log.Error("request enrichment", "court", id, "err", err)
+		}
+	}()
+}
+
+// DrainOnce claims and enriches the next requested court; reports if it worked.
+func (e *Enricher) DrainOnce(ctx context.Context) bool {
+	claim, err := e.queries.ClaimNextCourtEnrichment(ctx)
+	if err != nil {
+		if !errors.Is(err, pgx.ErrNoRows) {
+			e.log.Error("claim next enrichment", "err", err)
+		}
+		return false
 	}
+	e.enrichClaimed(ctx, claim)
+	return true
 }
 
 func (e *Enricher) Run(ctx context.Context) {
 	for {
+		if ctx.Err() != nil {
+			return
+		}
+		if e.DrainOnce(ctx) {
+			continue // enrichClaimed already spaces its own Overpass/Nominatim calls
+		}
 		select {
 		case <-ctx.Done():
 			return
-		case id := <-e.queue:
-			e.enrich(ctx, id)
+		case <-time.After(idlePoll):
 		}
 	}
 }
 
-func (e *Enricher) enrich(ctx context.Context, id uuid.UUID) {
-	claim, err := e.queries.ClaimCourtEnrichment(ctx, id)
-	if err != nil {
-		if !errors.Is(err, pgx.ErrNoRows) {
-			e.log.Error("claim enrichment", "court", id, "err", err)
-		}
-		return // already enriched or gone
-	}
-
+func (e *Enricher) enrichClaimed(ctx context.Context, claim gen.ClaimNextCourtEnrichmentRow) {
 	if claim.NeedsAddress {
 		if addr := e.reverseGeocode(ctx, claim.Lat, claim.Lng); addr != "" {
 			if err := e.queries.SetCourtAddressIfNull(ctx, gen.SetCourtAddressIfNullParams{
-				ID: id, Address: &addr,
+				ID: claim.ID, Address: &addr,
 			}); err != nil {
-				e.log.Error("set address", "court", id, "err", err)
+				e.log.Error("set address", "court", claim.ID, "err", err)
 			}
 		}
 		select {
@@ -97,21 +109,21 @@ func (e *Enricher) enrich(ctx context.Context, id uuid.UUID) {
 	photos := e.commonsPhotos(ctx, claim.Lat, claim.Lng)
 	for _, p := range photos {
 		if err := e.queries.InsertExternalPhoto(ctx, gen.InsertExternalPhotoParams{
-			CourtID: id, Source: "commons", SourceID: p.sourceID,
+			CourtID: claim.ID, Source: "commons", SourceID: p.sourceID,
 			ImageUrl: p.imageURL, PageUrl: p.pageURL, Attribution: p.attribution,
 		}); err != nil {
-			e.log.Error("insert external photo", "court", id, "err", err)
+			e.log.Error("insert external photo", "court", claim.ID, "err", err)
 		}
 	}
-	e.log.Info("enriched court", "court", id, "needed_address", claim.NeedsAddress, "photos", len(photos))
+	e.log.Info("enriched court", "court", claim.ID, "needed_address", claim.NeedsAddress, "photos", len(photos))
 
 	water, toilets, parking := e.nearbyAmenities(ctx, claim.Lat, claim.Lng)
 	if water || toilets || parking {
 		wp, tp, pp := boolPtrIfTrue(water), boolPtrIfTrue(toilets), boolPtrIfTrue(parking)
 		if err := e.queries.SetCourtAmenitiesIfNull(ctx, gen.SetCourtAmenitiesIfNullParams{
-			ID: id, DrinkingWater: wp, Toilets: tp, Parking: pp,
+			ID: claim.ID, DrinkingWater: wp, Toilets: tp, Parking: pp,
 		}); err != nil {
-			e.log.Error("set amenities", "court", id, "err", err)
+			e.log.Error("set amenities", "court", claim.ID, "err", err)
 		}
 	}
 
