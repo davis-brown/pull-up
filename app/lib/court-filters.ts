@@ -1,5 +1,8 @@
 // Pure, node-safe: the active court attribute filters and their query-string form.
-export type Surface = "asphalt" | "concrete" | "hardwood" | "rubber" | "other";
+// Surface is the single source of truth in ./types (type-only import — no
+// react-native runtime dependency, safe for node-env jest).
+import type { Surface } from "./types";
+export type { Surface };
 
 export interface CourtFilters {
   indoor?: boolean;
