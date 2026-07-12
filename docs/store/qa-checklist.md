@@ -131,3 +131,19 @@ Requires production builds and the association files live on the real domain
       to the requester; public follows fire no request push
 - [ ] Public accounts are unchanged: following is immediate, profile shows full
       stats to everyone
+
+## Court attributes: amenities, filters & correction (phase 9)
+
+- [ ] Filter bar on the map and Activity list: toggling Lights / Indoor / Hoops
+      / Public / Free / Covered / Water / Restroom / Parking / Fenced narrows the
+      courts shown; clearing restores all; filters compose (AND)
+- [ ] A court detail shows known amenities (water/restroom/parking/fenced) and
+      omits unknown ones
+- [ ] Signed-in "Suggest an edit" opens the editor pre-filled; changing surface,
+      lights, hoop count, access, fee, or an amenity saves and is reflected on
+      the court immediately; guests get a sign-in CTA
+- [ ] An invalid value can't be submitted (surface limited to the enum; hoop
+      count bounded)
+- [ ] description/website/name are NOT editable via the editor
+- [ ] A freshly-enriched OSM court near real amenities shows water/restroom/
+      parking when present within ~150 m (best-effort; absence is left blank)
