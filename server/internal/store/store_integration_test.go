@@ -778,13 +778,17 @@ func TestFollowRequestLifecycle(t *testing.T) {
 	requester := createUser(t, st, "req@test.local")
 	target := createUser(t, st, "tgt@test.local")
 
-	// Create request (idempotent).
-	for i := 0; i < 2; i++ {
-		if err := st.Queries.CreateFollowRequest(ctx, gen.CreateFollowRequestParams{
-			RequesterID: requester, TargetID: target,
-		}); err != nil {
-			t.Fatalf("create request %d: %v", i, err)
-		}
+	// Create request: the first insert affects 1 row; a duplicate affects 0
+	// (ON CONFLICT DO NOTHING) — this row count is what gates the re-notify.
+	if n, err := st.Queries.CreateFollowRequest(ctx, gen.CreateFollowRequestParams{
+		RequesterID: requester, TargetID: target,
+	}); err != nil || n != 1 {
+		t.Fatalf("first create request = %d, %v; want 1", n, err)
+	}
+	if n, err := st.Queries.CreateFollowRequest(ctx, gen.CreateFollowRequestParams{
+		RequesterID: requester, TargetID: target,
+	}); err != nil || n != 0 {
+		t.Fatalf("duplicate create request = %d, %v; want 0", n, err)
 	}
 	got, err := st.Queries.IsFollowRequested(ctx, gen.IsFollowRequestedParams{RequesterID: requester, TargetID: target})
 	if err != nil || !got {

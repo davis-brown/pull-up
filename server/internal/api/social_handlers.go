@@ -110,13 +110,18 @@ func (s *Server) handleFollow(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if !already {
-			if err := s.store.Queries.CreateFollowRequest(r.Context(),
-				gen.CreateFollowRequestParams{RequesterID: uid, TargetID: targetID}); err != nil {
+			created, err := s.store.Queries.CreateFollowRequest(r.Context(),
+				gen.CreateFollowRequestParams{RequesterID: uid, TargetID: targetID})
+			if err != nil {
 				s.internalError(w, "create follow request", err)
 				return
 			}
-			requester, _ := s.store.Queries.GetUserByID(r.Context(), uid)
-			go s.notifyFollowRequest(targetID, requester.DisplayName)
+			// Only notify on a newly-created request — a repeated PUT hits
+			// ON CONFLICT DO NOTHING (created == 0) and must not re-push.
+			if created > 0 {
+				requester, _ := s.store.Queries.GetUserByID(r.Context(), uid)
+				go s.notifyFollowRequest(targetID, requester.DisplayName)
+			}
 			writeJSON(w, http.StatusOK, map[string]any{"requested": true})
 			return
 		}
@@ -247,9 +252,11 @@ func (s *Server) notifyFollowRequest(targetID uuid.UUID, requesterName string) {
 	if err != nil || len(tokens) == 0 {
 		return
 	}
-	_ = push.Send(ctx, tokens, "New follow request",
+	if err := push.Send(ctx, tokens, "New follow request",
 		fmt.Sprintf("%s wants to follow you.", requesterName),
-		map[string]string{"type": "follow_request"})
+		map[string]string{"type": "follow_request"}); err != nil {
+		s.log.Error("push follow request", "err", err)
+	}
 }
 
 // notifyFollowAccepted pings the requester that their request was accepted.
@@ -260,7 +267,9 @@ func (s *Server) notifyFollowAccepted(requesterID uuid.UUID, accepterName string
 	if err != nil || len(tokens) == 0 {
 		return
 	}
-	_ = push.Send(ctx, tokens, "Follow request accepted",
+	if err := push.Send(ctx, tokens, "Follow request accepted",
 		fmt.Sprintf("%s accepted your follow request.", accepterName),
-		map[string]string{"type": "follow_accepted"})
+		map[string]string{"type": "follow_accepted"}); err != nil {
+		s.log.Error("push follow accepted", "err", err)
+	}
 }
