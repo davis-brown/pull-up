@@ -9,6 +9,8 @@ import type { CourtDetail, Surface } from "@/lib/types";
 
 const surfaces: Surface[] = ["asphalt", "concrete", "hardwood", "rubber", "other"];
 
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
 const accessOptions: Array<{ value: NonNullable<CourtDetail["access"]>; label: string }> = [
   { value: "public", label: "Public" },
   { value: "private", label: "Private" },
@@ -123,9 +125,9 @@ function EditForm({
           {surfaces.map((s) => (
             <Chip
               key={s}
-              label={s}
+              label={cap(s)}
               selected={surface === s}
-              onPress={() => setSurface(surface === s ? null : s)}
+              onPress={() => setSurface(s)}
             />
           ))}
         </View>
@@ -163,7 +165,7 @@ function EditForm({
               key={opt.value}
               label={opt.label}
               selected={access === opt.value}
-              onPress={() => setAccess(access === opt.value ? null : opt.value)}
+              onPress={() => setAccess(opt.value)}
             />
           ))}
         </View>
