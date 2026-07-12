@@ -9,6 +9,7 @@ interface Env {
   APPLE_AUDIENCES?: string;
   SENTRY_DSN?: string;
   PHOTOS?: R2Bucket;
+  INTERNAL_TASK_SECRET: string;
 }
 
 const MAX_PHOTO_BYTES = 8 * 1024 * 1024;
@@ -124,5 +125,20 @@ export default {
     }
 
     return getContainer(env.API_CONTAINER).fetch(request);
+  },
+
+  // Cron-driven: wake the container to drain the seeding/enrichment backlog.
+  async scheduled(_event: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    ctx.waitUntil(
+      getContainer(env.API_CONTAINER)
+        .fetch(
+          new Request("http://container/internal/drain", {
+            method: "POST",
+            headers: { "X-Internal-Task": env.INTERNAL_TASK_SECRET },
+          }),
+        )
+        .then(() => undefined)
+        .catch(() => undefined),
+    );
   },
 };
