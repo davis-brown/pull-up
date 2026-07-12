@@ -10,6 +10,7 @@ import (
 	"errors"
 	"log/slog"
 	"math"
+	"sync"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -92,6 +93,10 @@ type Seeder struct {
 	queries  *gen.Queries
 	endpoint string
 	log      *slog.Logger
+	// mu serializes tile imports so the in-process Run loop and a concurrent
+	// /internal/drain call never fetch Overpass at once — courtesyDelay only
+	// spaces successive imports within a single serialized run.
+	mu sync.Mutex
 }
 
 func New(queries *gen.Queries, endpoint string, log *slog.Logger) *Seeder {
@@ -147,6 +152,8 @@ func (s *Seeder) ViewportSeeding(ctx context.Context, minLng, minLat, maxLng, ma
 // DrainOnce claims and imports the next tile, then spaces the next Overpass
 // call by courtesyDelay. Reports whether it did any work.
 func (s *Seeder) DrainOnce(ctx context.Context) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	row, err := s.queries.ClaimNextSeedTile(ctx)
 	if err != nil {
 		if !errors.Is(err, pgx.ErrNoRows) {

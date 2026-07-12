@@ -16,6 +16,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/google/uuid"
@@ -40,6 +41,10 @@ type Enricher struct {
 	queries *gen.Queries
 	log     *slog.Logger
 	client  *http.Client
+	// mu serializes enrichment so the in-process Run loop and a concurrent
+	// /internal/drain call never hit Nominatim/Commons/Overpass at once —
+	// the courtesy delays only space calls within a single serialized run.
+	mu sync.Mutex
 }
 
 func New(queries *gen.Queries, log *slog.Logger) *Enricher {
@@ -63,6 +68,8 @@ func (e *Enricher) Request(id uuid.UUID) {
 
 // DrainOnce claims and enriches the next requested court; reports if it worked.
 func (e *Enricher) DrainOnce(ctx context.Context) bool {
+	e.mu.Lock()
+	defer e.mu.Unlock()
 	claim, err := e.queries.ClaimNextCourtEnrichment(ctx)
 	if err != nil {
 		if !errors.Is(err, pgx.ErrNoRows) {
