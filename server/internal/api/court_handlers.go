@@ -143,6 +143,7 @@ func (s *Server) handleListCourts(w http.ResponseWriter, r *http.Request) {
 	dLat := radius / 111_320
 	dLng := radius / (111_320 * math.Max(0.1, math.Cos(lat*math.Pi/180)))
 	s.requestSeeding(lng-dLng, lat-dLat, lng+dLng, lat+dLat)
+	seeding := s.viewportSeeding(r.Context(), lng-dLng, lat-dLat, lng+dLng, lat+dLat)
 	out := make([]courtSummary, 0, len(rows))
 	for _, c := range rows {
 		d := c.DistanceM
@@ -155,7 +156,7 @@ func (s *Server) handleListCourts(w http.ResponseWriter, r *http.Request) {
 			DrinkingWater: c.DrinkingWater, Toilets: c.Toilets, Parking: c.Parking, Fenced: c.Fenced,
 		})
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"courts": out})
+	writeJSON(w, http.StatusOK, map[string]any{"courts": out, "seeding": seeding})
 }
 
 func (s *Server) listCourtsInBBox(w http.ResponseWriter, r *http.Request, bbox string) {
@@ -193,6 +194,7 @@ func (s *Server) listCourtsInBBox(w http.ResponseWriter, r *http.Request, bbox s
 		return
 	}
 	s.requestSeeding(vals[0], vals[1], vals[2], vals[3])
+	seeding := s.viewportSeeding(r.Context(), vals[0], vals[1], vals[2], vals[3])
 	out := make([]courtSummary, 0, len(rows))
 	for _, c := range rows {
 		out = append(out, courtSummary{
@@ -203,7 +205,7 @@ func (s *Server) listCourtsInBBox(w http.ResponseWriter, r *http.Request, bbox s
 			DrinkingWater: c.DrinkingWater, Toilets: c.Toilets, Parking: c.Parking, Fenced: c.Fenced,
 		})
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"courts": out})
+	writeJSON(w, http.StatusOK, map[string]any{"courts": out, "seeding": seeding})
 }
 
 func (s *Server) handleGetCourt(w http.ResponseWriter, r *http.Request) {

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"log/slog"
@@ -46,6 +47,14 @@ func (s *Server) requestSeeding(minLng, minLat, maxLng, maxLat float64) {
 	if s.seeder != nil {
 		s.seeder.Request(minLng, minLat, maxLng, maxLat)
 	}
+}
+
+// viewportSeeding reports whether the viewport still has tiles importing.
+func (s *Server) viewportSeeding(ctx context.Context, minLng, minLat, maxLng, maxLat float64) bool {
+	if s.seeder == nil {
+		return false
+	}
+	return s.seeder.ViewportSeeding(ctx, minLng, minLat, maxLng, maxLat)
 }
 
 func (s *Server) Routes() http.Handler {
