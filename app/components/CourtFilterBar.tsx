@@ -1,4 +1,4 @@
-import { ScrollView, StyleSheet } from "react-native";
+import { ScrollView } from "react-native";
 import { Chip } from "@/components/ui";
 import { useTheme } from "@/lib/theme";
 import type { CourtFilters } from "@/lib/court-filters";
@@ -36,5 +36,3 @@ export function CourtFilterBar({ value, onChange }: { value: CourtFilters; onCha
     </ScrollView>
   );
 }
-
-const styles = StyleSheet.create({});
