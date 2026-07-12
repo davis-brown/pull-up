@@ -99,7 +99,14 @@ npx wrangler login
 cd deploy/api && npm install
 npx wrangler secret put DATABASE_URL   # Neon connection string (pooled)
 npx wrangler secret put JWT_SECRET     # openssl rand -hex 32
+npx wrangler secret put INTERNAL_TASK_SECRET  # auth for the drain cron
 ```
+
+`INTERNAL_TASK_SECRET` must also be set as the Go container's
+`INTERNAL_TASK_SECRET` env var — the 15-minute cron trigger POSTs
+`/internal/drain` with it to advance the OSM seeding/enrichment backlog. Leaving
+it unset in either place disables the endpoint (safe default); the in-process
+workers still drain on the warm path.
 
 Then, from the repo root:
 
