@@ -96,8 +96,6 @@ export async function api<T>(path: string, options: RequestInit = {}): Promise<T
   return (await res.json()) as T;
 }
 
-// --- auth endpoints ---
-
 export async function login(email: string, password: string): Promise<User> {
   const res = await rawRequest("/auth/login", {
     method: "POST",
