@@ -210,6 +210,18 @@ export default function CourtDetailScreen() {
               {court.fee ? (court.access === "public" || !court.access ? "Fee to play" : "  ·  Fee to play") : ""}
             </Text>
           )}
+          {(court.drinking_water || court.toilets || court.parking || court.fenced) && (
+            <Text style={[t.type.caption, { color: t.colors.textSecondary, marginTop: 2 }]}>
+              {[
+                court.drinking_water && "Water",
+                court.toilets && "Restroom",
+                court.parking && "Parking",
+                court.fenced && "Fenced",
+              ]
+                .filter(Boolean)
+                .join("  ·  ")}
+            </Text>
+          )}
           {court.address && (
             <Text style={[t.type.caption, { color: t.colors.textSecondary, marginTop: 2 }]}>
               {court.address}
@@ -237,6 +249,17 @@ export default function CourtDetailScreen() {
               Location © OpenStreetMap contributors
             </Text>
           )}
+          <View style={{ marginTop: t.spacing.sm }}>
+            {user ? (
+              <Button
+                title="Suggest an edit"
+                variant="ghost"
+                onPress={() => router.push(`/court/${id}/edit` as Href)}
+              />
+            ) : (
+              <SignInAction label="Sign in to suggest an edit" />
+            )}
+          </View>
         </Card>
 
         <Card>
