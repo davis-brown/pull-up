@@ -66,6 +66,24 @@ func TilesCovering(minLng, minLat, maxLng, maxLat float64) []Tile {
 	return tiles
 }
 
+// TileRange returns the inclusive tile-index bounds covering the bbox and
+// whether the viewport is seedable (within maxTilesPerRequest). ok=false for an
+// invalid or too-zoomed-out bbox — mirrors the cap in TilesCovering.
+func TileRange(minLng, minLat, maxLng, maxLat float64) (x0, x1, y0, y1 int, ok bool) {
+	if minLng > maxLng || minLat > maxLat {
+		return 0, 0, 0, 0, false
+	}
+	x0 = int(math.Floor(minLng / TileDeg))
+	x1 = int(math.Floor(maxLng / TileDeg))
+	y0 = int(math.Floor(minLat / TileDeg))
+	y1 = int(math.Floor(maxLat / TileDeg))
+	n := (x1 - x0 + 1) * (y1 - y0 + 1)
+	if n <= 0 || n > maxTilesPerRequest {
+		return x0, x1, y0, y1, false
+	}
+	return x0, x1, y0, y1, true
+}
+
 type Seeder struct {
 	queries  *gen.Queries
 	endpoint string
@@ -96,6 +114,25 @@ func (s *Seeder) Request(minLng, minLat, maxLng, maxLat float64) {
 			return
 		}
 	}
+}
+
+// ViewportSeeding reports whether the viewport is seedable and at least one
+// covering tile hasn't finished importing — the signal for the client's
+// "finding courts" state.
+func (s *Seeder) ViewportSeeding(ctx context.Context, minLng, minLat, maxLng, maxLat float64) bool {
+	x0, x1, y0, y1, ok := TileRange(minLng, minLat, maxLng, maxLat)
+	if !ok {
+		return false
+	}
+	done, err := s.queries.CountDoneTilesInRange(ctx, gen.CountDoneTilesInRangeParams{
+		MinX: int32(x0), MaxX: int32(x1), MinY: int32(y0), MaxY: int32(y1),
+	})
+	if err != nil {
+		s.log.Error("count seeded tiles", "err", err)
+		return false
+	}
+	expected := int32((x1 - x0 + 1) * (y1 - y0 + 1))
+	return done < expected
 }
 
 // Run processes the import queue until ctx is cancelled. Run exactly one —

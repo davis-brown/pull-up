@@ -47,3 +47,19 @@ func TestTileBBoxRoundTrip(t *testing.T) {
 		t.Errorf("round trip failed: %+v", tiles)
 	}
 }
+
+func TestTileRange(t *testing.T) {
+	// A tiny bbox inside one tile → 1×1, seedable.
+	x0, x1, y0, y1, ok := TileRange(0.1, 0.1, 0.2, 0.2)
+	if !ok || x0 != x1 || y0 != y1 {
+		t.Fatalf("single-tile bbox: got (%d,%d,%d,%d) ok=%v", x0, x1, y0, y1, ok)
+	}
+	// A huge bbox spanning more than the tile cap → not seedable.
+	if _, _, _, _, ok := TileRange(0, 0, 10, 10); ok {
+		t.Error("oversized viewport should be ok=false")
+	}
+	// Inverted bbox → not seedable.
+	if _, _, _, _, ok := TileRange(1, 1, 0, 0); ok {
+		t.Error("inverted bbox should be ok=false")
+	}
+}

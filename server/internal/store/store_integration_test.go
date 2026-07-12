@@ -838,3 +838,32 @@ func TestCourtFilters(t *testing.T) {
 		t.Errorf("no-filter returned %d, want 2", len(all))
 	}
 }
+
+func TestReseedAndCount(t *testing.T) {
+	st := testStore(t)
+	ctx := context.Background()
+
+	// Claim + mark one tile done.
+	if _, err := st.Queries.ClaimSeedTile(ctx, gen.ClaimSeedTileParams{TileX: 100, TileY: 100}); err != nil {
+		t.Fatalf("claim: %v", err)
+	}
+	found := int32(3)
+	if err := st.Queries.MarkSeedTile(ctx, gen.MarkSeedTileParams{TileX: 100, TileY: 100, Status: "done", CourtsFound: &found}); err != nil {
+		t.Fatalf("mark: %v", err)
+	}
+	done, err := st.Queries.CountDoneTilesInRange(ctx, gen.CountDoneTilesInRangeParams{MinX: 100, MaxX: 100, MinY: 100, MaxY: 100})
+	if err != nil || done != 1 {
+		t.Fatalf("count done = %d, %v; want 1", done, err)
+	}
+	// A fresh 'done' tile is NOT re-claimable.
+	if _, err := st.Queries.ClaimSeedTile(ctx, gen.ClaimSeedTileParams{TileX: 100, TileY: 100}); err == nil {
+		t.Error("fresh done tile should not be re-claimable")
+	}
+	// Age it past 90 days → re-claimable.
+	if _, err := st.Pool.Exec(ctx, "UPDATE seed_regions SET updated_at = now() - interval '91 days' WHERE tile_x=100 AND tile_y=100"); err != nil {
+		t.Fatalf("age: %v", err)
+	}
+	if _, err := st.Queries.ClaimSeedTile(ctx, gen.ClaimSeedTileParams{TileX: 100, TileY: 100}); err != nil {
+		t.Errorf("90-day-old done tile should be re-claimable: %v", err)
+	}
+}
