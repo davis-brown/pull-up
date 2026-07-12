@@ -105,7 +105,9 @@ WHERE ci.checked_out_at IS NULL
 ORDER BY ci.created_at DESC
 LIMIT 50;
 
--- name: CreateFollowRequest :exec
+-- name: CreateFollowRequest :execrows
+-- Returns rows affected: 1 when a new request was created, 0 when one already
+-- existed (ON CONFLICT DO NOTHING) — so the caller only notifies on a new one.
 INSERT INTO follow_requests (requester_id, target_id)
 VALUES (sqlc.arg('requester_id'), sqlc.arg('target_id'))
 ON CONFLICT DO NOTHING;

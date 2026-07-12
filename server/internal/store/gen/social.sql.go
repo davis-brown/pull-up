@@ -82,7 +82,7 @@ func (q *Queries) CountFollowing(ctx context.Context, followerID uuid.UUID) (int
 	return count, err
 }
 
-const createFollowRequest = `-- name: CreateFollowRequest :exec
+const createFollowRequest = `-- name: CreateFollowRequest :execrows
 INSERT INTO follow_requests (requester_id, target_id)
 VALUES ($1, $2)
 ON CONFLICT DO NOTHING
@@ -93,9 +93,14 @@ type CreateFollowRequestParams struct {
 	TargetID    uuid.UUID `json:"target_id"`
 }
 
-func (q *Queries) CreateFollowRequest(ctx context.Context, arg CreateFollowRequestParams) error {
-	_, err := q.db.Exec(ctx, createFollowRequest, arg.RequesterID, arg.TargetID)
-	return err
+// Returns rows affected: 1 when a new request was created, 0 when one already
+// existed (ON CONFLICT DO NOTHING) — so the caller only notifies on a new one.
+func (q *Queries) CreateFollowRequest(ctx context.Context, arg CreateFollowRequestParams) (int64, error) {
+	result, err := q.db.Exec(ctx, createFollowRequest, arg.RequesterID, arg.TargetID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const currentStreakDays = `-- name: CurrentStreakDays :one
