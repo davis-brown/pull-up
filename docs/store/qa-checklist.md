@@ -147,3 +147,17 @@ Requires production builds and the association files live on the real domain
 - [ ] description/website/name are NOT editable via the editor
 - [ ] A freshly-enriched OSM court near real amenities shows water/restroom/
       parking when present within ~150 m (best-effort; absence is left blank)
+
+## Broader court coverage: seeding discovery loop (phase 10)
+
+- [ ] Pan the map to a region with no courts you've never viewed before: a
+      "Finding courts in this area…" indicator appears, and within a minute
+      courts populate on their own without manually panning again
+- [ ] The Activity list in a fresh area shows "Finding courts in this area…"
+      then fills in as the import completes
+- [ ] Zoom the map way out over an unseeded area: a "Zoom in to load courts for
+      this area" hint shows (no false "no courts" claim)
+- [ ] A region that is genuinely empty of courts (fully seeded, none found)
+      shows the plain "no courts here yet" state, not an endless spinner
+- [ ] Fast-refetch stops once courts appear (network tab: polling returns to the
+      normal cadence)
