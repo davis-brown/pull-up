@@ -161,3 +161,19 @@ Requires production builds and the association files live on the real domain
       shows the plain "no courts here yet" state, not an endless spinner
 - [ ] Fast-refetch stops once courts appear (network tab: polling returns to the
       normal cadence)
+
+## Durable background work (phase 11)
+
+- [ ] Pan the map to a fresh region, then immediately kill/restart the API
+      container: after restart (or the next cron drain) the region's courts
+      still import — the pending tiles survived (were not lost with the process)
+- [ ] `POST /internal/drain` without the `X-Internal-Task` secret returns 401;
+      with the correct secret it returns 200 `{tiles, courts}` and advances the
+      backlog
+- [ ] The Cloudflare cron (every 15 min) drains retryable/failed tiles and
+      90-day re-seeds with zero app traffic; the container still scales to zero
+      between runs
+- [ ] Court enrichment stays lazy: only courts whose detail page was viewed get
+      addresses/photos/amenities (a never-viewed seeded court is not enriched)
+- [ ] With INTERNAL_TASK_SECRET unset, the drain endpoint is disabled (401) and
+      the in-process workers still drain on the warm path
