@@ -24,7 +24,8 @@ export default function MapScreen() {
   const [showLocationPrimer, setShowLocationPrimer] = useState(false);
   const [filters, setFilters] = useState<CourtFilters>({});
   const [filterBarHeight, setFilterBarHeight] = useState(0);
-  const { data: courts } = useCourtsInBBox(bbox, filters);
+  const { data } = useCourtsInBBox(bbox, filters);
+  const courts = data?.courts;
 
   useEffect(() => {
     void (async () => {

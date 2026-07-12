@@ -49,14 +49,14 @@ export function useCourtsInBBox(bbox: BBox | null, filters?: CourtFilters) {
   return useQuery({
     queryKey: ["courts", "bbox", bbox, filters],
     enabled: bbox != null,
-    // Court activity moves on a minutes timescale; poll while focused.
-    refetchInterval: 45_000,
+    // Poll every 5s while the region is still importing courts, else every 45s.
+    refetchInterval: (q) => (q.state.data?.seeding ? 5_000 : 45_000),
     queryFn: async () => {
       const b = bbox!;
-      const res = await api<{ courts: CourtSummary[] }>(
+      const res = await api<{ courts: CourtSummary[]; seeding?: boolean }>(
         `/courts?bbox=${b.minLng},${b.minLat},${b.maxLng},${b.maxLat}${filtersToQuery(filters ?? {})}`,
       );
-      return res.courts;
+      return { courts: res.courts, seeding: !!res.seeding };
     },
   });
 }
