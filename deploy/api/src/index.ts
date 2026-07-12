@@ -132,7 +132,7 @@ export default {
     ctx.waitUntil(
       getContainer(env.API_CONTAINER)
         .fetch(
-          new Request("http://container/internal/drain", {
+          new Request("http://container/api/v1/internal/drain", {
             method: "POST",
             headers: { "X-Internal-Task": env.INTERNAL_TASK_SECRET },
           }),
