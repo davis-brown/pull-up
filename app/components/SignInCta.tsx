@@ -48,5 +48,5 @@ export function useSignInDetour(): () => void {
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   message: { textAlign: "center" },
-  buttonWrap: { alignSelf: "stretch", maxWidth: 320, width: "100%" },
+  buttonWrap: { alignSelf: "center", maxWidth: 320, width: "100%" },
 });
