@@ -6,11 +6,15 @@
 //   npx wrangler secret put DATABASE_URL   # Neon Postgres w/ PostGIS
 //   npx wrangler secret put JWT_SECRET     # e.g. openssl rand -hex 32
 //   npx wrangler secret put SENTRY_DSN     # optional: server crash reporting
+//   npx wrangler secret put INTERNAL_TASK_SECRET  # drain cron auth; must also
+//     be set as the Go container's INTERNAL_TASK_SECRET env var. Unset in
+//     either place disables the /internal/drain endpoint (safe default).
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "pull-up-api",
   "main": "src/index.ts",
   "compatibility_date": "2026-06-01",
+  "triggers": { "crons": ["*/15 * * * *"] },
   "containers": [
     {
       "class_name": "ApiContainer",
