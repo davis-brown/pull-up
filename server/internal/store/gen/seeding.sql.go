@@ -9,6 +9,36 @@ import (
 	"context"
 )
 
+const claimNextSeedTile = `-- name: ClaimNextSeedTile :one
+UPDATE seed_regions SET status = 'importing', updated_at = now()
+WHERE (tile_x, tile_y) = (
+    SELECT tile_x, tile_y FROM seed_regions
+    WHERE status = 'pending'
+       OR (status = 'failed'    AND updated_at < now() - interval '24 hours')
+       OR (status = 'importing' AND updated_at < now() - interval '1 hour')
+       OR (status = 'done'      AND updated_at < now() - interval '90 days')
+    ORDER BY updated_at
+    FOR UPDATE SKIP LOCKED
+    LIMIT 1
+)
+RETURNING tile_x, tile_y
+`
+
+type ClaimNextSeedTileRow struct {
+	TileX int32 `json:"tile_x"`
+	TileY int32 `json:"tile_y"`
+}
+
+// Atomically claim the next claimable tile: pending, a failed tile past 24h, a
+// stale 'importing' tile (crashed worker) past 1h, or a 'done' tile past its
+// 90-day re-seed TTL. FOR UPDATE SKIP LOCKED makes concurrent workers safe.
+func (q *Queries) ClaimNextSeedTile(ctx context.Context) (ClaimNextSeedTileRow, error) {
+	row := q.db.QueryRow(ctx, claimNextSeedTile)
+	var i ClaimNextSeedTileRow
+	err := row.Scan(&i.TileX, &i.TileY)
+	return i, err
+}
+
 const claimSeedTile = `-- name: ClaimSeedTile :one
 INSERT INTO seed_regions (tile_x, tile_y, status)
 VALUES ($1, $2, 'importing')
@@ -66,6 +96,24 @@ func (q *Queries) CountSettledTilesInRange(ctx context.Context, arg CountSettled
 	var settled int32
 	err := row.Scan(&settled)
 	return settled, err
+}
+
+const enqueueSeedTile = `-- name: EnqueueSeedTile :exec
+INSERT INTO seed_regions (tile_x, tile_y, status)
+VALUES ($1, $2, 'pending')
+ON CONFLICT (tile_x, tile_y) DO NOTHING
+`
+
+type EnqueueSeedTileParams struct {
+	TileX int32 `json:"tile_x"`
+	TileY int32 `json:"tile_y"`
+}
+
+// Durably records that a tile needs importing. A tile that already has any row
+// (pending/importing/done/failed) is untouched, so a done tile is never reset.
+func (q *Queries) EnqueueSeedTile(ctx context.Context, arg EnqueueSeedTileParams) error {
+	_, err := q.db.Exec(ctx, enqueueSeedTile, arg.TileX, arg.TileY)
+	return err
 }
 
 const markSeedTile = `-- name: MarkSeedTile :exec
