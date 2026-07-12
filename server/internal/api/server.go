@@ -92,6 +92,10 @@ func (s *Server) Routes() http.Handler {
 			r.Post("/auth/oauth", s.handleOAuth)
 		})
 
+		// Secret-guarded; self-authenticates via X-Internal-Task, so it
+		// belongs at top level, not inside the public or requireAuth groups.
+		r.Post("/internal/drain", s.handleInternalDrain)
+
 		r.Get("/courts", s.handleListCourts)
 		r.Get("/courts/{id}", s.handleGetCourt)
 		r.Get("/courts/{id}/activity", s.handleCourtActivity)

@@ -67,13 +67,14 @@ func newTestServer(t *testing.T) (*httptest.Server, *store.Store) {
 	}
 
 	cfg := &config.Config{
-		Port:            "0",
-		DatabaseURL:     url,
-		JWTSecret:       []byte("test-secret"),
-		AccessTokenTTL:  15 * time.Minute,
-		RefreshTokenTTL: 30 * 24 * time.Hour,
-		CORSOrigins:     []string{"*"},
-		AutoSeed:        false,
+		Port:               "0",
+		DatabaseURL:        url,
+		JWTSecret:          []byte("test-secret"),
+		AccessTokenTTL:     15 * time.Minute,
+		RefreshTokenTTL:    30 * 24 * time.Hour,
+		CORSOrigins:        []string{"*"},
+		AutoSeed:           false,
+		InternalTaskSecret: "test-internal-secret",
 	}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	ts := httptest.NewServer(api.NewServer(cfg, st, log, nil, nil).Routes())
