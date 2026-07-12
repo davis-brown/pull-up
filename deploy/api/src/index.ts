@@ -23,6 +23,7 @@ export class ApiContainer extends Container {
     this.envVars = {
       DATABASE_URL: env.DATABASE_URL,
       JWT_SECRET: env.JWT_SECRET,
+      INTERNAL_TASK_SECRET: env.INTERNAL_TASK_SECRET ?? "",
       APP_ENV: "production",
       CORS_ORIGINS: env.CORS_ORIGINS ?? "*",
       GOOGLE_CLIENT_IDS: env.GOOGLE_CLIENT_IDS ?? "",
