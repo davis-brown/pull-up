@@ -28,3 +28,27 @@ FROM seed_regions
 WHERE tile_x BETWEEN sqlc.arg('min_x') AND sqlc.arg('max_x')
   AND tile_y BETWEEN sqlc.arg('min_y') AND sqlc.arg('max_y')
   AND status IN ('done', 'failed');
+
+-- name: EnqueueSeedTile :exec
+-- Durably records that a tile needs importing. A tile that already has any row
+-- (pending/importing/done/failed) is untouched, so a done tile is never reset.
+INSERT INTO seed_regions (tile_x, tile_y, status)
+VALUES ($1, $2, 'pending')
+ON CONFLICT (tile_x, tile_y) DO NOTHING;
+
+-- name: ClaimNextSeedTile :one
+-- Atomically claim the next claimable tile: pending, a failed tile past 24h, a
+-- stale 'importing' tile (crashed worker) past 1h, or a 'done' tile past its
+-- 90-day re-seed TTL. FOR UPDATE SKIP LOCKED makes concurrent workers safe.
+UPDATE seed_regions SET status = 'importing', updated_at = now()
+WHERE (tile_x, tile_y) = (
+    SELECT tile_x, tile_y FROM seed_regions
+    WHERE status = 'pending'
+       OR (status = 'failed'    AND updated_at < now() - interval '24 hours')
+       OR (status = 'importing' AND updated_at < now() - interval '1 hour')
+       OR (status = 'done'      AND updated_at < now() - interval '90 days')
+    ORDER BY updated_at
+    FOR UPDATE SKIP LOCKED
+    LIMIT 1
+)
+RETURNING tile_x, tile_y;

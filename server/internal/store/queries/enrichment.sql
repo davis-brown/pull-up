@@ -36,3 +36,24 @@ FROM external_photos
 WHERE court_id = $1
 ORDER BY created_at
 LIMIT 8;
+
+-- name: RequestEnrichment :exec
+-- Durable, lazy: mark a viewed court for enrichment (once) if not already done.
+UPDATE courts SET enrich_requested_at = now()
+WHERE id = $1 AND enrich_requested_at IS NULL AND enriched_at IS NULL;
+
+-- name: ClaimNextCourtEnrichment :one
+-- Claim the next requested-but-unenriched court (lazy: only viewed courts have
+-- enrich_requested_at set). SKIP LOCKED keeps concurrent workers safe.
+UPDATE courts SET enriched_at = now()
+WHERE id = (
+    SELECT id FROM courts
+    WHERE enrich_requested_at IS NOT NULL AND enriched_at IS NULL
+    ORDER BY enrich_requested_at
+    FOR UPDATE SKIP LOCKED
+    LIMIT 1
+)
+RETURNING id,
+    ST_Y(location::geometry)::float8 AS lat,
+    ST_X(location::geometry)::float8 AS lng,
+    (address IS NULL)::bool AS needs_address;
