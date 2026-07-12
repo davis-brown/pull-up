@@ -166,8 +166,6 @@ func (s *Server) Routes() http.Handler {
 	return r
 }
 
-// --- helpers ---
-
 type apiError struct {
 	Error   string `json:"error"`
 	Details any    `json:"details,omitempty"`

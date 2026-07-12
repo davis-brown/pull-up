@@ -46,8 +46,6 @@ func (s *Server) awardReputation(ctx context.Context, userID uuid.UUID, points i
 	}
 }
 
-// --- sessions -------------------------------------------------------------
-
 type createSessionRequest struct {
 	StartsAt time.Time `json:"starts_at"`
 	Note     *string   `json:"note"`
@@ -244,8 +242,6 @@ func (s *Server) notifySessionPlanned(courtID uuid.UUID, courtName string, actor
 		s.log.Error("push notify session", "court", courtID, "err", err)
 	}
 }
-
-// --- court chat -----------------------------------------------------------
 
 type messageRequest struct {
 	Body string `json:"body"`

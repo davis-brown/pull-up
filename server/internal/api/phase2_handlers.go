@@ -17,8 +17,6 @@ import (
 	"github.com/davisbrown/pull-up/server/internal/store/gen"
 )
 
-// --- photos -----------------------------------------------------------------
-
 const uploadURLTTL = 10 * time.Minute
 
 func (s *Server) handleCreatePhoto(w http.ResponseWriter, r *http.Request) {
@@ -75,8 +73,6 @@ func (s *Server) handleListPhotos(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"photos": photos, "external": external})
 }
-
-// --- favorites ----------------------------------------------------------------
 
 func (s *Server) handleAddFavorite(w http.ResponseWriter, r *http.Request) {
 	courtID, err := uuid.Parse(chi.URLParam(r, "id"))
@@ -141,8 +137,6 @@ func (s *Server) handleListFavorites(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"courts": rows})
 }
 
-// --- push tokens -----------------------------------------------------------
-
 type pushTokenRequest struct {
 	Token string `json:"token"`
 }
@@ -194,8 +188,6 @@ func (s *Server) notifyRunStarted(courtID, actor uuid.UUID) {
 		s.log.Error("push notify", "court", courtID, "err", err)
 	}
 }
-
-// --- oauth ---------------------------------------------------------------
 
 type oauthRequest struct {
 	Provider    string `json:"provider"`
@@ -265,8 +257,6 @@ func (s *Server) handleOAuth(w http.ResponseWriter, r *http.Request) {
 	s.issueTokens(w, r, created.ID, created)
 }
 
-// --- check-in history -------------------------------------------------------
-
 func (s *Server) handleCheckInHistory(w http.ResponseWriter, r *http.Request) {
 	rows, err := s.store.Queries.ListUserCheckInHistory(r.Context(), userID(r))
 	if err != nil {
@@ -278,8 +268,6 @@ func (s *Server) handleCheckInHistory(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"check_ins": rows})
 }
-
-// --- moderation -----------------------------------------------------------
 
 func (s *Server) requireAdmin(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

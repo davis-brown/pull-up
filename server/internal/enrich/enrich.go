@@ -146,8 +146,6 @@ func (e *Enricher) getJSON(ctx context.Context, rawURL string, dst any) error {
 	return json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(dst)
 }
 
-// --- Nominatim ------------------------------------------------------------
-
 type nominatimResponse struct {
 	Address map[string]string `json:"address"`
 }
@@ -186,8 +184,6 @@ func (e *Enricher) reverseGeocode(ctx context.Context, lat, lng float64) string 
 	}
 }
 
-// --- Wikimedia Commons ----------------------------------------------------
-
 type commonsPhoto struct {
 	sourceID    string
 	imageURL    string
@@ -218,13 +214,13 @@ var htmlTags = regexp.MustCompile(`<[^>]*>`)
 
 func (e *Enricher) commonsPhotos(ctx context.Context, lat, lng float64) []commonsPhoto {
 	params := url.Values{
-		"action":       {"query"},
-		"format":       {"json"},
-		"generator":    {"geosearch"},
-		"ggscoord":     {fmt.Sprintf("%f|%f", lat, lng)},
-		"ggsradius":    {fmt.Sprintf("%d", photoRadiusM)},
-		"ggslimit":     {"10"},
-		"ggsnamespace": {"6"}, // File:
+		"action":              {"query"},
+		"format":              {"json"},
+		"generator":           {"geosearch"},
+		"ggscoord":            {fmt.Sprintf("%f|%f", lat, lng)},
+		"ggsradius":           {fmt.Sprintf("%d", photoRadiusM)},
+		"ggslimit":            {"10"},
+		"ggsnamespace":        {"6"}, // File:
 		"prop":                {"imageinfo"},
 		"iiprop":              {"url|mime|extmetadata"},
 		"iiextmetadatafilter": {"Artist|LicenseShortName"},
@@ -267,8 +263,6 @@ func (e *Enricher) commonsPhotos(ctx context.Context, lat, lng float64) []common
 	}
 	return out
 }
-
-// --- Overpass (OSM) amenities -----------------------------------------------
 
 type overpassElement struct {
 	Tags map[string]string `json:"tags"`

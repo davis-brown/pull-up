@@ -30,8 +30,6 @@ export async function getGeofenceMode(): Promise<GeofenceMode> {
   return stored === "prompt" || stored === "auto" ? stored : "off";
 }
 
-// --- background task ---------------------------------------------------
-
 if (geofencingSupported) {
   Notifications.setNotificationHandler({
     handleNotification: async () => ({
@@ -111,8 +109,6 @@ async function onExit(courtId: string): Promise<void> {
     await api<void>("/check-ins/current", { method: "DELETE" });
   }
 }
-
-// --- registration & settings -------------------------------------------
 
 // Re-registers geofences around the nearest courts. Call after enabling,
 // and opportunistically on app launch/foreground — iOS's 20-region cap
