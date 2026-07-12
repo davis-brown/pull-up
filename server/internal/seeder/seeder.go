@@ -124,15 +124,15 @@ func (s *Seeder) ViewportSeeding(ctx context.Context, minLng, minLat, maxLng, ma
 	if !ok {
 		return false
 	}
-	done, err := s.queries.CountDoneTilesInRange(ctx, gen.CountDoneTilesInRangeParams{
+	settled, err := s.queries.CountSettledTilesInRange(ctx, gen.CountSettledTilesInRangeParams{
 		MinX: int32(x0), MaxX: int32(x1), MinY: int32(y0), MaxY: int32(y1),
 	})
 	if err != nil {
-		s.log.Error("count seeded tiles", "err", err)
+		s.log.Error("count settled tiles", "err", err)
 		return false
 	}
 	expected := int32((x1 - x0 + 1) * (y1 - y0 + 1))
-	return done < expected
+	return settled < expected
 }
 
 // Run processes the import queue until ctx is cancelled. Run exactly one —

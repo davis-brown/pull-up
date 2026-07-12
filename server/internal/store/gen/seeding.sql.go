@@ -36,32 +36,36 @@ func (q *Queries) ClaimSeedTile(ctx context.Context, arg ClaimSeedTileParams) (i
 	return tile_x, err
 }
 
-const countDoneTilesInRange = `-- name: CountDoneTilesInRange :one
-SELECT count(*)::int AS done
+const countSettledTilesInRange = `-- name: CountSettledTilesInRange :one
+SELECT count(*)::int AS settled
 FROM seed_regions
 WHERE tile_x BETWEEN $1 AND $2
   AND tile_y BETWEEN $3 AND $4
-  AND status = 'done'
+  AND status IN ('done', 'failed')
 `
 
-type CountDoneTilesInRangeParams struct {
+type CountSettledTilesInRangeParams struct {
 	MinX int32 `json:"min_x"`
 	MaxX int32 `json:"max_x"`
 	MinY int32 `json:"min_y"`
 	MaxY int32 `json:"max_y"`
 }
 
-// How many tiles in the (contiguous) covering rectangle are already imported.
-func (q *Queries) CountDoneTilesInRange(ctx context.Context, arg CountDoneTilesInRangeParams) (int32, error) {
-	row := q.db.QueryRow(ctx, countDoneTilesInRange,
+// How many tiles in the (contiguous) covering rectangle have settled — either
+// imported ('done') or given up for now ('failed', retryable in 24h). A tile
+// that is never-claimed or still 'importing' is NOT settled, so the viewport is
+// still "seeding". Counting 'failed' as settled stops the client from polling
+// forever when a tile can't import.
+func (q *Queries) CountSettledTilesInRange(ctx context.Context, arg CountSettledTilesInRangeParams) (int32, error) {
+	row := q.db.QueryRow(ctx, countSettledTilesInRange,
 		arg.MinX,
 		arg.MaxX,
 		arg.MinY,
 		arg.MaxY,
 	)
-	var done int32
-	err := row.Scan(&done)
-	return done, err
+	var settled int32
+	err := row.Scan(&settled)
+	return settled, err
 }
 
 const markSeedTile = `-- name: MarkSeedTile :exec

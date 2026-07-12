@@ -17,10 +17,14 @@ UPDATE seed_regions
 SET status = $3, courts_found = $4, seeded_at = now(), updated_at = now()
 WHERE tile_x = $1 AND tile_y = $2;
 
--- name: CountDoneTilesInRange :one
--- How many tiles in the (contiguous) covering rectangle are already imported.
-SELECT count(*)::int AS done
+-- name: CountSettledTilesInRange :one
+-- How many tiles in the (contiguous) covering rectangle have settled — either
+-- imported ('done') or given up for now ('failed', retryable in 24h). A tile
+-- that is never-claimed or still 'importing' is NOT settled, so the viewport is
+-- still "seeding". Counting 'failed' as settled stops the client from polling
+-- forever when a tile can't import.
+SELECT count(*)::int AS settled
 FROM seed_regions
 WHERE tile_x BETWEEN sqlc.arg('min_x') AND sqlc.arg('max_x')
   AND tile_y BETWEEN sqlc.arg('min_y') AND sqlc.arg('max_y')
-  AND status = 'done';
+  AND status IN ('done', 'failed');
