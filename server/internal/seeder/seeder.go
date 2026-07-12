@@ -30,6 +30,10 @@ const maxTilesPerRequest = 6
 // courtesyDelay spaces successive Overpass queries (shared free service).
 const courtesyDelay = 10 * time.Second
 
+// idlePoll is how long the worker waits before re-checking the queue when
+// there's nothing claimable.
+const idlePoll = 30 * time.Second
+
 type Tile struct {
 	X, Y int
 }
@@ -88,7 +92,6 @@ type Seeder struct {
 	queries  *gen.Queries
 	endpoint string
 	log      *slog.Logger
-	requests chan Tile
 }
 
 func New(queries *gen.Queries, endpoint string, log *slog.Logger) *Seeder {
@@ -99,21 +102,27 @@ func New(queries *gen.Queries, endpoint string, log *slog.Logger) *Seeder {
 		queries:  queries,
 		endpoint: endpoint,
 		log:      log,
-		requests: make(chan Tile, 128),
 	}
 }
 
-// Request enqueues any unseeded tiles covering the viewport. Non-blocking
-// and cheap — safe to call on every map query. Drops work when the queue is
-// full; the next viewer of the same region re-triggers it.
+// Request durably enqueues any covering tiles for import. Non-blocking (runs
+// the DB writes in the background) — safe to call on every map query.
 func (s *Seeder) Request(minLng, minLat, maxLng, maxLat float64) {
-	for _, tile := range TilesCovering(minLng, minLat, maxLng, maxLat) {
-		select {
-		case s.requests <- tile:
-		default:
-			return
-		}
+	tiles := TilesCovering(minLng, minLat, maxLng, maxLat)
+	if len(tiles) == 0 {
+		return
 	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		for _, t := range tiles {
+			if err := s.queries.EnqueueSeedTile(ctx, gen.EnqueueSeedTileParams{
+				TileX: int32(t.X), TileY: int32(t.Y),
+			}); err != nil {
+				s.log.Error("enqueue seed tile", "tile", t, "err", err)
+			}
+		}
+	}()
 }
 
 // ViewportSeeding reports whether the viewport is seedable and at least one
@@ -135,36 +144,40 @@ func (s *Seeder) ViewportSeeding(ctx context.Context, minLng, minLat, maxLng, ma
 	return settled < expected
 }
 
-// Run processes the import queue until ctx is cancelled. Run exactly one —
-// a single worker plus courtesyDelay is the Overpass rate limit.
-func (s *Seeder) Run(ctx context.Context) {
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case tile := <-s.requests:
-			if !s.claim(ctx, tile) {
-				continue
-			}
-			s.importTile(ctx, tile)
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.After(courtesyDelay):
-			}
-		}
-	}
-}
-
-func (s *Seeder) claim(ctx context.Context, tile Tile) bool {
-	_, err := s.queries.ClaimSeedTile(ctx, gen.ClaimSeedTileParams{TileX: int32(tile.X), TileY: int32(tile.Y)})
+// DrainOnce claims and imports the next tile, then spaces the next Overpass
+// call by courtesyDelay. Reports whether it did any work.
+func (s *Seeder) DrainOnce(ctx context.Context) bool {
+	row, err := s.queries.ClaimNextSeedTile(ctx)
 	if err != nil {
 		if !errors.Is(err, pgx.ErrNoRows) {
-			s.log.Error("claim seed tile", "tile", tile, "err", err)
+			s.log.Error("claim next seed tile", "err", err)
 		}
 		return false
 	}
+	s.importTile(ctx, Tile{X: int(row.TileX), Y: int(row.TileY)})
+	select {
+	case <-ctx.Done():
+	case <-time.After(courtesyDelay):
+	}
 	return true
+}
+
+// Run drains the queue until ctx is cancelled, polling when idle. Run exactly
+// one per process; DrainOnce's courtesyDelay is the Overpass rate limit.
+func (s *Seeder) Run(ctx context.Context) {
+	for {
+		if ctx.Err() != nil {
+			return
+		}
+		if s.DrainOnce(ctx) {
+			continue
+		}
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(idlePoll):
+		}
+	}
 }
 
 func (s *Seeder) importTile(ctx context.Context, tile Tile) {
