@@ -35,6 +35,10 @@ type Config struct {
 	// Per-IP rate limits (requests/minute). 0 disables the limiter.
 	RateLimitAuthPerMin  int
 	RateLimitWritePerMin int
+	// InternalTaskSecret guards POST /internal/drain, letting an external
+	// scheduler advance background queues. Empty disables the endpoint
+	// (always 401).
+	InternalTaskSecret string
 }
 
 func Load() (*Config, error) {
@@ -53,6 +57,7 @@ func Load() (*Config, error) {
 		SentryDSN:            os.Getenv("SENTRY_DSN"),
 		RateLimitAuthPerMin:  getenvInt("RATE_LIMIT_AUTH_PER_MIN", 10),
 		RateLimitWritePerMin: getenvInt("RATE_LIMIT_WRITE_PER_MIN", 60),
+		InternalTaskSecret:   getenv("INTERNAL_TASK_SECRET", ""),
 	}
 	if c.DatabaseURL == "" {
 		return nil, fmt.Errorf("DATABASE_URL is required")
