@@ -17,6 +17,7 @@ ON CONFLICT (tile_x, tile_y) DO UPDATE SET
     updated_at = now()
 WHERE (seed_regions.status = 'failed' AND seed_regions.updated_at < now() - interval '24 hours')
    OR (seed_regions.status = 'importing' AND seed_regions.updated_at < now() - interval '1 hour')
+   OR (seed_regions.status = 'done' AND seed_regions.updated_at < now() - interval '90 days')
 RETURNING tile_x
 `
 
@@ -33,6 +34,34 @@ func (q *Queries) ClaimSeedTile(ctx context.Context, arg ClaimSeedTileParams) (i
 	var tile_x int32
 	err := row.Scan(&tile_x)
 	return tile_x, err
+}
+
+const countDoneTilesInRange = `-- name: CountDoneTilesInRange :one
+SELECT count(*)::int AS done
+FROM seed_regions
+WHERE tile_x BETWEEN $1 AND $2
+  AND tile_y BETWEEN $3 AND $4
+  AND status = 'done'
+`
+
+type CountDoneTilesInRangeParams struct {
+	MinX int32 `json:"min_x"`
+	MaxX int32 `json:"max_x"`
+	MinY int32 `json:"min_y"`
+	MaxY int32 `json:"max_y"`
+}
+
+// How many tiles in the (contiguous) covering rectangle are already imported.
+func (q *Queries) CountDoneTilesInRange(ctx context.Context, arg CountDoneTilesInRangeParams) (int32, error) {
+	row := q.db.QueryRow(ctx, countDoneTilesInRange,
+		arg.MinX,
+		arg.MaxX,
+		arg.MinY,
+		arg.MaxY,
+	)
+	var done int32
+	err := row.Scan(&done)
+	return done, err
 }
 
 const markSeedTile = `-- name: MarkSeedTile :exec
