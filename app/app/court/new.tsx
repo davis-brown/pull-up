@@ -19,14 +19,10 @@ import type { NearbyDuplicate, Surface } from "@/lib/types";
 
 const surfaces: Surface[] = ["asphalt", "concrete", "hardwood", "rubber", "other"];
 
-// Pin-drop flow: the map pans under a fixed center crosshair; the court is
-// created wherever the crosshair points when the user submits.
 export default function NewCourtScreen() {
   const router = useRouter();
   const t = useTheme();
   const createCourt = useCreateCourt();
-  // Open the map at the user's location — they're usually standing at the
-  // court they're adding.
   const [start, setStart] = useState<Coords | null>(null);
   const center = useRef<Coords>(FALLBACK_CENTER);
   const [name, setName] = useState("");
@@ -95,7 +91,6 @@ export default function NewCourtScreen() {
                 onRegionChange={onRegionChange}
                 showUserLocation
               />
-              {/* Fixed crosshair: drag the map underneath it. */}
               <View pointerEvents="none" style={styles.crosshair}>
                 <View style={[styles.crosshairRing, { borderColor: t.colors.accent }]} />
                 <View style={[styles.crosshairDot, { backgroundColor: t.colors.accent }]} />

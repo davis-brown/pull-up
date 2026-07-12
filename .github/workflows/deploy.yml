@@ -1,12 +1,5 @@
 # Deploys to Cloudflare on push to main.
-#
-# Repo secrets required:
-#   CLOUDFLARE_API_TOKEN  — API token with Workers Scripts:Edit,
-#                           Workers Containers:Edit, Account Settings:Read
-#   EXPO_PUBLIC_API_URL   — deployed API URL (https://pull-up-api.<sub>.workers.dev)
-#
-# The API container's own secrets (DATABASE_URL, JWT_SECRET) are set once via
-# `wrangler secret put` and are not needed here.
+
 name: Deploy
 
 on:
