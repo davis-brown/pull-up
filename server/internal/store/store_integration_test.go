@@ -851,9 +851,19 @@ func TestReseedAndCount(t *testing.T) {
 	if err := st.Queries.MarkSeedTile(ctx, gen.MarkSeedTileParams{TileX: 100, TileY: 100, Status: "done", CourtsFound: &found}); err != nil {
 		t.Fatalf("mark: %v", err)
 	}
-	done, err := st.Queries.CountDoneTilesInRange(ctx, gen.CountDoneTilesInRangeParams{MinX: 100, MaxX: 100, MinY: 100, MaxY: 100})
-	if err != nil || done != 1 {
-		t.Fatalf("count done = %d, %v; want 1", done, err)
+	settled, err := st.Queries.CountSettledTilesInRange(ctx, gen.CountSettledTilesInRangeParams{MinX: 100, MaxX: 100, MinY: 100, MaxY: 100})
+	if err != nil || settled != 1 {
+		t.Fatalf("count settled = %d, %v; want 1", settled, err)
+	}
+	// A 'failed' tile also counts as settled (so the client stops polling).
+	if _, err := st.Queries.ClaimSeedTile(ctx, gen.ClaimSeedTileParams{TileX: 101, TileY: 100}); err != nil {
+		t.Fatalf("claim 101: %v", err)
+	}
+	if err := st.Queries.MarkSeedTile(ctx, gen.MarkSeedTileParams{TileX: 101, TileY: 100, Status: "failed", CourtsFound: nil}); err != nil {
+		t.Fatalf("mark failed: %v", err)
+	}
+	if s2, _ := st.Queries.CountSettledTilesInRange(ctx, gen.CountSettledTilesInRangeParams{MinX: 100, MaxX: 101, MinY: 100, MaxY: 100}); s2 != 2 {
+		t.Errorf("settled over done+failed = %d, want 2", s2)
 	}
 	// A fresh 'done' tile is NOT re-claimable.
 	if _, err := st.Queries.ClaimSeedTile(ctx, gen.ClaimSeedTileParams{TileX: 100, TileY: 100}); err == nil {
