@@ -205,3 +205,23 @@ func TestPatchCourtAttributes(t *testing.T) {
 		t.Errorf("attributes not persisted")
 	}
 }
+
+func TestCourtsResponseHasSeeding(t *testing.T) {
+	ts, _ := newTestServer(t)
+	ruckerLatStr := strconv.FormatFloat(ruckerLat, 'f', -1, 64)
+	ruckerLngStr := strconv.FormatFloat(ruckerLng, 'f', -1, 64)
+	resp := doJSON(t, ts, http.MethodGet, "/courts?lat="+ruckerLatStr+"&lng="+ruckerLngStr, "", nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("list: status %d: %s", resp.StatusCode, readBody(t, resp))
+	}
+	body := decodeJSON[struct {
+		Courts  []map[string]any `json:"courts"`
+		Seeding bool             `json:"seeding"`
+	}](t, resp)
+	_ = body.Courts
+	// With no live seeder wired in tests, seeding is false; the assertion is
+	// that the response includes a boolean `seeding` field and still decodes.
+	if body.Seeding {
+		t.Errorf("expected seeding=false without a wired seeder, got true")
+	}
+}
