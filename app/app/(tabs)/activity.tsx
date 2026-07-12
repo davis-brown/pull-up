@@ -46,12 +46,13 @@ export default function ActivityScreen() {
   const { data, isLoading, error, refetch, isRefetching } = useQuery({
     queryKey: ["courts", "nearby", pos, filters],
     enabled: pos != null,
-    refetchInterval: 45_000,
+    refetchInterval: (q) => (q.state.data?.seeding ? 5_000 : 45_000),
     queryFn: async () => {
-      const res = await api<{ courts: CourtSummary[] }>(
+      const res = await api<{ courts: CourtSummary[]; seeding?: boolean }>(
         `/courts?lat=${pos!.lat}&lng=${pos!.lng}&radius_m=10000${filtersToQuery(filters)}`,
       );
-      return [...res.courts].sort((a, b) => b.active_count - a.active_count);
+      const sorted = [...res.courts].sort((a, b) => b.active_count - a.active_count);
+      return { courts: sorted, seeding: !!res.seeding };
     },
   });
 
@@ -73,7 +74,7 @@ export default function ActivityScreen() {
 
   return (
     <FlatList
-      data={data ?? []}
+      data={data?.courts ?? []}
       keyExtractor={(c) => c.id}
       style={{ backgroundColor: t.colors.background }}
       contentContainerStyle={{ padding: t.spacing.md }}
@@ -100,13 +101,24 @@ export default function ActivityScreen() {
         </>
       }
       ListEmptyComponent={
-        <EmptyState
-          icon="map-outline"
-          title="No courts within 10 km yet"
-          body="Know a court around here? Put it on the map."
-          actionTitle="Open the map"
-          onAction={() => router.push("/")}
-        />
+        data?.seeding ? (
+          <View style={styles.seedingEmpty}>
+            <ActivityIndicator size="small" color={t.colors.accent} />
+            <Text
+              style={[t.type.body, { color: t.colors.textSecondary, marginTop: t.spacing.sm }]}
+            >
+              Finding courts in this area…
+            </Text>
+          </View>
+        ) : (
+          <EmptyState
+            icon="map-outline"
+            title="No courts within 10 km yet"
+            body="Know a court around here? Put it on the map."
+            actionTitle="Open the map"
+            onAction={() => router.push("/")}
+          />
+        )
       }
       renderItem={({ item }) => {
         const live = item.active_count > 0;
@@ -169,6 +181,7 @@ export default function ActivityScreen() {
 
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
+  seedingEmpty: { alignItems: "center", justifyContent: "center", padding: 24, paddingTop: 48 },
   cardHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
