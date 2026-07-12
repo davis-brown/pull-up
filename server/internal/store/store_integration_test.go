@@ -881,3 +881,54 @@ func TestReseedAndCount(t *testing.T) {
 		t.Errorf("90-day-old done tile should be re-claimable: %v", err)
 	}
 }
+
+func TestSeedTileQueue(t *testing.T) {
+	st := testStore(t)
+	ctx := context.Background()
+
+	// Enqueue is idempotent.
+	for i := 0; i < 2; i++ {
+		if err := st.Queries.EnqueueSeedTile(ctx, gen.EnqueueSeedTileParams{TileX: 5, TileY: 7}); err != nil {
+			t.Fatalf("enqueue %d: %v", i, err)
+		}
+	}
+	// Claim returns the pending tile.
+	row, err := st.Queries.ClaimNextSeedTile(ctx)
+	if err != nil || row.TileX != 5 || row.TileY != 7 {
+		t.Fatalf("claim next = %+v, %v; want tile (5,7)", row, err)
+	}
+	// Now claimed ('importing'), no other pending tile → ErrNoRows.
+	if _, err := st.Queries.ClaimNextSeedTile(ctx); err == nil {
+		t.Error("expected no claimable tile after the only one was claimed")
+	}
+	// Enqueue does not reset a non-pending tile: (5,7) is 'importing'.
+	if err := st.Queries.EnqueueSeedTile(ctx, gen.EnqueueSeedTileParams{TileX: 5, TileY: 7}); err != nil {
+		t.Fatalf("re-enqueue: %v", err)
+	}
+	if _, err := st.Queries.ClaimNextSeedTile(ctx); err == nil {
+		t.Error("re-enqueue must not resurrect an importing tile as pending")
+	}
+}
+
+func TestEnrichmentQueue(t *testing.T) {
+	st := testStore(t)
+	ctx := context.Background()
+	uid := createUser(t, st, "enrichq@test.local")
+	c := createCourt(t, st, "Enrich Court", ruckerLat, ruckerLng, uid)
+
+	// Not requested yet → nothing to claim.
+	if _, err := st.Queries.ClaimNextCourtEnrichment(ctx); err == nil {
+		t.Error("no court requested yet, claim should be empty")
+	}
+	if err := st.Queries.RequestEnrichment(ctx, c.ID); err != nil {
+		t.Fatalf("request: %v", err)
+	}
+	claimed, err := st.Queries.ClaimNextCourtEnrichment(ctx)
+	if err != nil || claimed.ID != c.ID {
+		t.Fatalf("claim enrichment = %+v, %v; want court %s", claimed, err, c.ID)
+	}
+	// Now enriched → no longer claimable.
+	if _, err := st.Queries.ClaimNextCourtEnrichment(ctx); err == nil {
+		t.Error("enriched court should not be re-claimable")
+	}
+}
