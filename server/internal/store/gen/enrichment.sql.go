@@ -45,6 +45,42 @@ func (q *Queries) ClaimCourtEnrichment(ctx context.Context, id uuid.UUID) (Claim
 	return i, err
 }
 
+const claimNextCourtEnrichment = `-- name: ClaimNextCourtEnrichment :one
+UPDATE courts SET enriched_at = now()
+WHERE id = (
+    SELECT id FROM courts
+    WHERE enrich_requested_at IS NOT NULL AND enriched_at IS NULL
+    ORDER BY enrich_requested_at
+    FOR UPDATE SKIP LOCKED
+    LIMIT 1
+)
+RETURNING id,
+    ST_Y(location::geometry)::float8 AS lat,
+    ST_X(location::geometry)::float8 AS lng,
+    (address IS NULL)::bool AS needs_address
+`
+
+type ClaimNextCourtEnrichmentRow struct {
+	ID           uuid.UUID `json:"id"`
+	Lat          float64   `json:"lat"`
+	Lng          float64   `json:"lng"`
+	NeedsAddress bool      `json:"needs_address"`
+}
+
+// Claim the next requested-but-unenriched court (lazy: only viewed courts have
+// enrich_requested_at set). SKIP LOCKED keeps concurrent workers safe.
+func (q *Queries) ClaimNextCourtEnrichment(ctx context.Context) (ClaimNextCourtEnrichmentRow, error) {
+	row := q.db.QueryRow(ctx, claimNextCourtEnrichment)
+	var i ClaimNextCourtEnrichmentRow
+	err := row.Scan(
+		&i.ID,
+		&i.Lat,
+		&i.Lng,
+		&i.NeedsAddress,
+	)
+	return i, err
+}
+
 const insertExternalPhoto = `-- name: InsertExternalPhoto :exec
 INSERT INTO external_photos (court_id, source, source_id, image_url, page_url, attribution)
 VALUES ($1, $2, $3, $4, $5, $6)
@@ -116,6 +152,17 @@ func (q *Queries) ListExternalPhotos(ctx context.Context, courtID uuid.UUID) ([]
 		return nil, err
 	}
 	return items, nil
+}
+
+const requestEnrichment = `-- name: RequestEnrichment :exec
+UPDATE courts SET enrich_requested_at = now()
+WHERE id = $1 AND enrich_requested_at IS NULL AND enriched_at IS NULL
+`
+
+// Durable, lazy: mark a viewed court for enrichment (once) if not already done.
+func (q *Queries) RequestEnrichment(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, requestEnrichment, id)
+	return err
 }
 
 const setCourtAddressIfNull = `-- name: SetCourtAddressIfNull :exec
