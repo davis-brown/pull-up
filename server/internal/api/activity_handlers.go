@@ -211,8 +211,13 @@ func (s *Server) handleCourtActivity(w http.ResponseWriter, r *http.Request) {
 	if reports == nil {
 		reports = []gen.ListRecentReportsRow{}
 	}
+	// Headcount, not row count: every displayed active_count sums party sizes.
+	activeCount := 0
+	for _, ci := range checkIns {
+		activeCount += int(ci.PartySize)
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"active_count": len(checkIns),
+		"active_count": activeCount,
 		"check_ins":    checkIns,
 		"reports":      reports,
 	})
