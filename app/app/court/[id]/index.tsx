@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import * as Notifications from "expo-notifications";
 import { Stack, useLocalSearchParams, useRouter, type Href } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Image,
@@ -13,6 +13,7 @@ import {
   Share,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -89,6 +90,18 @@ export default function CourtDetailScreen() {
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [showPushPrimer, setShowPushPrimer] = useState(false);
 
+  // On desktop web the standalone detail screen doesn't exist — the map home's
+  // side panel is the detail surface. Redirect so a deep link / refresh lands
+  // in the panel. Web + wide only, so mobile web and native are untouched; the
+  // target ("/") never navigates back here on desktop, so there's no loop.
+  const { width } = useWindowDimensions();
+  const isDesktopWeb = Platform.OS === "web" && width >= 1024;
+  useEffect(() => {
+    if (isDesktopWeb && id) {
+      router.replace(`/?court=${id}`);
+    }
+  }, [isDesktopWeb, id, router]);
+
   const isFavorite = favData?.favorite ?? false;
 
   const toggleFavorite = () => {
@@ -120,6 +133,10 @@ export default function CourtDetailScreen() {
       { onError: (e) => setPhotoError(e.message) },
     );
   };
+
+  // Redirecting to the desktop panel — render nothing to avoid a flash of the
+  // mobile detail layout.
+  if (isDesktopWeb) return null;
 
   if (courtError && !court) {
     return (
