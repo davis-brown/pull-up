@@ -30,7 +30,7 @@ export function GetTheAppBanner() {
         {storeUrl ? " " : ""}
         {storeUrl ? (
           <Text
-            style={{ color: t.colors.accent, fontWeight: "600" }}
+            style={{ color: t.colors.accent, fontFamily: t.fonts.bodySemi }}
             onPress={() => void Linking.openURL(storeUrl)}
           >
             Get it

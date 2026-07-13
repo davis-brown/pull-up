@@ -209,7 +209,7 @@ export default function ActivityScreen() {
                       <Text
                         style={[
                           t.type.caption,
-                          { color: t.colors.live, fontWeight: "600" },
+                          { fontFamily: t.fonts.bodySemi, color: t.colors.live },
                         ]}
                       >
                         {item.active_count} here

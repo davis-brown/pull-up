@@ -46,7 +46,12 @@ export default function ProfileScreen() {
     >
       <View style={styles.header}>
         <Avatar avatarUrl={profile.avatar_url} displayName={profile.display_name} seed={profile.id} size={72} />
-        <Text style={[t.type.title, { color: t.colors.textPrimary, marginTop: t.spacing.sm }]}>
+        <Text
+          style={[
+            t.type.displayCondensed,
+            { color: t.colors.textPrimary, marginTop: t.spacing.sm, textAlign: "center" },
+          ]}
+        >
           {profile.display_name}
         </Text>
         <Text style={[t.type.caption, { color: t.colors.textMuted, marginTop: 2 }]}>

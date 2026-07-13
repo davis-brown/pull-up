@@ -25,7 +25,7 @@ export function PermissionPrimer({
   const t = useTheme();
   return (
     <Modal transparent animationType="fade" visible={visible} onRequestClose={onDismiss}>
-      <View style={styles.overlay}>
+      <View style={[styles.overlay, { backgroundColor: t.colors.overlay }]}>
         <View
           style={[
             styles.sheet,
@@ -59,7 +59,6 @@ export function PermissionPrimer({
 const styles = StyleSheet.create({
   overlay: {
     flex: 1,
-    backgroundColor: "rgba(0,0,0,0.5)",
     alignItems: "center",
     justifyContent: "center",
     padding: 24,
