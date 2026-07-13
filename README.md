@@ -9,6 +9,10 @@ comes from geo-verified check-ins and crowd reports.
 **Map & courts**
 - Live map (MapLibre) with a basketball-icon pin per court; pin grows and
   turns green with a live player count once a court has active check-ins
+- "Now" and "All courts" map modes — Now shows only courts with live
+  activity, weighted by turnout; All shows every court
+- Time scrubber on the map — drag to any hour and see a per-court turnout
+  forecast (8-week hourly averages blended with today's scheduled runs)
 - Courts are crowd-sourced (community "add a court" pin-drop flow, with
   nearby-duplicate detection) and auto-seeded from OpenStreetMap per
   viewport in the background
@@ -17,12 +21,20 @@ comes from geo-verified check-ins and crowd reports.
   restrooms, parking, fenced, access (public/private/customers) — editable
   by anyone signed in
 - Court photos (upload, moderated)
-- Filter courts by attributes (e.g. lit, indoor) on the Discover feed
+- Filter courts with quick presets (Night run / Serious run / Rainy day /
+  Shoot around) or fine-tune chips (incl. min hoops and surface), with a
+  live matching count as you adjust
 - Favorite courts and view your favorites list
+- Court detail screen with a facts grid, a popular-times chart, and a
+  sticky check-in bar
+- Desktop web (≥1024px) gets a master-detail layout — court list and detail
+  panel alongside the map
 
 **Live activity**
-- Check-ins ("I'm here") — geo-verified server-side (within 150 m of the
-  court), auto-expire after 2 hours, no background job required
+- Check-ins — a one-gesture slide-to-check-in screen, with party size
+  (+1/+2/+3) and a "got a ball" flag; headcounts count party sizes, not
+  just check-ins. Geo-verified server-side (within 150 m of the court),
+  auto-expire after 2 hours, no background job required
 - Crowd reports — "~8 playing, good run" style reports, visible for 2 hours
 - Passive geofencing (native only, opt-in) — monitors nearby known courts
   and either prompts ("Looks like you're at Rucker Park — check in?") or
@@ -43,6 +55,9 @@ comes from geo-verified check-ins and crowd reports.
 
 **Social**
 - Public user profiles with a reputation score
+- Shareable player card — jersey number, position, height, and style tags
+- Stats (games played, courts visited, week streak) and earned badges, plus
+  your home courts
 - Follow / unfollow, with followers/following lists
 - Private accounts — new followers require your approval (follow requests
   screen)
@@ -81,7 +96,9 @@ comes from geo-verified check-ins and crowd reports.
 - **`server/`** — Go API (chi, pgx + sqlc, goose migrations) on PostgreSQL + PostGIS
 - **`app/`** — Expo (React Native) app for iOS, Android, and web; MapLibre maps
   with OpenFreeMap tiles (`@maplibre/maplibre-react-native` native,
-  `react-map-gl/maplibre` on web) — no map API keys needed
+  `react-map-gl/maplibre` on web) — no map API keys needed; a hi-fi design
+  system (Barlow / Barlow Condensed, warm paper-and-ink palette, light and
+  dark) runs across every screen
 
 ## Local development
 
