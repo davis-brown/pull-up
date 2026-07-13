@@ -45,6 +45,9 @@ function makeCourt(overrides: Partial<CourtSummary>): CourtSummary {
     toilets: null,
     parking: null,
     fenced: null,
+    covered: null,
+    fee: null,
+    access: null,
     source: "osm",
     status: "verified",
     active_count: 0,
@@ -164,25 +167,66 @@ describe("matchesFilters", () => {
     ).toBe(false);
   });
 
-  it("public: false is a no-op; true requires is_public", () => {
+  it("public: false is a no-op; true requires is_public AND (access null or 'public')", () => {
     expect(
       matchesFilters(makeCourt({ is_public: false }), { public: false }),
     ).toBe(true);
     expect(
-      matchesFilters(makeCourt({ is_public: true }), { public: true }),
+      matchesFilters(makeCourt({ is_public: true, access: null }), {
+        public: true,
+      }),
+    ).toBe(true);
+    expect(
+      matchesFilters(makeCourt({ is_public: true, access: "public" }), {
+        public: true,
+      }),
     ).toBe(true);
     expect(
       matchesFilters(makeCourt({ is_public: false }), { public: true }),
     ).toBe(false);
+    expect(
+      matchesFilters(makeCourt({ is_public: true, access: "private" }), {
+        public: true,
+      }),
+    ).toBe(false);
+    expect(
+      matchesFilters(makeCourt({ is_public: true, access: "customers" }), {
+        public: true,
+      }),
+    ).toBe(false);
   });
 
-  it("free is a client-side no-op (fee isn't present on CourtSummary, mirroring the fee-IS-NULL branch)", () => {
-    expect(matchesFilters(makeCourt({}), { free: true })).toBe(true);
+  it("free: false is a no-op; true passes when fee is null or false, fails when fee is true", () => {
+    expect(matchesFilters(makeCourt({ fee: false }), { free: false })).toBe(
+      true,
+    );
+    expect(matchesFilters(makeCourt({ fee: null }), { free: true })).toBe(
+      true,
+    );
+    expect(matchesFilters(makeCourt({ fee: false }), { free: true })).toBe(
+      true,
+    );
+    expect(matchesFilters(makeCourt({ fee: true }), { free: true })).toBe(
+      false,
+    );
   });
 
-  it("covered always fails a positive requirement (covered isn't present on CourtSummary, so it's always unknown)", () => {
-    expect(matchesFilters(makeCourt({}), { covered: true })).toBe(false);
-    expect(matchesFilters(makeCourt({}), { covered: false })).toBe(true);
+  it("covered is a strict equality check; null covered fails a positive requirement", () => {
+    expect(
+      matchesFilters(makeCourt({ covered: true }), { covered: true }),
+    ).toBe(true);
+    expect(
+      matchesFilters(makeCourt({ covered: false }), { covered: false }),
+    ).toBe(true);
+    expect(
+      matchesFilters(makeCourt({ covered: null }), { covered: true }),
+    ).toBe(false);
+    expect(
+      matchesFilters(makeCourt({ covered: null }), { covered: false }),
+    ).toBe(false);
+    expect(
+      matchesFilters(makeCourt({ covered: false }), { covered: true }),
+    ).toBe(false);
   });
 
   it("water/toilets/parking/fenced: false is a no-op; true requires the attribute === true", () => {
