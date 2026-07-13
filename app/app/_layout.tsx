@@ -82,10 +82,16 @@ function ThemedApp() {
     if (!geofencingSupported) return;
     // Keep the monitored courts current with wherever the user is now.
     void refreshGeofences().catch(() => {});
-    // Tapping a geofence notification opens that court.
+    // Tapping a geofence notification opens that court — except the
+    // "looks like you're at X" prompt, which deep-links straight to the
+    // slide-to-check-in screen instead.
     const sub = Notifications.addNotificationResponseReceivedListener((response) => {
-      const courtId = response.notification.request.content.data?.courtId;
-      if (typeof courtId === "string") {
+      const data = response.notification.request.content.data;
+      const courtId = data?.courtId;
+      if (typeof courtId !== "string") return;
+      if (data?.kind === "geofence_prompt") {
+        router.push(`/check-in?courtId=${courtId}&via=gps`);
+      } else {
         router.push(`/court/${courtId}`);
       }
     });
@@ -132,6 +138,10 @@ function ThemedApp() {
         <Stack.Screen
           name="location-disclosure"
           options={{ title: "Auto check-in", presentation: "modal" }}
+        />
+        <Stack.Screen
+          name="check-in"
+          options={{ headerShown: false, presentation: "modal" }}
         />
         <Stack.Screen name="privacy" options={{ title: "Privacy Policy" }} />
         <Stack.Screen name="terms" options={{ title: "Terms of Service" }} />

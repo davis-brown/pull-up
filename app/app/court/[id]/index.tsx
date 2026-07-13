@@ -539,7 +539,7 @@ export default function CourtDetailScreen() {
         {/* Sticky live/check-in bar. */}
         <LiveBar
           liveCount={activeCount}
-          onCheckIn={() => router.push(`/check-in?courtId=${id}` as Href)}
+          onCheckIn={() => router.push(`/check-in?courtId=${id}`)}
         />
       </View>
 

@@ -88,6 +88,8 @@ export interface CheckIn {
   source: "manual" | "geofence_prompt" | "geofence_auto";
   created_at: string;
   expires_at: string;
+  party_size?: number;
+  has_ball?: boolean;
 }
 
 export interface CrowdReport {
@@ -109,6 +111,8 @@ export interface CourtActivity {
     source: string;
     created_at: string;
     expires_at: string;
+    party_size: number;
+    has_ball: boolean;
   }>;
   reports: CrowdReport[];
 }

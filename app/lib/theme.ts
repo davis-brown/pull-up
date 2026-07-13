@@ -26,6 +26,9 @@ export interface ThemeColors {
   textPrimary: string;
   textSecondary: string;
   textMuted: string;
+  // Extra-quiet footnote copy, one step past textMuted (the check-in
+  // screen's "auto-checkout" line).
+  textFootnote: string;
   accent: string;
   accentPressed: string;
   accentSurface: string;
@@ -50,6 +53,7 @@ const light: ThemeColors = {
   textPrimary: "#16150F",
   textSecondary: "#807D6E",
   textMuted: "#B4B0A0",
+  textFootnote: "#807D6E",
   accent: "#FF5A1F",
   accentPressed: "#E04A12",
   accentSurface: "#FFF1EA",
@@ -74,6 +78,7 @@ const dark: ThemeColors = {
   textPrimary: "#F4F2E9",
   textSecondary: "#D8D5C8",
   textMuted: "#8B8878",
+  textFootnote: "#6B6858",
   accent: "#FF5A1F",
   accentPressed: "#E04A12",
   accentSurface: "#3A2117",
@@ -274,6 +279,22 @@ export function useTheme(): Theme {
   return {
     scheme,
     colors: scheme === "dark" ? dark : light,
+    spacing,
+    radius,
+    type,
+    shadows,
+    fonts,
+  };
+}
+
+// A handful of screens (the slide-to-check-in modal, spec 3d) are always
+// dark, regardless of the user's theme preference or OS setting. This
+// resolves the dark palette into a full Theme object without touching the
+// global preference — callers use it locally instead of useTheme().
+export function darkTheme(): Theme {
+  return {
+    scheme: "dark",
+    colors: dark,
     spacing,
     radius,
     type,

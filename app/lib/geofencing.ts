@@ -70,7 +70,7 @@ async function onEnter(courtId: string, mode: GeofenceMode): Promise<void> {
       content: {
         title: `Looks like you're at ${court.name}`,
         body: "Tap to check in and let others know there's a run.",
-        data: { courtId },
+        data: { courtId, kind: "geofence_prompt" },
       },
       trigger: null,
     });
