@@ -32,6 +32,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // A later request's refresh attempt can fail (expired/revoked refresh
+    // token) long after launch — without this, `user` stays stuck signed-in
+    // while every request just 401s again.
+    return apiClient.onSessionExpired(() => setUser(null));
+  }, []);
+
+  useEffect(() => {
     // Restore the session on launch: if a refresh token exists, /me will
     // succeed (transparently refreshing the access token if needed).
     (async () => {

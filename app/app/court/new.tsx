@@ -169,7 +169,7 @@ export default function NewCourtScreen() {
             <Button
               title="Add court"
               busy={createCourt.isPending}
-              disabled={!name.trim()}
+              disabled={!name.trim() || !start}
               onPress={() => submit(false)}
             />
           )}
