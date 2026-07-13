@@ -2,18 +2,29 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import { useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import {
+  ActivityIndicator,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { CourtFilterBar } from "@/components/CourtFilterBar";
 import CourtMap from "@/components/CourtMap/CourtMap";
 import type { CourtPin } from "@/components/CourtMap/types";
+import { FilterSheet } from "@/components/FilterSheet";
 import { GetTheAppBanner } from "@/components/GetTheAppBanner";
 import { MapSheet } from "@/components/MapSheet";
 import { PermissionPrimer } from "@/components/PermissionPrimer";
 import { SegmentedToggle } from "@/components/ui";
 import type { CourtFilters } from "@/lib/court-filters";
 import { courtsDisplayState, viewportTooLarge } from "@/lib/court-seeding";
-import { locationPrimerDone, markLocationPrimerDone, onboardingSeen } from "@/lib/first-run";
+import {
+  locationPrimerDone,
+  markLocationPrimerDone,
+  onboardingSeen,
+} from "@/lib/first-run";
 import { expectedAt, scrubHours } from "@/lib/forecast";
 import { useCourtsInBBox, useForecasts, type BBox } from "@/lib/hooks";
 import { FALLBACK_CENTER, tryGetPosition, type Coords } from "@/lib/location";
@@ -27,7 +38,7 @@ export default function MapScreen() {
   const [bbox, setBBox] = useState<BBox | null>(null);
   const [showLocationPrimer, setShowLocationPrimer] = useState(false);
   const [filters, setFilters] = useState<CourtFilters>({});
-  const [filterBarHeight, setFilterBarHeight] = useState(0);
+  const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   const [mode, setMode] = useState<"now" | "all">("now");
   const [selectedCourtId, setSelectedCourtId] = useState<string | null>(null);
   // Today's scrubbable hours, computed once per mount; hours[0] is NOW.
@@ -37,7 +48,11 @@ export default function MapScreen() {
   const courts = data?.courts ?? [];
   const seeding = data?.seeding ?? false;
   const tooLarge = bbox ? viewportTooLarge(bbox) : false;
-  const state = courtsDisplayState({ courtCount: courts.length, seeding, viewportTooLarge: tooLarge });
+  const state = courtsDisplayState({
+    courtCount: courts.length,
+    seeding,
+    viewportTooLarge: tooLarge,
+  });
 
   useEffect(() => {
     void (async () => {
@@ -50,7 +65,11 @@ export default function MapScreen() {
       }
       if (Platform.OS !== "web") {
         const perms = await Location.getForegroundPermissionsAsync();
-        if (!perms.granted && perms.canAskAgain && !(await locationPrimerDone())) {
+        if (
+          !perms.granted &&
+          perms.canAskAgain &&
+          !(await locationPrimerDone())
+        ) {
           setShowLocationPrimer(true);
           return; // locate after the primer is answered
         }
@@ -85,20 +104,33 @@ export default function MapScreen() {
         // "Now" mode's activity weight: the live count at the NOW position,
         // the scrubbed hour's forecast otherwise.
         expectedCount:
-          mode === "now" && !atNow ? expectedAt(forecasts[c.id], scrubHour) : c.active_count,
+          mode === "now" && !atNow
+            ? expectedAt(forecasts[c.id], scrubHour)
+            : c.active_count,
         status: c.status,
       })),
     [courts, mode, atNow, forecasts, scrubHour],
   );
 
   const selectedCourt =
-    mode === "now" ? (courts.find((c) => c.id === selectedCourtId) ?? null) : null;
+    mode === "now"
+      ? (courts.find((c) => c.id === selectedCourtId) ?? null)
+      : null;
+
+  const activeFilterCount = Object.values(filters).filter(
+    (v) => v !== undefined,
+  ).length;
 
   if (!center) {
     return (
       <View style={[styles.loading, { backgroundColor: t.colors.background }]}>
         <ActivityIndicator size="large" color={t.colors.accent} />
-        <Text style={[t.type.body, { color: t.colors.textSecondary, marginTop: t.spacing.md }]}>
+        <Text
+          style={[
+            t.type.body,
+            { color: t.colors.textSecondary, marginTop: t.spacing.md },
+          ]}
+        >
           Finding courts near you…
         </Text>
         <PermissionPrimer
@@ -133,13 +165,40 @@ export default function MapScreen() {
         mode={mode}
         selectedCourtId={selectedCourtId}
       />
-      <View
-        style={[styles.filterBar, { top: insets.top }]}
-        onLayout={(e) => setFilterBarHeight(e.nativeEvent.layout.height)}
+      <Pressable
+        onPress={() => setFilterSheetOpen(true)}
+        style={({ pressed }) => [
+          styles.filterButton,
+          t.shadows.chrome,
+          {
+            top: insets.top + 12,
+            backgroundColor: t.colors.surface,
+            borderRadius: t.radius.full,
+            opacity: pressed ? 0.85 : 1,
+          },
+        ]}
       >
-        <CourtFilterBar value={filters} onChange={setFilters} />
-      </View>
-      <View style={[styles.chrome, { top: insets.top + filterBarHeight + 12 }]}>
+        <Ionicons name="options" size={20} color={t.colors.textPrimary} />
+        {activeFilterCount > 0 && (
+          <View
+            style={[
+              styles.filterBadge,
+              { backgroundColor: t.colors.accent, borderRadius: t.radius.full },
+            ]}
+          >
+            <Text
+              style={[
+                t.type.caption,
+                styles.filterBadgeText,
+                { color: t.colors.onAccent },
+              ]}
+            >
+              {activeFilterCount}
+            </Text>
+          </View>
+        )}
+      </Pressable>
+      <View style={[styles.chrome, { top: insets.top + 12 }]}>
         <SegmentedToggle
           options={[
             { key: "now", label: "Now" },
@@ -190,7 +249,9 @@ export default function MapScreen() {
           ]}
         >
           <Ionicons name="add" size={20} color={t.colors.onAccent} />
-          <Text style={[t.type.bodyMedium, { color: t.colors.onAccent }]}>Add court</Text>
+          <Text style={[t.type.bodyMedium, { color: t.colors.onAccent }]}>
+            Add court
+          </Text>
         </Pressable>
       )}
       {selectedCourt != null && (
@@ -211,6 +272,13 @@ export default function MapScreen() {
         onAllow={() => answerLocationPrimer(true)}
         onDismiss={() => answerLocationPrimer(false)}
       />
+      <FilterSheet
+        visible={filterSheetOpen}
+        filters={filters}
+        courts={courts}
+        onApply={setFilters}
+        onClose={() => setFilterSheetOpen(false)}
+      />
     </View>
   );
 }
@@ -218,10 +286,27 @@ export default function MapScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   loading: { flex: 1, alignItems: "center", justifyContent: "center" },
-  filterBar: {
+  filterButton: {
     position: "absolute",
-    left: 0,
-    right: 0,
+    right: 16,
+    width: 44,
+    height: 44,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  filterBadge: {
+    position: "absolute",
+    top: -4,
+    right: -4,
+    minWidth: 18,
+    height: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 4,
+  },
+  filterBadgeText: {
+    fontSize: 11,
+    lineHeight: 13,
   },
   chrome: {
     position: "absolute",
