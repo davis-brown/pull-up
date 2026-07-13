@@ -34,6 +34,9 @@ export interface CourtSummary {
   toilets: boolean | null;
   parking: boolean | null;
   fenced: boolean | null;
+  covered: boolean | null;
+  fee: boolean | null;
+  access: "public" | "private" | "customers" | null;
   source: "user" | "osm";
   status: CourtStatus;
   active_count: number;

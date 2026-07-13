@@ -130,21 +130,19 @@ export function matchesFilters(c: CourtSummary, f: CourtFilters): boolean {
 
   // `(narg('public') IS NULL OR narg=false OR (c.is_public = true AND
   //   (c.access IS NULL OR c.access = 'public')))` — false is a no-op; true
-  // requires is_public. `access` isn't selected in CourtsInBBox / present on
-  // CourtSummary, so the access sub-check can't be mirrored client-side.
-  if (f.public && !c.is_public) return false;
+  // requires is_public AND (access is null or 'public').
+  if (f.public && !(c.is_public && (c.access == null || c.access === "public")))
+    return false;
 
   // `(narg('free') IS NULL OR narg=false OR c.fee IS NULL OR c.fee = false)`
-  // — false is a no-op; a true requirement still passes when fee is
-  // unknown. `fee` isn't selected in CourtsInBBox / present on CourtSummary,
-  // so it's always the unknown case here — `free` is a client-side no-op
-  // until Apply commits and the server re-filters on the real column.
+  // — false is a no-op; a true requirement passes when fee is null or false.
+  if (f.free && !(c.fee == null || c.fee === false)) return false;
 
   // `(narg('covered') IS NULL OR c.covered = narg('covered'))` — strict
-  // equality, unlike free/public/etc. `covered` isn't selected in
-  // CourtsInBBox / present on CourtSummary, so it's always unknown — a
-  // positive requirement therefore always fails client-side.
-  if (f.covered) return false;
+  // equality; a positive requirement fails when covered is null.
+  if (f.covered !== undefined) {
+    if (c.covered === null || c.covered !== f.covered) return false;
+  }
 
   // `(narg('surface') IS NULL OR c.surface = narg('surface'))` — strict
   // equality; a positive requirement fails when surface is null.
