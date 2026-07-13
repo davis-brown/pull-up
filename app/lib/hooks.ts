@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import {
   useMutation,
   useQuery,
@@ -6,6 +7,7 @@ import {
 import { api, API_URL } from "./api";
 import { useAuth } from "./auth-context";
 import { filtersToQuery, type CourtFilters } from "./court-filters";
+import type { CourtForecast } from "./forecast";
 import type {
   AdminAction,
   AdminUser,
@@ -59,6 +61,34 @@ export function useCourtsInBBox(bbox: BBox | null, filters?: CourtFilters) {
       return { courts: res.courts, seeding: !!res.seeding };
     },
   });
+}
+
+// Forecast lookups are batched by id set, not per-court — the scrubber reads
+// the response locally (see lib/forecast.ts) so dragging it never refetches.
+// Sorting the ids before joining keeps the query key (and therefore the
+// cache entry) stable regardless of array order; capping at 50 keeps the
+// query string bounded for very large viewports.
+const MAX_FORECAST_IDS = 50;
+
+export function useForecasts(courtIds: string[]): Record<string, CourtForecast> {
+  const sortedIds = [...new Set(courtIds)].sort().slice(0, MAX_FORECAST_IDS);
+  const { data } = useQuery({
+    queryKey: ["courts", "forecast", sortedIds],
+    enabled: sortedIds.length > 0,
+    staleTime: 5 * 60_000,
+    queryFn: async () => {
+      const tzOffsetMinutes = -new Date().getTimezoneOffset();
+      const res = await api<{ forecasts: CourtForecast[] }>(
+        `/courts/forecast?ids=${sortedIds.join(",")}&tz_offset_minutes=${tzOffsetMinutes}`,
+      );
+      return res.forecasts;
+    },
+  });
+  return useMemo(() => {
+    const byId: Record<string, CourtForecast> = {};
+    for (const f of data ?? []) byId[f.court_id] = f;
+    return byId;
+  }, [data]);
 }
 
 export function useCourt(id: string | undefined) {
@@ -293,6 +323,8 @@ export function useRSVP(courtId: string) {
       }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["courts", courtId, "sessions"] });
+      // Session going-counts feed the turnout forecasts (map sheet scrubber).
+      void qc.invalidateQueries({ queryKey: ["courts", "forecast"] });
     },
   });
 }
