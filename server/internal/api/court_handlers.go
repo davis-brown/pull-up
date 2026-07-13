@@ -58,6 +58,10 @@ type courtSummary struct {
 	Toilets       *bool `json:"toilets"`
 	Parking       *bool `json:"parking"`
 	Fenced        *bool `json:"fenced"`
+
+	Covered *bool   `json:"covered"`
+	Fee     *bool   `json:"fee"`
+	Access  *string `json:"access"`
 }
 
 type latestReport struct {
@@ -170,6 +174,7 @@ func (s *Server) handleListCourts(w http.ResponseWriter, r *http.Request) {
 			DistanceM:     &d,
 			LatestReport:  newLatestReport(c.LatestPlayerCount, c.LatestRunQuality, c.LatestReportAt),
 			DrinkingWater: c.DrinkingWater, Toilets: c.Toilets, Parking: c.Parking, Fenced: c.Fenced,
+			Covered: c.Covered, Fee: c.Fee, Access: c.Access,
 		})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"courts": out, "seeding": seeding})
@@ -220,6 +225,7 @@ func (s *Server) listCourtsInBBox(w http.ResponseWriter, r *http.Request, bbox s
 			IsPublic: c.IsPublic, Source: c.Source, Status: c.Status, ActiveCount: c.ActiveCount,
 			LatestReport:  newLatestReport(c.LatestPlayerCount, c.LatestRunQuality, c.LatestReportAt),
 			DrinkingWater: c.DrinkingWater, Toilets: c.Toilets, Parking: c.Parking, Fenced: c.Fenced,
+			Covered: c.Covered, Fee: c.Fee, Access: c.Access,
 		})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"courts": out, "seeding": seeding})

@@ -41,6 +41,7 @@ SELECT
     ST_X(c.location::geometry)::float8 AS lng,
     c.address, c.hoop_count, c.indoor, c.surface, c.lighting, c.is_public,
     c.drinking_water, c.toilets, c.parking, c.fenced,
+    c.covered, c.fee, c.access,
     c.source, c.status,
     ac.active_count,
     lr.player_count AS latest_player_count,
@@ -112,6 +113,9 @@ type CourtsInBBoxRow struct {
 	Toilets           *bool     `json:"toilets"`
 	Parking           *bool     `json:"parking"`
 	Fenced            *bool     `json:"fenced"`
+	Covered           *bool     `json:"covered"`
+	Fee               *bool     `json:"fee"`
+	Access            *string   `json:"access"`
 	Source            string    `json:"source"`
 	Status            string    `json:"status"`
 	ActiveCount       int32     `json:"active_count"`
@@ -161,6 +165,9 @@ func (q *Queries) CourtsInBBox(ctx context.Context, arg CourtsInBBoxParams) ([]C
 			&i.Toilets,
 			&i.Parking,
 			&i.Fenced,
+			&i.Covered,
+			&i.Fee,
+			&i.Access,
 			&i.Source,
 			&i.Status,
 			&i.ActiveCount,
@@ -185,6 +192,7 @@ SELECT
     ST_X(c.location::geometry)::float8 AS lng,
     c.address, c.hoop_count, c.indoor, c.surface, c.lighting, c.is_public,
     c.drinking_water, c.toilets, c.parking, c.fenced,
+    c.covered, c.fee, c.access,
     c.source, c.status,
     ST_Distance(c.location, ST_SetSRID(ST_MakePoint($1::float8, $2::float8), 4326)::geography)::float8 AS distance_m,
     ac.active_count,
@@ -255,6 +263,9 @@ type CourtsNearbyRow struct {
 	Toilets           *bool     `json:"toilets"`
 	Parking           *bool     `json:"parking"`
 	Fenced            *bool     `json:"fenced"`
+	Covered           *bool     `json:"covered"`
+	Fee               *bool     `json:"fee"`
+	Access            *string   `json:"access"`
 	Source            string    `json:"source"`
 	Status            string    `json:"status"`
 	DistanceM         float64   `json:"distance_m"`
@@ -304,6 +315,9 @@ func (q *Queries) CourtsNearby(ctx context.Context, arg CourtsNearbyParams) ([]C
 			&i.Toilets,
 			&i.Parking,
 			&i.Fenced,
+			&i.Covered,
+			&i.Fee,
+			&i.Access,
 			&i.Source,
 			&i.Status,
 			&i.DistanceM,
