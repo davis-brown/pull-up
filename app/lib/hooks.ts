@@ -117,13 +117,20 @@ export function useCurrentCheckIn() {
   });
 }
 
+export interface CheckInInput {
+  party_size: number;
+  has_ball: boolean;
+  lat?: number;
+  lng?: number;
+}
+
 export function useCheckIn(courtId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (coords: { lat: number; lng: number }) =>
+    mutationFn: (input: CheckInInput) =>
       api<CheckIn>(`/courts/${courtId}/check-ins`, {
         method: "POST",
-        body: JSON.stringify(coords),
+        body: JSON.stringify(input),
       }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["courts"] });
