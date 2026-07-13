@@ -10,7 +10,7 @@ import {
   View,
 } from "react-native";
 import { SignInAction } from "@/components/SignInCta";
-import { Card, ErrorText } from "@/components/ui";
+import { Card, ErrorText, Overline } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
 import { useCourtMessages, useSendMessage, useSetBlocked } from "@/lib/hooks";
 import { useTheme } from "@/lib/theme";
@@ -46,7 +46,7 @@ export function CourtChat({ courtId }: { courtId: string }) {
 
   return (
     <Card>
-      <Text style={[t.type.label, { color: t.colors.textSecondary }]}>Court talk</Text>
+      <Overline>Court talk</Overline>
       {(messages?.length ?? 0) > 0 ? (
         <View style={{ marginTop: t.spacing.sm }}>
           {messages!.map((m) => {
@@ -58,7 +58,10 @@ export function CourtChat({ courtId }: { courtId: string }) {
                     <Text
                       style={[
                         t.type.caption,
-                        { fontWeight: "600", color: mine ? t.colors.accent : t.colors.textSecondary },
+                        {
+                          fontFamily: t.fonts.bodySemi,
+                          color: mine ? t.colors.accent : t.colors.textSecondary,
+                        },
                       ]}
                     >
                       {mine ? "You" : m.display_name}

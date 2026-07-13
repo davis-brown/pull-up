@@ -10,7 +10,7 @@ export default function TabsLayout() {
         ...navChrome(t),
         tabBarActiveTintColor: t.colors.accent,
         tabBarInactiveTintColor: t.colors.textMuted,
-        tabBarLabelStyle: { fontSize: 11, fontWeight: "600" },
+        tabBarLabelStyle: { fontFamily: t.fonts.bodySemi, fontSize: 11 },
         tabBarStyle: {
           backgroundColor: t.colors.surface,
           borderTopColor: t.colors.border,

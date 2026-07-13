@@ -2,7 +2,7 @@ import { useRouter, type Href } from "expo-router";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Avatar } from "@/components/Avatar";
 import { sessionTimeLabel } from "@/components/CourtSessions";
-import { Card } from "@/components/ui";
+import { Card, Overline } from "@/components/ui";
 import { relativeSince } from "@/lib/relative-time";
 import { useTheme } from "@/lib/theme";
 import type { FeedRun, FriendPresence } from "@/lib/types";
@@ -38,9 +38,7 @@ export function FeedHeader({
     <View>
       {friendsHere.length > 0 ? (
         <View style={{ marginBottom: t.spacing.md }}>
-          <Text style={[t.type.label, { color: t.colors.textSecondary, marginBottom: t.spacing.sm }]}>
-            Friends here now
-          </Text>
+          <Overline style={{ marginBottom: t.spacing.sm }}>Friends here now</Overline>
           {friendsHere.map((f) => (
             <Pressable
               key={`${f.id}-${f.court_id}`}
@@ -63,9 +61,7 @@ export function FeedHeader({
 
       {runs.length > 0 ? (
         <View style={{ marginBottom: t.spacing.md }}>
-          <Text style={[t.type.label, { color: t.colors.textSecondary, marginBottom: t.spacing.sm }]}>
-            Upcoming runs
-          </Text>
+          <Overline style={{ marginBottom: t.spacing.sm }}>Upcoming runs</Overline>
           {runs.map((run) => (
             <Pressable
               key={run.id}

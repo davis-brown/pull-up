@@ -3,7 +3,7 @@ import { useRouter, type Href } from "expo-router";
 import { useState } from "react";
 import { Pressable, Share, StyleSheet, Text, View } from "react-native";
 import { useSignInDetour } from "@/components/SignInCta";
-import { Button, Card, ErrorText } from "@/components/ui";
+import { Button, Card, ErrorText, Overline } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
 import { useCancelSession, useCourtSessions, useRSVP } from "@/lib/hooks";
 import { buildCourtLink, runShareMessage } from "@/lib/links";
@@ -78,7 +78,7 @@ function SessionRow({
             "you"
           ) : (
             <Text
-              style={{ fontWeight: "600" }}
+              style={{ fontFamily: t.fonts.bodySemi }}
               onPress={() => router.push(`/user/${session.created_by}` as Href)}
             >
               {session.created_by_name}
@@ -172,7 +172,7 @@ export function CourtSessions({
   return (
     <Card>
       <View style={styles.header}>
-        <Text style={[t.type.label, { color: t.colors.textSecondary }]}>Upcoming runs</Text>
+        <Overline>Upcoming runs</Overline>
         <Pressable onPress={() => router.push(`/court/${courtId}/plan`)} hitSlop={10}>
           <Ionicons name="add-circle-outline" size={22} color={t.colors.accent} />
         </Pressable>
