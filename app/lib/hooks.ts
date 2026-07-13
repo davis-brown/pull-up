@@ -29,6 +29,7 @@ import type {
   FollowRequest,
   FollowUser,
   FriendPresence,
+  MeStats,
   PhotoStatus,
   Profile,
   RunQuality,
@@ -475,6 +476,19 @@ export function useSetBlocked() {
 export function useDeleteAccount() {
   return useMutation({
     mutationFn: () => api<void>("/me", { method: "DELETE" }),
+  });
+}
+
+// /me/stats: the player card's lifetime stats, badges, and home courts.
+export function useMeStats() {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ["me", "stats"],
+    enabled: !!user,
+    queryFn: () => {
+      const tzOffsetMinutes = -new Date().getTimezoneOffset();
+      return api<MeStats>(`/me/stats?tz_offset_minutes=${tzOffsetMinutes}`);
+    },
   });
 }
 

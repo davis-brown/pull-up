@@ -71,6 +71,7 @@ const config: ExpoConfig = {
     "expo-notifications",
     "expo-task-manager",
     "expo-apple-authentication",
+    "expo-sharing",
     [
       "expo-image-picker",
       {

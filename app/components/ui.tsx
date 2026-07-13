@@ -19,7 +19,7 @@ import { useTheme } from "@/lib/theme";
 // Applies an alpha channel to a theme hex color (e.g. surface at 92%
 // opacity for the floating segmented toggle). Derives from a token value —
 // not a new hardcoded color.
-function withAlpha(hex: string, alpha: number): string {
+export function withAlpha(hex: string, alpha: number): string {
   const clean = hex.replace("#", "");
   const r = parseInt(clean.substring(0, 2), 16);
   const g = parseInt(clean.substring(2, 4), 16);

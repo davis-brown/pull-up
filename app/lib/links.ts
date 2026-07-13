@@ -19,6 +19,11 @@ export function buildCourtLink(courtId: string, sessionId?: string): string {
   return sessionId ? `${base}?run=${sessionId}` : base;
 }
 
+// Canonical share link for a player's public profile (shared player card).
+export function buildProfileLink(userId: string): string {
+  return `${baseUrl()}/user/${userId}`;
+}
+
 // Validates a router `run` query value: a single non-empty string, else null.
 export function parseRunParam(param: string | string[] | undefined): string | null {
   return typeof param === "string" && param.length > 0 ? param : null;

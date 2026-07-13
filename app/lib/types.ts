@@ -1,3 +1,5 @@
+export type Position = "guard" | "wing" | "forward" | "center";
+
 export interface User {
   id: string;
   email: string;
@@ -7,6 +9,31 @@ export interface User {
   created_at: string;
   is_admin: boolean;
   is_private: boolean;
+  jersey_number: number | null;
+  position: Position | null;
+  height_cm: number | null;
+  style_tags: string[];
+}
+
+// /me/stats (Task 6): the player card's stats, badges, and home courts.
+export interface MeStatsBadge {
+  id: string;
+  earned: boolean;
+}
+
+export interface MeStatsHomeCourt {
+  court_id: string;
+  name: string;
+  check_ins: number;
+  live_count: number;
+}
+
+export interface MeStats {
+  games: number;
+  courts: number;
+  week_streak: number;
+  badges: MeStatsBadge[];
+  home_courts: MeStatsHomeCourt[];
 }
 
 export interface LatestReport {
