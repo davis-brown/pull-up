@@ -8,12 +8,14 @@ import { CourtFilterBar } from "@/components/CourtFilterBar";
 import CourtMap from "@/components/CourtMap/CourtMap";
 import type { CourtPin } from "@/components/CourtMap/types";
 import { GetTheAppBanner } from "@/components/GetTheAppBanner";
+import { MapSheet } from "@/components/MapSheet";
 import { PermissionPrimer } from "@/components/PermissionPrimer";
 import { SegmentedToggle } from "@/components/ui";
 import type { CourtFilters } from "@/lib/court-filters";
 import { courtsDisplayState, viewportTooLarge } from "@/lib/court-seeding";
 import { locationPrimerDone, markLocationPrimerDone, onboardingSeen } from "@/lib/first-run";
-import { useCourtsInBBox, type BBox } from "@/lib/hooks";
+import { expectedAt, scrubHours } from "@/lib/forecast";
+import { useCourtsInBBox, useForecasts, type BBox } from "@/lib/hooks";
 import { FALLBACK_CENTER, tryGetPosition, type Coords } from "@/lib/location";
 import { useTheme } from "@/lib/theme";
 
@@ -27,6 +29,10 @@ export default function MapScreen() {
   const [filters, setFilters] = useState<CourtFilters>({});
   const [filterBarHeight, setFilterBarHeight] = useState(0);
   const [mode, setMode] = useState<"now" | "all">("now");
+  const [selectedCourtId, setSelectedCourtId] = useState<string | null>(null);
+  // Today's scrubbable hours, computed once per mount; hours[0] is NOW.
+  const hours = useMemo(() => scrubHours(new Date()), []);
+  const [scrubHour, setScrubHour] = useState(hours[0]);
   const { data } = useCourtsInBBox(bbox, filters);
   const courts = data?.courts ?? [];
   const seeding = data?.seeding ?? false;
@@ -63,6 +69,11 @@ export default function MapScreen() {
     }
   };
 
+  // One batched forecast fetch per visible id set (only in "now" mode) —
+  // scrubbing below reads it locally via expectedAt, never refetching.
+  const forecasts = useForecasts(mode === "now" ? courts.map((c) => c.id) : []);
+  const atNow = scrubHour === hours[0];
+
   const pins = useMemo<CourtPin[]>(
     () =>
       courts.map((c) => ({
@@ -71,13 +82,17 @@ export default function MapScreen() {
         lat: c.lat,
         lng: c.lng,
         activeCount: c.active_count,
-        // "Now" mode's activity weight — a later task swaps in scrubbed
-        // forecasts here instead of the current live count.
-        expectedCount: c.active_count,
+        // "Now" mode's activity weight: the live count at the NOW position,
+        // the scrubbed hour's forecast otherwise.
+        expectedCount:
+          mode === "now" && !atNow ? expectedAt(forecasts[c.id], scrubHour) : c.active_count,
         status: c.status,
       })),
-    [courts],
+    [courts, mode, atNow, forecasts, scrubHour],
   );
+
+  const selectedCourt =
+    mode === "now" ? (courts.find((c) => c.id === selectedCourtId) ?? null) : null;
 
   if (!center) {
     return (
@@ -106,8 +121,17 @@ export default function MapScreen() {
         courts={pins}
         initialCenter={center}
         onRegionChange={setBBox}
-        onPinPress={(id) => router.push(`/court/${id}`)}
+        onPinPress={(id) => {
+          if (mode === "now") {
+            // Tap selects (and shows the sheet); tapping the selected pin
+            // again deselects. "All courts" keeps navigate-on-tap.
+            setSelectedCourtId((cur) => (cur === id ? null : id));
+          } else {
+            router.push(`/court/${id}`);
+          }
+        }}
         mode={mode}
+        selectedCourtId={selectedCourtId}
       />
       <View
         style={[styles.filterBar, { top: insets.top }]}
@@ -152,21 +176,32 @@ export default function MapScreen() {
           </View>
         )}
       </View>
-      <Pressable
-        onPress={() => router.push("/court/new")}
-        style={({ pressed }) => [
-          styles.fab,
-          {
-            bottom: insets.bottom + 24,
-            backgroundColor: t.colors.accent,
-            borderRadius: t.radius.full,
-            opacity: pressed ? 0.85 : 1,
-          },
-        ]}
-      >
-        <Ionicons name="add" size={20} color={t.colors.onAccent} />
-        <Text style={[t.type.bodyMedium, { color: t.colors.onAccent }]}>Add court</Text>
-      </Pressable>
+      {selectedCourt == null && (
+        <Pressable
+          onPress={() => router.push("/court/new")}
+          style={({ pressed }) => [
+            styles.fab,
+            {
+              bottom: insets.bottom + 24,
+              backgroundColor: t.colors.accent,
+              borderRadius: t.radius.full,
+              opacity: pressed ? 0.85 : 1,
+            },
+          ]}
+        >
+          <Ionicons name="add" size={20} color={t.colors.onAccent} />
+          <Text style={[t.type.bodyMedium, { color: t.colors.onAccent }]}>Add court</Text>
+        </Pressable>
+      )}
+      {selectedCourt != null && (
+        <MapSheet
+          court={selectedCourt}
+          hours={hours}
+          scrubHour={scrubHour}
+          onScrub={setScrubHour}
+          forecast={forecasts[selectedCourt.id]}
+        />
+      )}
       <PermissionPrimer
         visible={showLocationPrimer}
         icon="location-outline"
