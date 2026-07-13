@@ -1,5 +1,6 @@
 import {
   buildCourtLink,
+  buildProfileLink,
   courtShareMessage,
   parseRunParam,
   runShareMessage,
@@ -32,6 +33,19 @@ describe("buildCourtLink", () => {
   it("falls back to the default web url when unset", () => {
     delete process.env.EXPO_PUBLIC_WEB_URL;
     expect(buildCourtLink("abc")).toBe("https://pullup.app/court/abc");
+  });
+});
+
+describe("buildProfileLink", () => {
+  const orig = process.env.EXPO_PUBLIC_WEB_URL;
+  afterEach(() => {
+    if (orig === undefined) delete process.env.EXPO_PUBLIC_WEB_URL;
+    else process.env.EXPO_PUBLIC_WEB_URL = orig;
+  });
+
+  it("builds a profile link from EXPO_PUBLIC_WEB_URL", () => {
+    process.env.EXPO_PUBLIC_WEB_URL = "https://pullup.app";
+    expect(buildProfileLink("u1")).toBe("https://pullup.app/user/u1");
   });
 });
 
