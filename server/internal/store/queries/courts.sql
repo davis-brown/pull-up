@@ -177,10 +177,13 @@ VALUES ($1, $2, $3)
 ON CONFLICT (court_id, user_id) DO UPDATE SET vote = EXCLUDED.vote;
 
 -- name: CourtVoteStats :one
-SELECT coalesce(sum(vote), 0)::int AS net_votes,
-       coalesce(count(*) FILTER (WHERE vote = 1), 0)::int AS upvotes
-FROM court_votes
-WHERE court_id = $1;
+-- The submitter's own vote (either direction) never counts toward their
+-- court's verification tally.
+SELECT coalesce(sum(v.vote), 0)::int AS net_votes,
+       coalesce(count(*) FILTER (WHERE v.vote = 1), 0)::int AS upvotes
+FROM court_votes v
+JOIN courts c ON c.id = v.court_id
+WHERE v.court_id = $1 AND (c.submitted_by IS NULL OR v.user_id <> c.submitted_by);
 
 -- name: CreateFlag :exec
 INSERT INTO flags (user_id, entity_type, entity_id, reason)

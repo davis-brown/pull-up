@@ -51,6 +51,19 @@ async function rawRequest(
   return fetch(`${API_URL}/api/v1${path}`, { ...options, headers });
 }
 
+// Lets auth-context know the session is truly dead (refresh failed) so it
+// can clear the signed-in user — otherwise the UI stays stuck showing a
+// signed-in state that every subsequent request will just 401 on again.
+type SessionExpiredListener = () => void;
+let sessionExpiredListeners: SessionExpiredListener[] = [];
+
+export function onSessionExpired(listener: SessionExpiredListener): () => void {
+  sessionExpiredListeners.push(listener);
+  return () => {
+    sessionExpiredListeners = sessionExpiredListeners.filter((l) => l !== listener);
+  };
+}
+
 let refreshPromise: Promise<boolean> | null = null;
 
 async function refreshSession(): Promise<boolean> {
@@ -65,6 +78,7 @@ async function refreshSession(): Promise<boolean> {
       });
       if (!res.ok) {
         await clearTokens();
+        sessionExpiredListeners.forEach((l) => l());
         return false;
       }
       await setTokens((await res.json()) as TokenResponse);
