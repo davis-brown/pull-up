@@ -34,6 +34,8 @@ type CheckIn struct {
 	CreatedAt        time.Time  `json:"created_at"`
 	ExpiresAt        time.Time  `json:"expires_at"`
 	CheckedOutAt     *time.Time `json:"checked_out_at"`
+	PartySize        int16      `json:"party_size"`
+	HasBall          bool       `json:"has_ball"`
 }
 
 type Court struct {
@@ -210,4 +212,8 @@ type User struct {
 	OauthSubject *string   `json:"oauth_subject"`
 	IsAdmin      bool      `json:"is_admin"`
 	IsPrivate    bool      `json:"is_private"`
+	JerseyNumber *int16    `json:"jersey_number"`
+	Position     *string   `json:"position"`
+	HeightCm     *int16    `json:"height_cm"`
+	StyleTags    []string  `json:"style_tags"`
 }
