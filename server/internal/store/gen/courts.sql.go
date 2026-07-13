@@ -48,7 +48,7 @@ SELECT
     coalesce(lr.created_at, 'epoch'::timestamptz) AS latest_report_at
 FROM courts c
 LEFT JOIN LATERAL (
-    SELECT count(*)::int AS active_count
+    SELECT coalesce(sum(ci.party_size), 0)::int AS active_count
     FROM check_ins ci
     WHERE ci.court_id = c.id AND ci.checked_out_at IS NULL AND ci.expires_at > now()
 ) ac ON true
@@ -190,7 +190,7 @@ SELECT
     coalesce(lr.created_at, 'epoch'::timestamptz) AS latest_report_at
 FROM courts c
 LEFT JOIN LATERAL (
-    SELECT count(*)::int AS active_count
+    SELECT coalesce(sum(ci.party_size), 0)::int AS active_count
     FROM check_ins ci
     WHERE ci.court_id = c.id AND ci.checked_out_at IS NULL AND ci.expires_at > now()
 ) ac ON true
@@ -483,7 +483,7 @@ SELECT
     vs.net_votes
 FROM courts c
 LEFT JOIN LATERAL (
-    SELECT count(*)::int AS active_count
+    SELECT coalesce(sum(ci.party_size), 0)::int AS active_count
     FROM check_ins ci
     WHERE ci.court_id = c.id AND ci.checked_out_at IS NULL AND ci.expires_at > now()
 ) ac ON true

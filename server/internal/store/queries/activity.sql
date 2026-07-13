@@ -27,7 +27,7 @@ ORDER BY ci.created_at DESC
 LIMIT 1;
 
 -- name: CountActiveCheckIns :one
-SELECT count(*)::int AS active_count
+SELECT coalesce(sum(party_size), 0)::int AS active_count
 FROM check_ins
 WHERE court_id = $1 AND checked_out_at IS NULL AND expires_at > now();
 
