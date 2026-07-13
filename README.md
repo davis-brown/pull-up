@@ -4,6 +4,78 @@ Find live pickup basketball. A map of courts showing who's playing right now —
 court locations are crowd-sourced and seeded from OpenStreetMap; live activity
 comes from geo-verified check-ins and crowd reports.
 
+## Features
+
+**Map & courts**
+- Live map (MapLibre) with a basketball-icon pin per court; pin grows and
+  turns green with a live player count once a court has active check-ins
+- Courts are crowd-sourced (community "add a court" pin-drop flow, with
+  nearby-duplicate detection) and auto-seeded from OpenStreetMap per
+  viewport in the background
+- Structured court attributes — surface (asphalt/concrete/hardwood/rubber/
+  other), hoop count, lighting, indoor/covered, fee to play, drinking water,
+  restrooms, parking, fenced, access (public/private/customers) — editable
+  by anyone signed in
+- Court photos (upload, moderated)
+- Filter courts by attributes (e.g. lit, indoor) on the Discover feed
+- Favorite courts and view your favorites list
+
+**Live activity**
+- Check-ins ("I'm here") — geo-verified server-side (within 150 m of the
+  court), auto-expire after 2 hours, no background job required
+- Crowd reports — "~8 playing, good run" style reports, visible for 2 hours
+- Passive geofencing (native only, opt-in) — monitors nearby known courts
+  and either prompts ("Looks like you're at Rucker Park — check in?") or
+  checks in automatically, per user setting, with a prominent
+  background-location disclosure screen before enabling it
+- Discover/Activity feed — nearby courts ranked by liveness then distance,
+  a "friends here" strip, and upcoming runs from people you follow
+
+**Planned runs (sessions)**
+- Schedule a run at a court (quick-pick day/time chips + optional note)
+- RSVP to a run and see who else is attending
+- Cancel a run you organized
+- Share a run via the native share sheet / a deep link
+
+**Court chat**
+- Per-court message board to coordinate with the regulars at that court
+  (moderated, same flagging path as everything else)
+
+**Social**
+- Public user profiles with a reputation score
+- Follow / unfollow, with followers/following lists
+- Private accounts — new followers require your approval (follow requests
+  screen)
+- Block / unblock other users
+- Feed of followed users' check-ins and upcoming runs
+
+**Account & sign-in**
+- Email/password auth with refresh-token rotation, plus Sign in with Google
+  and Sign in with Apple
+- Avatar upload/removal, editable display name, system/light/dark theme
+- Push notification token registration
+- Self-service account deletion — cascades your check-ins, messages,
+  photos, and favorites; courts you added stay on the map, anonymized
+
+**Sharing & deep links**
+- Universal/app links for a court (`/court/<id>`) or a specific run
+  (`?run=<sessionId>`) open the native app when installed, the web app
+  otherwise
+
+**Moderation & trust/safety**
+- Flag courts, photos, crowd reports, messages, sessions, or users
+- Admin moderation queue — resolve flags, set court/photo/message status
+- Admin management — search users, promote/demote admins (checked live on
+  every request, never baked into the JWT; demoting the last admin is
+  rejected server-side), with every promote/demote recorded in an audit log
+  visible in the moderation screen
+
+**Reliability**
+- Durable background work — OSM seeding and enrichment run off a DB-backed
+  queue (not in-memory), drained on the request warm path and by a
+  secret-guarded `/internal/drain` endpoint on a 15-minute Cloudflare Cron
+  Trigger, so backlogged imports/enrichment finish even with no traffic
+
 ## Stack
 
 - **`server/`** — Go API (chi, pgx + sqlc, goose migrations) on PostgreSQL + PostGIS
