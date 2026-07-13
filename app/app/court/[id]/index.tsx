@@ -77,7 +77,7 @@ export default function CourtDetailScreen() {
   const toggleFavorite = () => {
     if (!user) return detour();
     const turningOn = !isFavorite;
-    setFavorite.mutate(turningOn);
+    setFavorite.mutate(turningOn, { onError: (e) => setError(e.message) });
     if (turningOn && Platform.OS !== "web") {
       void (async () => {
         const perms = await Notifications.getPermissionsAsync();
@@ -114,9 +114,12 @@ export default function CourtDetailScreen() {
       checkIn.mutate(coords, {
         onError: (e) => {
           if (e instanceof ApiError && e.status === 422) {
-            const meters = Math.round(Number(e.body.distance_m ?? 0));
+            const raw = Number(e.body.distance_m);
+            const meters = Number.isFinite(raw) ? Math.round(raw) : null;
             setError(
-              `You need to be at the court to check in — you're about ${meters} m away.`,
+              meters != null
+                ? `You need to be at the court to check in — you're about ${meters} m away.`
+                : "You need to be at the court to check in.",
             );
           } else {
             setError(e.message);

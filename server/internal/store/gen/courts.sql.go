@@ -13,10 +13,11 @@ import (
 )
 
 const courtVoteStats = `-- name: CourtVoteStats :one
-SELECT coalesce(sum(vote), 0)::int AS net_votes,
-       coalesce(count(*) FILTER (WHERE vote = 1), 0)::int AS upvotes
-FROM court_votes
-WHERE court_id = $1
+SELECT coalesce(sum(v.vote), 0)::int AS net_votes,
+       coalesce(count(*) FILTER (WHERE v.vote = 1), 0)::int AS upvotes
+FROM court_votes v
+JOIN courts c ON c.id = v.court_id
+WHERE v.court_id = $1 AND (c.submitted_by IS NULL OR v.user_id <> c.submitted_by)
 `
 
 type CourtVoteStatsRow struct {
@@ -24,6 +25,8 @@ type CourtVoteStatsRow struct {
 	Upvotes  int32 `json:"upvotes"`
 }
 
+// The submitter's own vote (either direction) never counts toward their
+// court's verification tally.
 func (q *Queries) CourtVoteStats(ctx context.Context, courtID uuid.UUID) (CourtVoteStatsRow, error) {
 	row := q.db.QueryRow(ctx, courtVoteStats, courtID)
 	var i CourtVoteStatsRow

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"crypto/subtle"
 	"net/http"
 	"time"
 )
@@ -10,7 +11,9 @@ import (
 // backlog drains even with no organic traffic. Secret-guarded; not in the
 // public or requireAuth groups.
 func (s *Server) handleInternalDrain(w http.ResponseWriter, r *http.Request) {
-	if s.cfg.InternalTaskSecret == "" || r.Header.Get("X-Internal-Task") != s.cfg.InternalTaskSecret {
+	provided := r.Header.Get("X-Internal-Task")
+	if s.cfg.InternalTaskSecret == "" ||
+		subtle.ConstantTimeCompare([]byte(provided), []byte(s.cfg.InternalTaskSecret)) != 1 {
 		writeError(w, http.StatusUnauthorized, "unauthorized")
 		return
 	}
