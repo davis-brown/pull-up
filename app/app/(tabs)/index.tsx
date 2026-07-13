@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
@@ -8,16 +8,18 @@ import {
   Pressable,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import CourtMap from "@/components/CourtMap/CourtMap";
 import type { CourtPin } from "@/components/CourtMap/types";
+import { DesktopPanel } from "@/components/DesktopPanel";
 import { FilterSheet } from "@/components/FilterSheet";
 import { GetTheAppBanner } from "@/components/GetTheAppBanner";
 import { MapSheet } from "@/components/MapSheet";
 import { PermissionPrimer } from "@/components/PermissionPrimer";
-import { SegmentedToggle } from "@/components/ui";
+import { SegmentedToggle, withAlpha } from "@/components/ui";
 import type { CourtFilters } from "@/lib/court-filters";
 import { courtsDisplayState, viewportTooLarge } from "@/lib/court-seeding";
 import {
@@ -34,13 +36,23 @@ export default function MapScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const t = useTheme();
+  const { width } = useWindowDimensions();
+  // Desktop master-detail (Task 14) is web-only and gated on a wide viewport;
+  // below this, and on native, the mobile layout is used unchanged.
+  const isDesktop = Platform.OS === "web" && width >= 1024;
+  // Deep link: /court/[id] redirects to /?court=<id> on desktop web, and the
+  // panel opens straight to that court's detail.
+  const { court: courtParam } = useLocalSearchParams<{ court?: string }>();
   const [center, setCenter] = useState<Coords | null>(null);
   const [bbox, setBBox] = useState<BBox | null>(null);
   const [showLocationPrimer, setShowLocationPrimer] = useState(false);
   const [filters, setFilters] = useState<CourtFilters>({});
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   const [mode, setMode] = useState<"now" | "all">("now");
-  const [selectedCourtId, setSelectedCourtId] = useState<string | null>(null);
+  const [selectedCourtId, setSelectedCourtId] = useState<string | null>(
+    typeof courtParam === "string" ? courtParam : null,
+  );
+  const [hoveredCourtId, setHoveredCourtId] = useState<string | null>(null);
   // Today's scrubbable hours, computed once per mount; hours[0] is NOW.
   const hours = useMemo(() => scrubHours(new Date()), []);
   const [scrubHour, setScrubHour] = useState(hours[0]);
@@ -77,6 +89,15 @@ export default function MapScreen() {
       setCenter((await tryGetPosition()) ?? FALLBACK_CENTER);
     })();
   }, []);
+
+  // Keep the panel in sync if the deep-link param arrives after mount (e.g. a
+  // /court/[id] redirect while the map is already open). Depending only on the
+  // param means tapping "back" (which clears the selection) never re-triggers.
+  useEffect(() => {
+    if (isDesktop && typeof courtParam === "string" && courtParam) {
+      setSelectedCourtId(courtParam);
+    }
+  }, [courtParam, isDesktop]);
 
   const answerLocationPrimer = (allow: boolean) => {
     void markLocationPrimerDone();
@@ -121,6 +142,10 @@ export default function MapScreen() {
     (v) => v !== undefined,
   ).length;
 
+  // Desktop status chip: total loaded courts and how many are live now.
+  const totalCourts = courts.length;
+  const activeCourts = courts.filter((c) => c.active_count > 0).length;
+
   if (!center) {
     return (
       <View style={[styles.loading, { backgroundColor: t.colors.background }]}>
@@ -142,6 +167,103 @@ export default function MapScreen() {
           onAllow={() => answerLocationPrimer(true)}
           onDismiss={() => answerLocationPrimer(false)}
         />
+      </View>
+    );
+  }
+
+  if (isDesktop) {
+    return (
+      <View style={styles.desktopRow}>
+        <DesktopPanel
+          courts={courts}
+          selectedId={selectedCourtId}
+          onSelect={setSelectedCourtId}
+          onHover={setHoveredCourtId}
+        />
+        <View style={styles.mapPane}>
+          <CourtMap
+            courts={pins}
+            initialCenter={center}
+            onRegionChange={setBBox}
+            // Desktop: a pin click selects into the panel (no navigation);
+            // clicking the selected pin again clears back to the list.
+            onPinPress={(id) =>
+              setSelectedCourtId((cur) => (cur === id ? null : id))
+            }
+            mode={mode}
+            selectedCourtId={selectedCourtId}
+            hoveredCourtId={hoveredCourtId}
+          />
+          <Pressable
+            onPress={() => setFilterSheetOpen(true)}
+            style={({ pressed }) => [
+              styles.filterButton,
+              t.shadows.chrome,
+              {
+                top: 12,
+                backgroundColor: t.colors.surface,
+                borderRadius: t.radius.full,
+                opacity: pressed ? 0.85 : 1,
+              },
+            ]}
+          >
+            <Ionicons name="options" size={20} color={t.colors.textPrimary} />
+            {activeFilterCount > 0 && (
+              <View
+                style={[
+                  styles.filterBadge,
+                  { backgroundColor: t.colors.accent, borderRadius: t.radius.full },
+                ]}
+              >
+                <Text
+                  style={[
+                    t.type.caption,
+                    styles.filterBadgeText,
+                    { color: t.colors.onAccent },
+                  ]}
+                >
+                  {activeFilterCount}
+                </Text>
+              </View>
+            )}
+          </Pressable>
+          <View style={[styles.chrome, { top: 12 }]}>
+            <SegmentedToggle
+              options={[
+                { key: "now", label: "Now" },
+                { key: "all", label: "All courts" },
+              ]}
+              value={mode}
+              onChange={(key) => setMode(key as "now" | "all")}
+            />
+          </View>
+          <View
+            style={[
+              styles.statusChip,
+              t.shadows.chrome,
+              {
+                bottom: 24,
+                backgroundColor: withAlpha(t.colors.surface, 0.94),
+                borderRadius: 14,
+              },
+            ]}
+          >
+            <Text style={[t.type.caption, { color: t.colors.textSecondary }]}>
+              {totalCourts} courts
+              {" · "}
+              <Text style={{ color: t.colors.live, fontFamily: t.fonts.bodySemi }}>
+                {activeCourts} active now
+              </Text>
+            </Text>
+          </View>
+          <FilterSheet
+            visible={filterSheetOpen}
+            filters={filters}
+            courts={courts}
+            onApply={setFilters}
+            onClose={() => setFilterSheetOpen(false)}
+          />
+        </View>
       </View>
     );
   }
@@ -285,6 +407,14 @@ export default function MapScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  desktopRow: { flex: 1, flexDirection: "row" },
+  mapPane: { flex: 1 },
+  statusChip: {
+    position: "absolute",
+    left: 16,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+  },
   loading: { flex: 1, alignItems: "center", justifyContent: "center" },
   filterButton: {
     position: "absolute",
