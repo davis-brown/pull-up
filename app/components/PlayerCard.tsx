@@ -147,7 +147,14 @@ export function PlayerCard({
                     color={t.colors.accent}
                   />
                 ) : (
-                  <Text style={[styles.badgeLocked, { color: t.colors.textMuted }]}>?</Text>
+                  <Text
+                    style={[
+                      styles.badgeLocked,
+                      { fontFamily: t.fonts.bodyBold, color: t.colors.textMuted },
+                    ]}
+                  >
+                    ?
+                  </Text>
                 )}
                 <Text
                   style={[
@@ -292,7 +299,6 @@ const styles = StyleSheet.create({
   },
   badgeLocked: {
     fontSize: 22,
-    fontWeight: "700",
     opacity: 0.45,
   },
   courtRow: {
