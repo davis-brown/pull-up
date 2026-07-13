@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import {
@@ -10,9 +11,9 @@ import {
   View,
 } from "react-native";
 import { useQuery } from "@tanstack/react-query";
-import { CourtFilterBar } from "@/components/CourtFilterBar";
 import { EmptyState } from "@/components/EmptyState";
 import { FeedHeader } from "@/components/FeedHeader";
+import { FilterSheet } from "@/components/FilterSheet";
 import { QueryError } from "@/components/QueryError";
 import { Card } from "@/components/ui";
 import { api } from "@/lib/api";
@@ -36,8 +37,12 @@ export default function ActivityScreen() {
   const t = useTheme();
   const [pos, setPos] = useState<Coords | null>(null);
   const [filters, setFilters] = useState<CourtFilters>({});
+  const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   const { user } = useAuth();
   const feed = useFeed();
+  const activeFilterCount = Object.values(filters).filter(
+    (v) => v !== undefined,
+  ).length;
 
   useEffect(() => {
     void tryGetPosition().then((p) => setPos(p ?? FALLBACK_CENTER));
@@ -51,7 +56,9 @@ export default function ActivityScreen() {
       const res = await api<{ courts: CourtSummary[]; seeding?: boolean }>(
         `/courts?lat=${pos!.lat}&lng=${pos!.lng}&radius_m=10000${filtersToQuery(filters)}`,
       );
-      const sorted = [...res.courts].sort((a, b) => b.active_count - a.active_count);
+      const sorted = [...res.courts].sort(
+        (a, b) => b.active_count - a.active_count,
+      );
       return { courts: sorted, seeding: !!res.seeding };
     },
   });
@@ -73,115 +80,227 @@ export default function ActivityScreen() {
   }
 
   return (
-    <FlatList
-      data={data?.courts ?? []}
-      keyExtractor={(c) => c.id}
-      style={{ backgroundColor: t.colors.background }}
-      contentContainerStyle={{ padding: t.spacing.md }}
-      refreshControl={
-        <RefreshControl
-          refreshing={isRefetching}
-          onRefresh={() => {
-            void refetch();
-            void feed.refetch();
-          }}
-          tintColor={t.colors.accent}
-        />
-      }
-      ListHeaderComponent={
-        <>
-          <CourtFilterBar value={filters} onChange={setFilters} />
-          {user ? (
-            <FeedHeader
-              friendsHere={feed.data?.friends_here ?? []}
-              runs={feed.data?.upcoming_runs ?? []}
-              loading={feed.isLoading}
-            />
-          ) : null}
-        </>
-      }
-      ListEmptyComponent={
-        data?.seeding ? (
-          <View style={styles.seedingEmpty}>
-            <ActivityIndicator size="small" color={t.colors.accent} />
-            <Text
-              style={[t.type.body, { color: t.colors.textSecondary, marginTop: t.spacing.sm }]}
-            >
-              Finding courts in this area…
-            </Text>
-          </View>
-        ) : (
-          <EmptyState
-            icon="map-outline"
-            title="No courts within 10 km yet"
-            body="Know a court around here? Put it on the map."
-            actionTitle="Open the map"
-            onAction={() => router.push("/")}
+    <>
+      <FlatList
+        data={data?.courts ?? []}
+        keyExtractor={(c) => c.id}
+        style={{ backgroundColor: t.colors.background }}
+        contentContainerStyle={{ padding: t.spacing.md }}
+        refreshControl={
+          <RefreshControl
+            refreshing={isRefetching}
+            onRefresh={() => {
+              void refetch();
+              void feed.refetch();
+            }}
+            tintColor={t.colors.accent}
           />
-        )
-      }
-      renderItem={({ item }) => {
-        const live = item.active_count > 0;
-        const report = item.latest_report;
-        return (
-          <Pressable onPress={() => router.push(`/court/${item.id}`)}>
-            <Card>
-              <View style={styles.cardHeader}>
-                <Text
-                  style={[t.type.heading, styles.name, { color: t.colors.textPrimary }]}
-                  numberOfLines={1}
-                >
-                  {item.name}
-                </Text>
-                {live ? (
-                  <View
-                    style={[
-                      styles.liveBadge,
-                      { backgroundColor: t.colors.liveSurface, borderRadius: t.radius.full },
-                    ]}
-                  >
-                    <View style={[styles.liveDot, { backgroundColor: t.colors.live }]} />
-                    <Text style={[t.type.caption, { color: t.colors.live, fontWeight: "600" }]}>
-                      {item.active_count} here
-                    </Text>
-                  </View>
-                ) : (
-                  <Text style={[t.type.caption, { color: t.colors.textMuted }]}>Quiet</Text>
-                )}
-              </View>
+        }
+        ListHeaderComponent={
+          <>
+            <Pressable
+              onPress={() => setFilterSheetOpen(true)}
+              style={[
+                styles.filterButton,
+                {
+                  borderColor: t.colors.chipBorder,
+                  borderRadius: t.radius.full,
+                  backgroundColor: t.colors.surface,
+                },
+              ]}
+            >
+              <Ionicons
+                name="options"
+                size={16}
+                color={t.colors.textSecondary}
+              />
               <Text
-                style={[t.type.caption, { color: t.colors.textSecondary, marginTop: t.spacing.xs }]}
+                style={[t.type.bodyMedium, { color: t.colors.textSecondary }]}
               >
-                {(item.distance_m! / 1000).toFixed(1)} km away
-                {item.indoor ? "  ·  Indoor" : ""}
-                {item.hoop_count ? `  ·  ${item.hoop_count} hoops` : ""}
+                Filters
               </Text>
-              {report?.run_quality && (
-                <Text
+              {activeFilterCount > 0 && (
+                <View
                   style={[
-                    t.type.caption,
+                    styles.filterButtonBadge,
                     {
-                      color: t.colors.textPrimary,
-                      marginTop: t.spacing.sm,
-                      fontStyle: "italic",
+                      backgroundColor: t.colors.accent,
+                      borderRadius: t.radius.full,
                     },
                   ]}
                 >
-                  “{runQualityLabel[report.run_quality] ?? report.run_quality}
-                  {report.player_count != null ? `, ~${report.player_count} playing` : ""}”
-                </Text>
+                  <Text
+                    style={[
+                      t.type.caption,
+                      styles.filterButtonBadgeText,
+                      { color: t.colors.onAccent },
+                    ]}
+                  >
+                    {activeFilterCount}
+                  </Text>
+                </View>
               )}
-            </Card>
-          </Pressable>
-        );
-      }}
-    />
+            </Pressable>
+            {user ? (
+              <FeedHeader
+                friendsHere={feed.data?.friends_here ?? []}
+                runs={feed.data?.upcoming_runs ?? []}
+                loading={feed.isLoading}
+              />
+            ) : null}
+          </>
+        }
+        ListEmptyComponent={
+          data?.seeding ? (
+            <View style={styles.seedingEmpty}>
+              <ActivityIndicator size="small" color={t.colors.accent} />
+              <Text
+                style={[
+                  t.type.body,
+                  { color: t.colors.textSecondary, marginTop: t.spacing.sm },
+                ]}
+              >
+                Finding courts in this area…
+              </Text>
+            </View>
+          ) : (
+            <EmptyState
+              icon="map-outline"
+              title="No courts within 10 km yet"
+              body="Know a court around here? Put it on the map."
+              actionTitle="Open the map"
+              onAction={() => router.push("/")}
+            />
+          )
+        }
+        renderItem={({ item }) => {
+          const live = item.active_count > 0;
+          const report = item.latest_report;
+          return (
+            <Pressable onPress={() => router.push(`/court/${item.id}`)}>
+              <Card>
+                <View style={styles.cardHeader}>
+                  <Text
+                    style={[
+                      t.type.heading,
+                      styles.name,
+                      { color: t.colors.textPrimary },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {item.name}
+                  </Text>
+                  {live ? (
+                    <View
+                      style={[
+                        styles.liveBadge,
+                        {
+                          backgroundColor: t.colors.liveSurface,
+                          borderRadius: t.radius.full,
+                        },
+                      ]}
+                    >
+                      <View
+                        style={[
+                          styles.liveDot,
+                          { backgroundColor: t.colors.live },
+                        ]}
+                      />
+                      <Text
+                        style={[
+                          t.type.caption,
+                          { color: t.colors.live, fontWeight: "600" },
+                        ]}
+                      >
+                        {item.active_count} here
+                      </Text>
+                    </View>
+                  ) : (
+                    <Text
+                      style={[t.type.caption, { color: t.colors.textMuted }]}
+                    >
+                      Quiet
+                    </Text>
+                  )}
+                </View>
+                <Text
+                  style={[
+                    t.type.caption,
+                    { color: t.colors.textSecondary, marginTop: t.spacing.xs },
+                  ]}
+                >
+                  {(item.distance_m! / 1000).toFixed(1)} km away
+                  {item.indoor ? "  ·  Indoor" : ""}
+                  {item.hoop_count ? `  ·  ${item.hoop_count} hoops` : ""}
+                </Text>
+                {report?.run_quality && (
+                  <Text
+                    style={[
+                      t.type.caption,
+                      {
+                        color: t.colors.textPrimary,
+                        marginTop: t.spacing.sm,
+                        fontStyle: "italic",
+                      },
+                    ]}
+                  >
+                    “{runQualityLabel[report.run_quality] ?? report.run_quality}
+                    {report.player_count != null
+                      ? `, ~${report.player_count} playing`
+                      : ""}
+                    ”
+                  </Text>
+                )}
+              </Card>
+            </Pressable>
+          );
+        }}
+      />
+      <FilterSheet
+        visible={filterSheetOpen}
+        filters={filters}
+        courts={data?.courts ?? []}
+        onApply={setFilters}
+        onClose={() => setFilterSheetOpen(false)}
+      />
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  center: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24 },
-  seedingEmpty: { alignItems: "center", justifyContent: "center", padding: 24, paddingTop: 48 },
+  center: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 24,
+  },
+  seedingEmpty: {
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 24,
+    paddingTop: 48,
+  },
+  filterButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    gap: 6,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    marginBottom: 12,
+  },
+  filterButtonBadge: {
+    minWidth: 18,
+    height: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 4,
+  },
+  filterButtonBadgeText: {
+    fontSize: 11,
+    lineHeight: 13,
+  },
   cardHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
