@@ -36,7 +36,7 @@ export function Avatar({
         { width: size, height: size, borderRadius: radius, backgroundColor: avatarColor(seed) },
       ]}
     >
-      <Text style={{ color: "#fff", fontWeight: "700", fontSize: size * 0.4 }}>
+      <Text style={{ fontFamily: t.fonts.bodyBold, color: "#fff", fontSize: size * 0.4 }}>
         {initials(displayName)}
       </Text>
     </View>
