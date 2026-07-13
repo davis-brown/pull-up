@@ -55,8 +55,7 @@ export function MapSheet({
 
   const imIn = () => {
     if (isNow) {
-      // Route lands in a later task — wiring the link now is intentional.
-      router.push({ pathname: "/check-in", params: { courtId: court.id } } as unknown as Href);
+      router.push({ pathname: "/check-in", params: { courtId: court.id } });
       return;
     }
     if (!user) {
