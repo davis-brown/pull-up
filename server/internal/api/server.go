@@ -97,6 +97,7 @@ func (s *Server) Routes() http.Handler {
 		r.Post("/internal/drain", s.handleInternalDrain)
 
 		r.Get("/courts", s.handleListCourts)
+		r.Get("/courts/forecast", s.handleForecast) // must precede /courts/{id} or chi routes "forecast" as an id
 		r.Get("/courts/{id}", s.handleGetCourt)
 		r.Get("/courts/{id}/activity", s.handleCourtActivity)
 		r.Get("/courts/{id}/photos", s.handleListPhotos)
