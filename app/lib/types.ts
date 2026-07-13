@@ -146,6 +146,17 @@ export interface FeedRun extends CourtSession {
   court_name: string;
 }
 
+// Compact view-model for a planned run, shown by the RunRow building block
+// (court detail + Task 14 desktop panel). `capacity` is optional — when
+// absent the row shows "N in" without a cap.
+export interface SessionSummary {
+  id: string;
+  starts_at: string;
+  going_count: number;
+  capacity?: number | null;
+  host_name: string;
+}
+
 export interface FriendPresence {
   id: string;
   display_name: string;
