@@ -2,7 +2,7 @@ import { Redirect, useRouter } from "expo-router";
 import { useState } from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
 import { AuthGate } from "@/components/AuthGate";
-import { Button, Card, ErrorText, Field } from "@/components/ui";
+import { Button, Card, ErrorText, Field, Overline } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
 import {
   useAdminActions,
@@ -27,11 +27,7 @@ const entityLabels: Record<Flag["entity_type"], string> = {
 
 function SectionLabel({ children }: { children: string }) {
   const t = useTheme();
-  return (
-    <Text style={[t.type.label, { color: t.colors.textSecondary, marginBottom: t.spacing.sm }]}>
-      {children}
-    </Text>
-  );
+  return <Overline style={{ marginBottom: t.spacing.sm }}>{children}</Overline>;
 }
 
 function FlagRow({ flag }: { flag: Flag }) {
@@ -192,9 +188,9 @@ function AdminActionsCard() {
       {actions!.map((a) => (
         <View key={a.id} style={[styles.userRow, { borderTopColor: t.colors.border }]}>
           <Text style={[t.type.caption, { color: t.colors.textSecondary, flex: 1 }]}>
-            <Text style={{ fontWeight: "600" }}>{a.actor_name}</Text>{" "}
+            <Text style={{ fontFamily: t.fonts.bodySemi }}>{a.actor_name}</Text>{" "}
             {a.action === "promote" ? "promoted" : "demoted"}{" "}
-            <Text style={{ fontWeight: "600" }}>{a.target_name}</Text>
+            <Text style={{ fontFamily: t.fonts.bodySemi }}>{a.target_name}</Text>
           </Text>
           <Text style={[t.type.caption, { color: t.colors.textMuted }]}>
             {new Date(a.created_at).toLocaleDateString([], { month: "short", day: "numeric" })}
