@@ -22,6 +22,22 @@ func (q *Queries) CloseActiveCheckInsForUser(ctx context.Context, userID uuid.UU
 	return err
 }
 
+const countActiveCheckInRows = `-- name: CountActiveCheckInRows :one
+SELECT count(*)::int AS row_count
+FROM check_ins
+WHERE court_id = $1 AND checked_out_at IS NULL AND expires_at > now()
+`
+
+// Row count, not a headcount: "was this the check-in that started the run?"
+// is a question about check-in rows (1 = the court was empty before it), while
+// displayed headcounts sum party_size.
+func (q *Queries) CountActiveCheckInRows(ctx context.Context, courtID uuid.UUID) (int32, error) {
+	row := q.db.QueryRow(ctx, countActiveCheckInRows, courtID)
+	var row_count int32
+	err := row.Scan(&row_count)
+	return row_count, err
+}
+
 const countActiveCheckIns = `-- name: CountActiveCheckIns :one
 SELECT coalesce(sum(party_size), 0)::int AS active_count
 FROM check_ins
@@ -181,7 +197,7 @@ func (q *Queries) GetActiveCheckInForUser(ctx context.Context, userID uuid.UUID)
 }
 
 const listActiveCheckIns = `-- name: ListActiveCheckIns :many
-SELECT ci.id, ci.user_id, u.display_name, ci.source, ci.created_at, ci.expires_at
+SELECT ci.id, ci.user_id, u.display_name, ci.source, ci.created_at, ci.expires_at, ci.party_size, ci.has_ball
 FROM check_ins ci
 JOIN users u ON u.id = ci.user_id
 WHERE ci.court_id = $1 AND ci.checked_out_at IS NULL AND ci.expires_at > now()
@@ -195,6 +211,8 @@ type ListActiveCheckInsRow struct {
 	Source      string    `json:"source"`
 	CreatedAt   time.Time `json:"created_at"`
 	ExpiresAt   time.Time `json:"expires_at"`
+	PartySize   int16     `json:"party_size"`
+	HasBall     bool      `json:"has_ball"`
 }
 
 func (q *Queries) ListActiveCheckIns(ctx context.Context, courtID uuid.UUID) ([]ListActiveCheckInsRow, error) {
@@ -213,6 +231,8 @@ func (q *Queries) ListActiveCheckIns(ctx context.Context, courtID uuid.UUID) ([]
 			&i.Source,
 			&i.CreatedAt,
 			&i.ExpiresAt,
+			&i.PartySize,
+			&i.HasBall,
 		); err != nil {
 			return nil, err
 		}

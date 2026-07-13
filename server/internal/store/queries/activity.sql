@@ -31,8 +31,16 @@ SELECT coalesce(sum(party_size), 0)::int AS active_count
 FROM check_ins
 WHERE court_id = $1 AND checked_out_at IS NULL AND expires_at > now();
 
+-- Row count, not a headcount: "was this the check-in that started the run?"
+-- is a question about check-in rows (1 = the court was empty before it), while
+-- displayed headcounts sum party_size.
+-- name: CountActiveCheckInRows :one
+SELECT count(*)::int AS row_count
+FROM check_ins
+WHERE court_id = $1 AND checked_out_at IS NULL AND expires_at > now();
+
 -- name: ListActiveCheckIns :many
-SELECT ci.id, ci.user_id, u.display_name, ci.source, ci.created_at, ci.expires_at
+SELECT ci.id, ci.user_id, u.display_name, ci.source, ci.created_at, ci.expires_at, ci.party_size, ci.has_ball
 FROM check_ins ci
 JOIN users u ON u.id = ci.user_id
 WHERE ci.court_id = $1 AND ci.checked_out_at IS NULL AND ci.expires_at > now()

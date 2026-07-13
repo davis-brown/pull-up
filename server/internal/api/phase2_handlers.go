@@ -162,11 +162,13 @@ func (s *Server) handleRegisterPushToken(w http.ResponseWriter, r *http.Request)
 
 // notifyRunStarted alerts favoriters when a court's first active check-in
 // lands (0 → 1 transition). Fire-and-forget from the check-in handler.
+// Counts check-in ROWS, not the party-size headcount: exactly one active row
+// means this check-in started the run, whatever its party size.
 func (s *Server) notifyRunStarted(courtID, actor uuid.UUID) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	count, err := s.store.Queries.CountActiveCheckIns(ctx, courtID)
+	count, err := s.store.Queries.CountActiveCheckInRows(ctx, courtID)
 	if err != nil || count != 1 {
 		return
 	}

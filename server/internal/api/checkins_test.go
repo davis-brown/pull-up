@@ -153,6 +153,26 @@ func TestCheckInPartySize(t *testing.T) {
 	if len(bboxResult.Courts) != 1 || bboxResult.Courts[0].ActiveCount != 3 {
 		t.Fatalf("bbox result = %+v, want one court with active_count=3", bboxResult.Courts)
 	}
+
+	// The activity endpoint's active_count is the same party-size sum, and
+	// each check-in entry carries its party size.
+	resp = doJSON(t, ts, http.MethodGet, "/courts/"+court.ID+"/activity", "", nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("activity: status %d", resp.StatusCode)
+	}
+	activity := decodeJSON[struct {
+		ActiveCount int `json:"active_count"`
+		CheckIns    []struct {
+			PartySize int  `json:"party_size"`
+			HasBall   bool `json:"has_ball"`
+		} `json:"check_ins"`
+	}](t, resp)
+	if activity.ActiveCount != 3 {
+		t.Errorf("activity active_count = %d, want 3 (party-size sum, not row count)", activity.ActiveCount)
+	}
+	if len(activity.CheckIns) != 1 || activity.CheckIns[0].PartySize != 3 || !activity.CheckIns[0].HasBall {
+		t.Errorf("activity check_ins = %+v, want one entry with party_size=3 has_ball=true", activity.CheckIns)
+	}
 }
 
 func TestCreateReportAndActivity(t *testing.T) {
