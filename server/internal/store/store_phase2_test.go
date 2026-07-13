@@ -155,7 +155,7 @@ func TestCheckInHistoryOrdering(t *testing.T) {
 
 	dm := float32(1)
 	if _, err := st.Queries.CreateCheckIn(ctx, gen.CreateCheckInParams{
-		CourtID: courtA.ID, UserID: uid, Source: "manual", Lng: ruckerLng, Lat: ruckerLat, DistanceM: &dm,
+		CourtID: courtA.ID, UserID: uid, Source: "manual", Lng: ruckerLng, Lat: ruckerLat, DistanceM: &dm, PartySize: 1, HasBall: false,
 	}); err != nil {
 		t.Fatalf("check in A: %v", err)
 	}
@@ -163,7 +163,7 @@ func TestCheckInHistoryOrdering(t *testing.T) {
 		t.Fatalf("close A: %v", err)
 	}
 	if _, err := st.Queries.CreateCheckIn(ctx, gen.CreateCheckInParams{
-		CourtID: courtB.ID, UserID: uid, Source: "geofence_prompt", Lng: ruckerLng, Lat: ruckerLat + 0.05, DistanceM: &dm,
+		CourtID: courtB.ID, UserID: uid, Source: "geofence_prompt", Lng: ruckerLng, Lat: ruckerLat + 0.05, DistanceM: &dm, PartySize: 1, HasBall: false,
 	}); err != nil {
 		t.Fatalf("check in B: %v", err)
 	}
