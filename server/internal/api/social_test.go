@@ -228,6 +228,120 @@ func TestFollowerGetsRunNotification(t *testing.T) {
 	}
 }
 
+// playerCard mirrors the /me response fields added for player cards.
+type playerCard struct {
+	JerseyNumber *int     `json:"jersey_number"`
+	Position     *string  `json:"position"`
+	HeightCm     *int     `json:"height_cm"`
+	StyleTags    []string `json:"style_tags"`
+}
+
+func TestPatchMePlayerCard(t *testing.T) {
+	ts, _ := newTestServer(t)
+	u := registerUser(t, ts, "playercard@test.local", "Player Card")
+
+	// Valid partial update sets all four fields and echoes them back.
+	resp := doJSON(t, ts, http.MethodPatch, "/me", u.AccessToken, map[string]any{
+		"jersey_number": 23, "position": "guard", "height_cm": 185, "style_tags": []string{"shooter", "casual"},
+	})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("valid patch: status %d: %s", resp.StatusCode, readBody(t, resp))
+	}
+	card := decodeJSON[playerCard](t, resp)
+	if card.JerseyNumber == nil || *card.JerseyNumber != 23 {
+		t.Errorf("jersey_number = %v, want 23", card.JerseyNumber)
+	}
+	if card.Position == nil || *card.Position != "guard" {
+		t.Errorf("position = %v, want guard", card.Position)
+	}
+	if card.HeightCm == nil || *card.HeightCm != 185 {
+		t.Errorf("height_cm = %v, want 185", card.HeightCm)
+	}
+	if len(card.StyleTags) != 2 || card.StyleTags[0] != "shooter" || card.StyleTags[1] != "casual" {
+		t.Errorf("style_tags = %v, want [shooter casual]", card.StyleTags)
+	}
+
+	// GET /me reflects the same values.
+	resp = doJSON(t, ts, http.MethodGet, "/me", u.AccessToken, nil)
+	if got := decodeJSON[playerCard](t, resp); got.JerseyNumber == nil || *got.JerseyNumber != 23 {
+		t.Errorf("GET /me jersey_number = %v, want 23", got.JerseyNumber)
+	}
+
+	// A partial update touching only one field doesn't clobber the others.
+	doJSON(t, ts, http.MethodPatch, "/me", u.AccessToken, map[string]any{"height_cm": 190}).Body.Close()
+	resp = doJSON(t, ts, http.MethodGet, "/me", u.AccessToken, nil)
+	card = decodeJSON[playerCard](t, resp)
+	if card.HeightCm == nil || *card.HeightCm != 190 {
+		t.Errorf("height_cm after partial update = %v, want 190", card.HeightCm)
+	}
+	if card.JerseyNumber == nil || *card.JerseyNumber != 23 {
+		t.Errorf("jersey_number clobbered by unrelated patch: %v", card.JerseyNumber)
+	}
+	if card.Position == nil || *card.Position != "guard" {
+		t.Errorf("position clobbered by unrelated patch: %v", card.Position)
+	}
+	if len(card.StyleTags) != 2 {
+		t.Errorf("style_tags clobbered by unrelated patch: %v", card.StyleTags)
+	}
+
+	// Invalid position.
+	resp = doJSON(t, ts, http.MethodPatch, "/me", u.AccessToken, map[string]any{"position": "pivot"})
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("invalid position: status %d, want 400", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	// Jersey number out of range.
+	resp = doJSON(t, ts, http.MethodPatch, "/me", u.AccessToken, map[string]any{"jersey_number": 100})
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("jersey_number 100: status %d, want 400", resp.StatusCode)
+	}
+	resp.Body.Close()
+	resp = doJSON(t, ts, http.MethodPatch, "/me", u.AccessToken, map[string]any{"jersey_number": -1})
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("jersey_number -1: status %d, want 400", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	// Height out of range.
+	resp = doJSON(t, ts, http.MethodPatch, "/me", u.AccessToken, map[string]any{"height_cm": 119})
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("height_cm 119: status %d, want 400", resp.StatusCode)
+	}
+	resp.Body.Close()
+	resp = doJSON(t, ts, http.MethodPatch, "/me", u.AccessToken, map[string]any{"height_cm": 251})
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("height_cm 251: status %d, want 400", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	// More than 3 style tags.
+	resp = doJSON(t, ts, http.MethodPatch, "/me", u.AccessToken, map[string]any{
+		"style_tags": []string{"shooter", "casual", "defense", "rim_runner"},
+	})
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("4 style_tags: status %d, want 400", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	// Unknown style tag.
+	resp = doJSON(t, ts, http.MethodPatch, "/me", u.AccessToken, map[string]any{"style_tags": []string{"dunker"}})
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Errorf("unknown style tag: status %d, want 400", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	// The rejected patches above must not have clobbered the valid state.
+	resp = doJSON(t, ts, http.MethodGet, "/me", u.AccessToken, nil)
+	card = decodeJSON[playerCard](t, resp)
+	if card.JerseyNumber == nil || *card.JerseyNumber != 23 {
+		t.Errorf("jersey_number after rejected patches = %v, want 23", card.JerseyNumber)
+	}
+	if len(card.StyleTags) != 2 {
+		t.Errorf("style_tags after rejected patches = %v, want len 2", card.StyleTags)
+	}
+}
+
 func TestSetPrivateFlag(t *testing.T) {
 	ts, _ := newTestServer(t)
 	u := registerUser(t, ts, "private@test.local", "Private User")

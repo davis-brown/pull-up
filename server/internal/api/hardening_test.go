@@ -62,3 +62,25 @@ func TestLimitBody(t *testing.T) {
 		t.Errorf("2MB body: status %d, want 413", big.StatusCode)
 	}
 }
+
+// TestValidStyleTagAndPosition exercises the player-card validation helpers
+// directly; unlike the HTTP-level PATCH /me tests, this needs no Postgres
+// connection so it always runs.
+func TestValidStyleTagAndPosition(t *testing.T) {
+	for _, tag := range validStyleTags {
+		if !isValidStyleTag(tag) {
+			t.Errorf("isValidStyleTag(%q) = false, want true", tag)
+		}
+	}
+	if isValidStyleTag("dunker") {
+		t.Error(`isValidStyleTag("dunker") = true, want false`)
+	}
+	for _, pos := range []string{"guard", "wing", "forward", "center"} {
+		if !validPositions[pos] {
+			t.Errorf("validPositions[%q] = false, want true", pos)
+		}
+	}
+	if validPositions["pivot"] {
+		t.Error(`validPositions["pivot"] = true, want false`)
+	}
+}
