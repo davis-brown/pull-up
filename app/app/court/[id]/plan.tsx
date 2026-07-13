@@ -18,12 +18,18 @@ function hourLabel(h: number): string {
 }
 
 export default function PlanSessionScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, prefillHour } = useLocalSearchParams<{ id: string; prefillHour?: string }>();
   const router = useRouter();
   const t = useTheme();
   const createSession = useCreateSession(id ?? "");
+  // The map sheet's I'M IN passes the scrubbed hour as ?prefillHour — preset
+  // the time picker with it when it's still a valid hour later today.
+  const prefill = useMemo(() => {
+    const n = Number(prefillHour);
+    return Number.isInteger(n) && n > new Date().getHours() && n <= 23 ? n : null;
+  }, [prefillHour]);
   const [dayOffset, setDayOffset] = useState(0);
-  const [hour, setHour] = useState<number | null>(null);
+  const [hour, setHour] = useState<number | null>(prefill);
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
 
@@ -45,8 +51,14 @@ export default function PlanSessionScreen() {
     return out;
   }, []);
 
+  // A prefilled hour that isn't one of the quick picks gets its own chip.
+  const hourChoices =
+    prefill != null && !hourOptions.includes(prefill)
+      ? [...hourOptions, prefill].sort((a, b) => a - b)
+      : hourOptions;
+
   // Hours already in the past drop off for "Today".
-  const availableHours = hourOptions.filter(
+  const availableHours = hourChoices.filter(
     (h) => dayOffset > 0 || h > new Date().getHours(),
   );
 

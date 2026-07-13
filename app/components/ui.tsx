@@ -35,12 +35,15 @@ export function Button({
   disabled,
   busy,
   variant = "primary",
+  compact,
 }: {
   title: string;
   onPress: () => void;
   disabled?: boolean;
   busy?: boolean;
   variant?: ButtonVariant;
+  /** Tighter padding for inline placements (e.g. inside a card row). */
+  compact?: boolean;
 }) {
   const t = useTheme();
   const background: Record<ButtonVariant, string> = {
@@ -73,6 +76,7 @@ export function Button({
       disabled={disabled || busy}
       style={({ pressed }) => [
         styles.button,
+        compact ? styles.buttonCompact : null,
         variant === "primary" ? t.shadows.cta : null,
         {
           backgroundColor: pressed ? pressedBackground[variant] : background[variant],
@@ -269,6 +273,12 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginVertical: 6,
     minHeight: 48,
+  },
+  buttonCompact: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
+    marginVertical: 0,
+    minHeight: 40,
   },
   input: {
     borderWidth: 1,
