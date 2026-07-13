@@ -77,6 +77,9 @@ func (s *Server) handleCheckIn(w http.ResponseWriter, r *http.Request) {
 	checkIn, err := s.store.Queries.CreateCheckIn(r.Context(), gen.CreateCheckInParams{
 		CourtID: courtID, UserID: uid, Source: req.Source,
 		Lng: req.Lng, Lat: req.Lat, DistanceM: &d,
+		// Party size and ball status arrive with the redesigned check-in UI
+		// (Tasks 2-3); until then every check-in is solo, no ball.
+		PartySize: 1, HasBall: false,
 	})
 	if err != nil {
 		s.internalError(w, "create check-in", err)

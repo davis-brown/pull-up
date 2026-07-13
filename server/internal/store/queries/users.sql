@@ -4,22 +4,26 @@ VALUES ($1, $2, $3)
 RETURNING id, email, display_name, avatar_url, reputation, created_at, is_admin;
 
 -- name: GetUserByEmail :one
-SELECT id, email, password_hash, display_name, avatar_url, reputation, created_at, is_admin, is_private
+SELECT id, email, password_hash, display_name, avatar_url, reputation, created_at, is_admin, is_private, jersey_number, position, height_cm, style_tags
 FROM users
 WHERE email = $1;
 
 -- name: GetUserByID :one
-SELECT id, email, display_name, avatar_url, reputation, created_at, is_admin, is_private
+SELECT id, email, display_name, avatar_url, reputation, created_at, is_admin, is_private, jersey_number, position, height_cm, style_tags
 FROM users
 WHERE id = $1;
 
 -- name: UpdateUser :one
 UPDATE users SET
-    display_name = coalesce(sqlc.narg('display_name'), display_name),
-    avatar_url   = coalesce(sqlc.narg('avatar_url'), avatar_url),
-    is_private   = coalesce(sqlc.narg('is_private'), is_private)
+    display_name   = coalesce(sqlc.narg('display_name'), display_name),
+    avatar_url     = coalesce(sqlc.narg('avatar_url'), avatar_url),
+    is_private     = coalesce(sqlc.narg('is_private'), is_private),
+    jersey_number  = coalesce(sqlc.narg('jersey_number'), jersey_number),
+    position       = coalesce(sqlc.narg('position'), position),
+    height_cm      = coalesce(sqlc.narg('height_cm'), height_cm),
+    style_tags     = coalesce(sqlc.narg('style_tags')::text[], style_tags)
 WHERE id = sqlc.arg('id')
-RETURNING id, email, display_name, avatar_url, reputation, created_at, is_admin, is_private;
+RETURNING id, email, display_name, avatar_url, reputation, created_at, is_admin, is_private, jersey_number, position, height_cm, style_tags;
 
 -- name: ClearUserAvatar :exec
 UPDATE users SET avatar_url = NULL WHERE id = $1;

@@ -55,14 +55,15 @@ func (q *Queries) CourtCheckInDistance(ctx context.Context, arg CourtCheckInDist
 }
 
 const createCheckIn = `-- name: CreateCheckIn :one
-INSERT INTO check_ins (court_id, user_id, source, reported_location, distance_m, expires_at)
+INSERT INTO check_ins (court_id, user_id, source, reported_location, distance_m, expires_at, party_size, has_ball)
 VALUES (
     $1, $2, $3,
     ST_SetSRID(ST_MakePoint($4::float8, $5::float8), 4326)::geography,
     $6,
-    now() + interval '2 hours'
+    now() + interval '2 hours',
+    $7, $8
 )
-RETURNING id, court_id, user_id, source, created_at, expires_at
+RETURNING id, court_id, user_id, source, created_at, expires_at, party_size, has_ball
 `
 
 type CreateCheckInParams struct {
@@ -72,6 +73,8 @@ type CreateCheckInParams struct {
 	Lng       float64   `json:"lng"`
 	Lat       float64   `json:"lat"`
 	DistanceM *float32  `json:"distance_m"`
+	PartySize int16     `json:"party_size"`
+	HasBall   bool      `json:"has_ball"`
 }
 
 type CreateCheckInRow struct {
@@ -81,6 +84,8 @@ type CreateCheckInRow struct {
 	Source    string    `json:"source"`
 	CreatedAt time.Time `json:"created_at"`
 	ExpiresAt time.Time `json:"expires_at"`
+	PartySize int16     `json:"party_size"`
+	HasBall   bool      `json:"has_ball"`
 }
 
 func (q *Queries) CreateCheckIn(ctx context.Context, arg CreateCheckInParams) (CreateCheckInRow, error) {
@@ -91,6 +96,8 @@ func (q *Queries) CreateCheckIn(ctx context.Context, arg CreateCheckInParams) (C
 		arg.Lng,
 		arg.Lat,
 		arg.DistanceM,
+		arg.PartySize,
+		arg.HasBall,
 	)
 	var i CreateCheckInRow
 	err := row.Scan(
@@ -100,6 +107,8 @@ func (q *Queries) CreateCheckIn(ctx context.Context, arg CreateCheckInParams) (C
 		&i.Source,
 		&i.CreatedAt,
 		&i.ExpiresAt,
+		&i.PartySize,
+		&i.HasBall,
 	)
 	return i, err
 }

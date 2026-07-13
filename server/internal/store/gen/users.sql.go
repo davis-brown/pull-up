@@ -98,7 +98,7 @@ func (q *Queries) GetRefreshTokenByHash(ctx context.Context, tokenHash string) (
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, email, password_hash, display_name, avatar_url, reputation, created_at, is_admin, is_private
+SELECT id, email, password_hash, display_name, avatar_url, reputation, created_at, is_admin, is_private, jersey_number, position, height_cm, style_tags
 FROM users
 WHERE email = $1
 `
@@ -113,6 +113,10 @@ type GetUserByEmailRow struct {
 	CreatedAt    time.Time `json:"created_at"`
 	IsAdmin      bool      `json:"is_admin"`
 	IsPrivate    bool      `json:"is_private"`
+	JerseyNumber *int16    `json:"jersey_number"`
+	Position     *string   `json:"position"`
+	HeightCm     *int16    `json:"height_cm"`
+	StyleTags    []string  `json:"style_tags"`
 }
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (GetUserByEmailRow, error) {
@@ -128,25 +132,33 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (GetUserByEm
 		&i.CreatedAt,
 		&i.IsAdmin,
 		&i.IsPrivate,
+		&i.JerseyNumber,
+		&i.Position,
+		&i.HeightCm,
+		&i.StyleTags,
 	)
 	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, email, display_name, avatar_url, reputation, created_at, is_admin, is_private
+SELECT id, email, display_name, avatar_url, reputation, created_at, is_admin, is_private, jersey_number, position, height_cm, style_tags
 FROM users
 WHERE id = $1
 `
 
 type GetUserByIDRow struct {
-	ID          uuid.UUID `json:"id"`
-	Email       string    `json:"email"`
-	DisplayName string    `json:"display_name"`
-	AvatarUrl   *string   `json:"avatar_url"`
-	Reputation  int32     `json:"reputation"`
-	CreatedAt   time.Time `json:"created_at"`
-	IsAdmin     bool      `json:"is_admin"`
-	IsPrivate   bool      `json:"is_private"`
+	ID           uuid.UUID `json:"id"`
+	Email        string    `json:"email"`
+	DisplayName  string    `json:"display_name"`
+	AvatarUrl    *string   `json:"avatar_url"`
+	Reputation   int32     `json:"reputation"`
+	CreatedAt    time.Time `json:"created_at"`
+	IsAdmin      bool      `json:"is_admin"`
+	IsPrivate    bool      `json:"is_private"`
+	JerseyNumber *int16    `json:"jersey_number"`
+	Position     *string   `json:"position"`
+	HeightCm     *int16    `json:"height_cm"`
+	StyleTags    []string  `json:"style_tags"`
 }
 
 func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (GetUserByIDRow, error) {
@@ -161,6 +173,10 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (GetUserByIDRow
 		&i.CreatedAt,
 		&i.IsAdmin,
 		&i.IsPrivate,
+		&i.JerseyNumber,
+		&i.Position,
+		&i.HeightCm,
+		&i.StyleTags,
 	)
 	return i, err
 }
@@ -187,29 +203,41 @@ func (q *Queries) RevokeRefreshToken(ctx context.Context, id uuid.UUID) error {
 
 const updateUser = `-- name: UpdateUser :one
 UPDATE users SET
-    display_name = coalesce($1, display_name),
-    avatar_url   = coalesce($2, avatar_url),
-    is_private   = coalesce($3, is_private)
-WHERE id = $4
-RETURNING id, email, display_name, avatar_url, reputation, created_at, is_admin, is_private
+    display_name   = coalesce($1, display_name),
+    avatar_url     = coalesce($2, avatar_url),
+    is_private     = coalesce($3, is_private),
+    jersey_number  = coalesce($4, jersey_number),
+    position       = coalesce($5, position),
+    height_cm      = coalesce($6, height_cm),
+    style_tags     = coalesce($7::text[], style_tags)
+WHERE id = $8
+RETURNING id, email, display_name, avatar_url, reputation, created_at, is_admin, is_private, jersey_number, position, height_cm, style_tags
 `
 
 type UpdateUserParams struct {
-	DisplayName *string   `json:"display_name"`
-	AvatarUrl   *string   `json:"avatar_url"`
-	IsPrivate   *bool     `json:"is_private"`
-	ID          uuid.UUID `json:"id"`
+	DisplayName  *string   `json:"display_name"`
+	AvatarUrl    *string   `json:"avatar_url"`
+	IsPrivate    *bool     `json:"is_private"`
+	JerseyNumber *int16    `json:"jersey_number"`
+	Position     *string   `json:"position"`
+	HeightCm     *int16    `json:"height_cm"`
+	StyleTags    []string  `json:"style_tags"`
+	ID           uuid.UUID `json:"id"`
 }
 
 type UpdateUserRow struct {
-	ID          uuid.UUID `json:"id"`
-	Email       string    `json:"email"`
-	DisplayName string    `json:"display_name"`
-	AvatarUrl   *string   `json:"avatar_url"`
-	Reputation  int32     `json:"reputation"`
-	CreatedAt   time.Time `json:"created_at"`
-	IsAdmin     bool      `json:"is_admin"`
-	IsPrivate   bool      `json:"is_private"`
+	ID           uuid.UUID `json:"id"`
+	Email        string    `json:"email"`
+	DisplayName  string    `json:"display_name"`
+	AvatarUrl    *string   `json:"avatar_url"`
+	Reputation   int32     `json:"reputation"`
+	CreatedAt    time.Time `json:"created_at"`
+	IsAdmin      bool      `json:"is_admin"`
+	IsPrivate    bool      `json:"is_private"`
+	JerseyNumber *int16    `json:"jersey_number"`
+	Position     *string   `json:"position"`
+	HeightCm     *int16    `json:"height_cm"`
+	StyleTags    []string  `json:"style_tags"`
 }
 
 func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (UpdateUserRow, error) {
@@ -217,6 +245,10 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (UpdateU
 		arg.DisplayName,
 		arg.AvatarUrl,
 		arg.IsPrivate,
+		arg.JerseyNumber,
+		arg.Position,
+		arg.HeightCm,
+		arg.StyleTags,
 		arg.ID,
 	)
 	var i UpdateUserRow
@@ -229,6 +261,10 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (UpdateU
 		&i.CreatedAt,
 		&i.IsAdmin,
 		&i.IsPrivate,
+		&i.JerseyNumber,
+		&i.Position,
+		&i.HeightCm,
+		&i.StyleTags,
 	)
 	return i, err
 }

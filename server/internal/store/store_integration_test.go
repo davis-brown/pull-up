@@ -178,7 +178,7 @@ func TestCheckInFlow(t *testing.T) {
 	// Check in to A, then to B: only B's must remain active (one per user).
 	dm := float32(1)
 	if _, err := st.Queries.CreateCheckIn(ctx, gen.CreateCheckInParams{
-		CourtID: court.ID, UserID: uid, Source: "manual", Lng: ruckerLng, Lat: ruckerLat, DistanceM: &dm,
+		CourtID: court.ID, UserID: uid, Source: "manual", Lng: ruckerLng, Lat: ruckerLat, DistanceM: &dm, PartySize: 1, HasBall: false,
 	}); err != nil {
 		t.Fatalf("check in A: %v", err)
 	}
@@ -186,7 +186,7 @@ func TestCheckInFlow(t *testing.T) {
 		t.Fatalf("close: %v", err)
 	}
 	if _, err := st.Queries.CreateCheckIn(ctx, gen.CreateCheckInParams{
-		CourtID: courtB.ID, UserID: uid, Source: "geofence_auto", Lng: ruckerLng, Lat: ruckerLat + 0.05, DistanceM: &dm,
+		CourtID: courtB.ID, UserID: uid, Source: "geofence_auto", Lng: ruckerLng, Lat: ruckerLat + 0.05, DistanceM: &dm, PartySize: 1, HasBall: false,
 	}); err != nil {
 		t.Fatalf("check in B: %v", err)
 	}
@@ -223,7 +223,7 @@ func TestCheckInExpiryFiltering(t *testing.T) {
 
 	dm := float32(1)
 	row, err := st.Queries.CreateCheckIn(ctx, gen.CreateCheckInParams{
-		CourtID: court.ID, UserID: uid, Source: "manual", Lng: ruckerLng, Lat: ruckerLat, DistanceM: &dm,
+		CourtID: court.ID, UserID: uid, Source: "manual", Lng: ruckerLng, Lat: ruckerLat, DistanceM: &dm, PartySize: 1, HasBall: false,
 	})
 	if err != nil {
 		t.Fatalf("check in: %v", err)
@@ -510,7 +510,7 @@ func TestPhase3ReputationWeighting(t *testing.T) {
 	// Check-in reputation guard: first check-in has no prior, second does.
 	d := float32(5)
 	ci1, err := st.Queries.CreateCheckIn(ctx, gen.CreateCheckInParams{
-		CourtID: court.ID, UserID: rookie, Source: "manual", Lng: ruckerLng, Lat: ruckerLat, DistanceM: &d,
+		CourtID: court.ID, UserID: rookie, Source: "manual", Lng: ruckerLng, Lat: ruckerLat, DistanceM: &d, PartySize: 1, HasBall: false,
 	})
 	if err != nil {
 		t.Fatalf("check-in: %v", err)
@@ -522,7 +522,7 @@ func TestPhase3ReputationWeighting(t *testing.T) {
 		t.Fatalf("first check-in: recent=%v err=%v, want false", recent, err)
 	}
 	ci2, err := st.Queries.CreateCheckIn(ctx, gen.CreateCheckInParams{
-		CourtID: court.ID, UserID: rookie, Source: "manual", Lng: ruckerLng, Lat: ruckerLat, DistanceM: &d,
+		CourtID: court.ID, UserID: rookie, Source: "manual", Lng: ruckerLng, Lat: ruckerLat, DistanceM: &d, PartySize: 1, HasBall: false,
 	})
 	if err != nil {
 		t.Fatalf("second check-in: %v", err)
@@ -708,7 +708,7 @@ func TestFeedFriendsHere(t *testing.T) {
 	dm := float32(1)
 	for _, uid := range []uuid.UUID{friend, stranger} {
 		if _, err := st.Queries.CreateCheckIn(ctx, gen.CreateCheckInParams{
-			CourtID: court.ID, UserID: uid, Source: "manual", Lng: ruckerLng, Lat: ruckerLat, DistanceM: &dm,
+			CourtID: court.ID, UserID: uid, Source: "manual", Lng: ruckerLng, Lat: ruckerLat, DistanceM: &dm, PartySize: 1, HasBall: false,
 		}); err != nil {
 			t.Fatalf("check in %v: %v", uid, err)
 		}

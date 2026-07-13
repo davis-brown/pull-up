@@ -8,14 +8,15 @@ UPDATE check_ins SET checked_out_at = now()
 WHERE user_id = $1 AND checked_out_at IS NULL AND expires_at > now();
 
 -- name: CreateCheckIn :one
-INSERT INTO check_ins (court_id, user_id, source, reported_location, distance_m, expires_at)
+INSERT INTO check_ins (court_id, user_id, source, reported_location, distance_m, expires_at, party_size, has_ball)
 VALUES (
     sqlc.arg(court_id), sqlc.arg(user_id), sqlc.arg(source),
     ST_SetSRID(ST_MakePoint(sqlc.arg(lng)::float8, sqlc.arg(lat)::float8), 4326)::geography,
     sqlc.arg(distance_m),
-    now() + interval '2 hours'
+    now() + interval '2 hours',
+    sqlc.arg(party_size), sqlc.arg(has_ball)
 )
-RETURNING id, court_id, user_id, source, created_at, expires_at;
+RETURNING id, court_id, user_id, source, created_at, expires_at, party_size, has_ball;
 
 -- name: GetActiveCheckInForUser :one
 SELECT ci.id, ci.court_id, c.name AS court_name, ci.source, ci.created_at, ci.expires_at
