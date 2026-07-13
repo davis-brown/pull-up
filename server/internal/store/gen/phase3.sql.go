@@ -49,11 +49,12 @@ SELECT
     coalesce(sum(v.vote * w.weight), 0)::int AS net_weighted,
     coalesce(sum(w.weight) FILTER (WHERE v.vote = 1), 0)::int AS weighted_upvotes
 FROM court_votes v
+JOIN courts c ON c.id = v.court_id
 JOIN LATERAL (
     SELECT 1 + LEAST(u.reputation, 100) / 50 AS weight
     FROM users u WHERE u.id = v.user_id
 ) w ON true
-WHERE v.court_id = $1
+WHERE v.court_id = $1 AND (c.submitted_by IS NULL OR v.user_id <> c.submitted_by)
 `
 
 type CourtVoteStatsWeightedRow struct {
@@ -63,7 +64,8 @@ type CourtVoteStatsWeightedRow struct {
 
 // Reputation-weighted vote tally. Weight tiers: <50 rep = 1, 50-99 = 2,
 // 100+ = 3 — experienced players' votes count more, capped so no one
-// becomes a one-person verdict beyond 3x.
+// becomes a one-person verdict beyond 3x. The submitter's own vote (either
+// direction) never counts toward their court's verification tally.
 func (q *Queries) CourtVoteStatsWeighted(ctx context.Context, courtID uuid.UUID) (CourtVoteStatsWeightedRow, error) {
 	row := q.db.QueryRow(ctx, courtVoteStatsWeighted, courtID)
 	var i CourtVoteStatsWeightedRow
