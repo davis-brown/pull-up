@@ -35,6 +35,9 @@ export interface CourtMapProps {
    * "all" gives every court the equal-weight marker look. */
   mode: "now" | "all";
   selectedCourtId?: string | null;
+  /** Desktop web only (Task 14): the court hovered in the side panel, raised
+   * to a 36px pin even when quiet. Ignored by the native map. */
+  hoveredCourtId?: string | null;
   style?: object;
 }
 

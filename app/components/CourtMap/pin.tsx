@@ -19,11 +19,15 @@ export function CourtPinMarker({
   pin,
   mode,
   selected = false,
+  hovered = false,
   onPress,
 }: {
   pin: CourtPin;
   mode: "now" | "all";
   selected?: boolean;
+  /** Desktop web (Task 14): the panel is hovering this court — raise a quiet
+   * dot to a full 36px pin so it stands out on the map. */
+  hovered?: boolean;
   onPress?: () => void;
 }) {
   const t = useTheme();
@@ -36,6 +40,29 @@ export function CourtPinMarker({
   const variant = pinVariant(count, selected);
 
   if (variant.kind === "dot") {
+    if (hovered) {
+      // A quiet, hovered court: a 36px accent pin with a basketball glyph
+      // (there's no player count to show).
+      return (
+        <Pressable onPress={onPress} hitSlop={8}>
+          <View
+            style={[
+              styles.countPin,
+              t.shadows.pin,
+              {
+                width: 36,
+                height: 36,
+                borderRadius: 18,
+                backgroundColor: t.colors.accent,
+                borderColor: t.colors.surface,
+              },
+            ]}
+          >
+            <Ionicons name="basketball" size={18} color={t.colors.onAccent} />
+          </View>
+        </Pressable>
+      );
+    }
     return (
       <Pressable onPress={onPress} hitSlop={12}>
         <View style={[styles.quietDot, { backgroundColor: t.colors.quietDot }]} />

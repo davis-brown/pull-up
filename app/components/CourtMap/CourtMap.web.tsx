@@ -15,6 +15,7 @@ export default function CourtMap({
   showUserLocation = true,
   mode,
   selectedCourtId,
+  hoveredCourtId,
   style,
 }: CourtMapProps) {
   const t = useTheme();
@@ -50,6 +51,7 @@ export default function CourtMap({
             pin={pin}
             mode={mode}
             selected={pin.id === selectedCourtId}
+            hovered={pin.id === hoveredCourtId}
             onPress={() => onPinPress?.(pin.id)}
           />
         </Marker>
