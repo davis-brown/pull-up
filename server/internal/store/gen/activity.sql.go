@@ -23,7 +23,7 @@ func (q *Queries) CloseActiveCheckInsForUser(ctx context.Context, userID uuid.UU
 }
 
 const countActiveCheckIns = `-- name: CountActiveCheckIns :one
-SELECT count(*)::int AS active_count
+SELECT coalesce(sum(party_size), 0)::int AS active_count
 FROM check_ins
 WHERE court_id = $1 AND checked_out_at IS NULL AND expires_at > now()
 `

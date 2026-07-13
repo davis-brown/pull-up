@@ -108,6 +108,53 @@ func TestCheckInOneActivePerUserAndHistory(t *testing.T) {
 	}
 }
 
+func TestCheckInPartySize(t *testing.T) {
+	ts, _ := newTestServer(t)
+	u := registerUser(t, ts, "partysize@test.local", "PartySize")
+	court := createTestCourt(t, ts, u.AccessToken, "Party Court", ruckerLat, ruckerLng)
+
+	// Valid party size + ball status: 201, echoed back in the response.
+	resp := doJSON(t, ts, http.MethodPost, "/courts/"+court.ID+"/check-ins", u.AccessToken, map[string]any{
+		"lat": ruckerLat, "lng": ruckerLng, "party_size": 3, "has_ball": true,
+	})
+	if resp.StatusCode != http.StatusCreated {
+		defer resp.Body.Close()
+		t.Fatalf("party-size check-in: status %d: %s", resp.StatusCode, readBody(t, resp))
+	}
+	checkIn := decodeJSON[struct {
+		PartySize int  `json:"party_size"`
+		HasBall   bool `json:"has_ball"`
+	}](t, resp)
+	if checkIn.PartySize != 3 || !checkIn.HasBall {
+		t.Fatalf("check-in response = %+v, want party_size=3 has_ball=true", checkIn)
+	}
+
+	// Out-of-range party size (max 4): 400.
+	resp = doJSON(t, ts, http.MethodPost, "/courts/"+court.ID+"/check-ins", u.AccessToken, map[string]any{
+		"lat": ruckerLat, "lng": ruckerLng, "party_size": 9,
+	})
+	if resp.StatusCode != http.StatusBadRequest {
+		defer resp.Body.Close()
+		t.Fatalf("oversized party: status %d, want 400: %s", resp.StatusCode, readBody(t, resp))
+	}
+	resp.Body.Close()
+
+	// The court's live count is the sum of party sizes, not a row count.
+	resp = doJSON(t, ts, http.MethodGet, "/courts?bbox=-73.946,40.819,-73.926,40.839", "", nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("bbox list: status %d", resp.StatusCode)
+	}
+	bboxResult := decodeJSON[struct {
+		Courts []struct {
+			ID          string `json:"id"`
+			ActiveCount int    `json:"active_count"`
+		} `json:"courts"`
+	}](t, resp)
+	if len(bboxResult.Courts) != 1 || bboxResult.Courts[0].ActiveCount != 3 {
+		t.Fatalf("bbox result = %+v, want one court with active_count=3", bboxResult.Courts)
+	}
+}
+
 func TestCreateReportAndActivity(t *testing.T) {
 	ts, _ := newTestServer(t)
 	u := registerUser(t, ts, "reporter2@test.local", "Reporter2")

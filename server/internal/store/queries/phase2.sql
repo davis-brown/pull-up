@@ -39,7 +39,7 @@ SELECT c.id, c.name,
 FROM favorites f
 JOIN courts c ON c.id = f.court_id
 LEFT JOIN LATERAL (
-    SELECT count(*)::int AS active_count
+    SELECT coalesce(sum(ci.party_size), 0)::int AS active_count
     FROM check_ins ci
     WHERE ci.court_id = c.id AND ci.checked_out_at IS NULL AND ci.expires_at > now()
 ) ac ON true
