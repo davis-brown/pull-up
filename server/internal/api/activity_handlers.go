@@ -20,9 +20,11 @@ const checkInRadiusM = 150.0
 var validCheckInSources = map[string]bool{"manual": true, "geofence_prompt": true, "geofence_auto": true}
 
 type checkInRequest struct {
-	Lat    float64 `json:"lat"`
-	Lng    float64 `json:"lng"`
-	Source string  `json:"source,omitempty"`
+	Lat       float64 `json:"lat"`
+	Lng       float64 `json:"lng"`
+	Source    string  `json:"source,omitempty"`
+	PartySize *int    `json:"party_size,omitempty"`
+	HasBall   bool    `json:"has_ball,omitempty"`
 }
 
 func (s *Server) handleCheckIn(w http.ResponseWriter, r *http.Request) {
@@ -44,6 +46,14 @@ func (s *Server) handleCheckIn(w http.ResponseWriter, r *http.Request) {
 	}
 	if !validCheckInSources[req.Source] {
 		writeError(w, http.StatusBadRequest, "source must be manual, geofence_prompt, or geofence_auto")
+		return
+	}
+	partySize := 1
+	if req.PartySize != nil {
+		partySize = *req.PartySize
+	}
+	if partySize < 1 || partySize > 4 {
+		writeError(w, http.StatusBadRequest, "party_size must be between 1 and 4")
 		return
 	}
 
@@ -77,9 +87,7 @@ func (s *Server) handleCheckIn(w http.ResponseWriter, r *http.Request) {
 	checkIn, err := s.store.Queries.CreateCheckIn(r.Context(), gen.CreateCheckInParams{
 		CourtID: courtID, UserID: uid, Source: req.Source,
 		Lng: req.Lng, Lat: req.Lat, DistanceM: &d,
-		// Party size and ball status arrive with the redesigned check-in UI
-		// (Tasks 2-3); until then every check-in is solo, no ball.
-		PartySize: 1, HasBall: false,
+		PartySize: int16(partySize), HasBall: req.HasBall,
 	})
 	if err != nil {
 		s.internalError(w, "create check-in", err)
