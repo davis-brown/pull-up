@@ -1,10 +1,11 @@
 // pull-up design system.
 //
-// Single source of truth for color, spacing, radius, and type. Components
-// never hardcode values — they read tokens from useTheme(), which resolves
-// the light or dark palette from the OS setting automatically.
+// Single source of truth for color, spacing, radius, type, shadows, and
+// fonts. Components never hardcode values — they read tokens from
+// useTheme(), which resolves the light or dark palette from the OS setting
+// automatically.
 //
-// Palette rationale: warm neutrals (asphalt & sand, not blue-grays) with a
+// Palette rationale: warm paper/ink neutrals (not blue-grays) with a
 // burnt-orange brand accent; green is reserved exclusively for live activity.
 import {
   createContext,
@@ -26,7 +27,12 @@ export interface ThemeColors {
   textSecondary: string;
   textMuted: string;
   accent: string;
+  accentPressed: string;
+  accentSurface: string;
+  accentSoft: string;
   onAccent: string;
+  chipBorder: string;
+  quietDot: string;
   live: string;
   liveSurface: string;
   warning: string;
@@ -37,36 +43,46 @@ export interface ThemeColors {
 }
 
 const light: ThemeColors = {
-  background: "#F7F5F2",
+  background: "#FBFAF6",
   surface: "#FFFFFF",
-  surfaceMuted: "#EFECE7",
-  border: "#E3DFD8",
-  textPrimary: "#1D1A17",
-  textSecondary: "#6E675E",
-  textMuted: "#9B948A",
-  accent: "#DE540A",
+  surfaceMuted: "#F0EDE2",
+  border: "#EDEAE0",
+  textPrimary: "#16150F",
+  textSecondary: "#807D6E",
+  textMuted: "#B4B0A0",
+  accent: "#FF5A1F",
+  accentPressed: "#E04A12",
+  accentSurface: "#FFF1EA",
+  accentSoft: "#FFB08C",
   onAccent: "#FFFFFF",
-  live: "#177A3D",
-  liveSurface: "#E1F4E7",
+  chipBorder: "#DDD9CC",
+  quietDot: "#C9C5B4",
+  live: "#12A150",
+  liveSurface: "#E4F4EA",
   warning: "#8A6404",
   warningSurface: "#FBF3DA",
   warningBorder: "#E8D08C",
   danger: "#B3261E",
-  overlay: "rgba(29, 26, 23, 0.45)",
+  overlay: "rgba(22, 21, 15, 0.45)",
 };
 
 const dark: ThemeColors = {
-  background: "#141210",
-  surface: "#1F1C19",
-  surfaceMuted: "#2A2622",
-  border: "#3A342E",
-  textPrimary: "#F1EDE7",
-  textSecondary: "#A9A197",
-  textMuted: "#756D62",
-  accent: "#FF7A33",
-  onAccent: "#221004",
-  live: "#53C97C",
-  liveSurface: "#1B3323",
+  background: "#16150F",
+  surface: "#26251E",
+  surfaceMuted: "#2E2D25",
+  border: "#3B3931",
+  textPrimary: "#F4F2E9",
+  textSecondary: "#D8D5C8",
+  textMuted: "#8B8878",
+  accent: "#FF5A1F",
+  accentPressed: "#E04A12",
+  accentSurface: "#3A2117",
+  accentSoft: "#B45A33",
+  onAccent: "#FFFFFF",
+  chipBorder: "#3B3931",
+  quietDot: "#55524A",
+  live: "#12A150",
+  liveSurface: "#1E3327",
   warning: "#E3B341",
   warningSurface: "#2E2817",
   warningBorder: "#57491F",
@@ -87,22 +103,114 @@ export const radius = {
   sm: 8,
   md: 12,
   lg: 16,
+  xl: 24,
   full: 999,
 } as const;
 
-// Type scale. Weights: regular 400, medium 500, semibold 600, bold 700.
+// Loaded font family names (see app/_layout.tsx for useFonts wiring). Body
+// copy is Barlow; display/condensed headings and buttons are Barlow
+// Condensed, always uppercase.
+export const fonts = {
+  body: "Barlow_400Regular",
+  bodyMedium: "Barlow_500Medium",
+  bodySemi: "Barlow_600SemiBold",
+  bodyBold: "Barlow_700Bold",
+  condensed: "BarlowCondensed_700Bold",
+  condensedHeavy: "BarlowCondensed_800ExtraBold",
+} as const;
+
+// Type scale. Entries with an explicit fontFamily omit fontWeight — RN
+// Android breaks glyph shaping when a weight is paired with a named family.
 export const type = {
-  display: { fontSize: 30, fontWeight: "700" as const, letterSpacing: -0.5 },
-  title: { fontSize: 21, fontWeight: "700" as const, letterSpacing: -0.3 },
-  heading: { fontSize: 17, fontWeight: "600" as const },
-  body: { fontSize: 15, fontWeight: "400" as const },
-  bodyMedium: { fontSize: 15, fontWeight: "500" as const },
-  caption: { fontSize: 13, fontWeight: "400" as const },
-  label: {
-    fontSize: 12,
-    fontWeight: "600" as const,
-    letterSpacing: 0.6,
+  hero: {
+    fontFamily: fonts.condensedHeavy,
+    fontSize: 44,
     textTransform: "uppercase" as const,
+    letterSpacing: 0.9,
+    lineHeight: 42,
+  },
+  display: {
+    fontFamily: fonts.condensedHeavy,
+    fontSize: 30,
+    textTransform: "uppercase" as const,
+    letterSpacing: 0.6,
+  },
+  displayCondensed: {
+    fontFamily: fonts.condensedHeavy,
+    fontSize: 24,
+    textTransform: "uppercase" as const,
+    letterSpacing: 0.5,
+  },
+  title: {
+    fontFamily: fonts.bodySemi,
+    fontSize: 19,
+  },
+  heading: {
+    fontFamily: fonts.bodySemi,
+    fontSize: 16,
+  },
+  body: {
+    fontFamily: fonts.body,
+    fontSize: 16,
+  },
+  bodyMedium: {
+    fontFamily: fonts.bodyMedium,
+    fontSize: 16,
+  },
+  caption: {
+    fontFamily: fonts.body,
+    fontSize: 13,
+  },
+  button: {
+    fontFamily: fonts.condensed,
+    fontSize: 17,
+    textTransform: "uppercase" as const,
+    letterSpacing: 1.4,
+  },
+  overline: {
+    fontFamily: fonts.bodySemi,
+    fontSize: 11,
+    textTransform: "uppercase" as const,
+    letterSpacing: 1.2,
+  },
+  label: {
+    fontFamily: fonts.bodySemi,
+    fontSize: 11,
+    textTransform: "uppercase" as const,
+    letterSpacing: 1.2,
+  },
+} as const;
+
+// Shadow presets. shadowColor/shadowOpacity/shadowRadius/shadowOffset are
+// consumed on iOS; elevation is the Android equivalent.
+export const shadows = {
+  cta: {
+    shadowColor: "#FF5A1F",
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 6,
+  },
+  pin: {
+    shadowColor: "#FF5A1F",
+    shadowOpacity: 0.45,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 6,
+  },
+  sheet: {
+    shadowColor: "#16150F",
+    shadowOpacity: 0.14,
+    shadowRadius: 30,
+    shadowOffset: { width: 0, height: -8 },
+    elevation: 12,
+  },
+  chrome: {
+    shadowColor: "#16150F",
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 5,
   },
 } as const;
 
@@ -112,6 +220,8 @@ export interface Theme {
   spacing: typeof spacing;
   radius: typeof radius;
   type: typeof type;
+  shadows: typeof shadows;
+  fonts: typeof fonts;
 }
 
 // User-selectable appearance: follow the OS or force light/dark. Persisted
@@ -167,6 +277,8 @@ export function useTheme(): Theme {
     spacing,
     radius,
     type,
+    shadows,
+    fonts,
   };
 }
 
@@ -176,7 +288,7 @@ export function navChrome(t: Theme) {
   return {
     headerStyle: { backgroundColor: t.colors.surface },
     headerTintColor: t.colors.textPrimary,
-    headerTitleStyle: { fontWeight: "600" as const, color: t.colors.textPrimary },
+    headerTitleStyle: { fontFamily: t.fonts.bodySemi, color: t.colors.textPrimary },
     headerShadowVisible: false,
     contentStyle: { backgroundColor: t.colors.background },
   };

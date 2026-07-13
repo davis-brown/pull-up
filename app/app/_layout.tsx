@@ -1,8 +1,17 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import {
+  Barlow_400Regular,
+  Barlow_500Medium,
+  Barlow_600SemiBold,
+  Barlow_700Bold,
+} from "@expo-google-fonts/barlow";
+import { BarlowCondensed_700Bold, BarlowCondensed_800ExtraBold } from "@expo-google-fonts/barlow-condensed";
+import { useFonts } from "expo-font";
 import * as Notifications from "expo-notifications";
 import { Stack, useRouter } from "expo-router";
+import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
-import { useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as Sentry from "@sentry/react-native";
 import { AuthProvider } from "@/lib/auth-context";
 // Side-effect import: registers the geofence background task at startup so
@@ -28,6 +37,41 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+// Hold the splash screen until Barlow is loaded so the type scale never
+// flashes system fonts — but never hang forever: fall back to system fonts
+// after 3s if the font fetch stalls (slow network, offline first launch).
+void SplashScreen.preventAutoHideAsync().catch(() => {});
+const FONT_LOAD_TIMEOUT_MS = 3000;
+
+function useAppReady(): boolean {
+  const [fontsLoaded, fontError] = useFonts({
+    Barlow_400Regular,
+    Barlow_500Medium,
+    Barlow_600SemiBold,
+    Barlow_700Bold,
+    BarlowCondensed_700Bold,
+    BarlowCondensed_800ExtraBold,
+  });
+  const [timedOut, setTimedOut] = useState(false);
+  const hidden = useRef(false);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setTimedOut(true), FONT_LOAD_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, []);
+
+  const ready = fontsLoaded || !!fontError || timedOut;
+
+  useEffect(() => {
+    if (ready && !hidden.current) {
+      hidden.current = true;
+      void SplashScreen.hideAsync().catch(() => {});
+    }
+  }, [ready]);
+
+  return ready;
+}
 
 // Split from RootLayout so useTheme() sees the preference provider.
 function ThemedApp() {
@@ -97,6 +141,11 @@ function ThemedApp() {
 }
 
 function RootLayout() {
+  const ready = useAppReady();
+  // Native splash screen is still showing until hideAsync() fires above, so
+  // rendering nothing here just avoids a flash of unstyled content.
+  if (!ready) return null;
+
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
