@@ -9,6 +9,7 @@ import CourtMap from "@/components/CourtMap/CourtMap";
 import type { CourtPin } from "@/components/CourtMap/types";
 import { GetTheAppBanner } from "@/components/GetTheAppBanner";
 import { PermissionPrimer } from "@/components/PermissionPrimer";
+import { SegmentedToggle } from "@/components/ui";
 import type { CourtFilters } from "@/lib/court-filters";
 import { courtsDisplayState, viewportTooLarge } from "@/lib/court-seeding";
 import { locationPrimerDone, markLocationPrimerDone, onboardingSeen } from "@/lib/first-run";
@@ -25,6 +26,7 @@ export default function MapScreen() {
   const [showLocationPrimer, setShowLocationPrimer] = useState(false);
   const [filters, setFilters] = useState<CourtFilters>({});
   const [filterBarHeight, setFilterBarHeight] = useState(0);
+  const [mode, setMode] = useState<"now" | "all">("now");
   const { data } = useCourtsInBBox(bbox, filters);
   const courts = data?.courts ?? [];
   const seeding = data?.seeding ?? false;
@@ -69,6 +71,9 @@ export default function MapScreen() {
         lat: c.lat,
         lng: c.lng,
         activeCount: c.active_count,
+        // "Now" mode's activity weight — a later task swaps in scrubbed
+        // forecasts here instead of the current live count.
+        expectedCount: c.active_count,
         status: c.status,
       })),
     [courts],
@@ -102,6 +107,7 @@ export default function MapScreen() {
         initialCenter={center}
         onRegionChange={setBBox}
         onPinPress={(id) => router.push(`/court/${id}`)}
+        mode={mode}
       />
       <View
         style={[styles.filterBar, { top: insets.top }]}
@@ -109,34 +115,43 @@ export default function MapScreen() {
       >
         <CourtFilterBar value={filters} onChange={setFilters} />
       </View>
-      {bbox != null && state !== "has-courts" && (
-        <View
-          style={[
-            styles.banner,
-            {
-              top: insets.top + filterBarHeight + 12,
-              backgroundColor: t.colors.surface,
-              borderColor: t.colors.border,
-              borderRadius: t.radius.full,
-            },
+      <View style={[styles.chrome, { top: insets.top + filterBarHeight + 12 }]}>
+        <SegmentedToggle
+          options={[
+            { key: "now", label: "Now" },
+            { key: "all", label: "All courts" },
           ]}
-        >
-          {state === "seeding" && (
-            <ActivityIndicator
-              size="small"
-              color={t.colors.accent}
-              style={{ marginRight: t.spacing.xs }}
-            />
-          )}
-          <Text style={[t.type.caption, { color: t.colors.textSecondary }]}>
-            {state === "seeding"
-              ? "Finding courts in this area…"
-              : state === "zoomed-out"
-                ? "Zoom in to load courts for this area"
-                : "No courts here yet — add the first one"}
-          </Text>
-        </View>
-      )}
+          value={mode}
+          onChange={(key) => setMode(key as "now" | "all")}
+        />
+        {bbox != null && state !== "has-courts" && (
+          <View
+            style={[
+              styles.banner,
+              {
+                backgroundColor: t.colors.surface,
+                borderColor: t.colors.border,
+                borderRadius: t.radius.full,
+              },
+            ]}
+          >
+            {state === "seeding" && (
+              <ActivityIndicator
+                size="small"
+                color={t.colors.accent}
+                style={{ marginRight: t.spacing.xs }}
+              />
+            )}
+            <Text style={[t.type.caption, { color: t.colors.textSecondary }]}>
+              {state === "seeding"
+                ? "Finding courts in this area…"
+                : state === "zoomed-out"
+                  ? "Zoom in to load courts for this area"
+                  : "No courts here yet — add the first one"}
+            </Text>
+          </View>
+        )}
+      </View>
       <Pressable
         onPress={() => router.push("/court/new")}
         style={({ pressed }) => [
@@ -173,6 +188,12 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
   },
+  chrome: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    alignItems: "center",
+  },
   fab: {
     position: "absolute",
     right: 16,
@@ -188,8 +209,7 @@ const styles = StyleSheet.create({
     elevation: 5,
   },
   banner: {
-    position: "absolute",
-    alignSelf: "center",
+    marginTop: 12,
     flexDirection: "row",
     alignItems: "center",
     borderWidth: StyleSheet.hairlineWidth,

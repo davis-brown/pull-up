@@ -11,6 +11,8 @@ export default function CourtMap({
   onRegionChange,
   onPinPress,
   showUserLocation = true,
+  mode,
+  selectedCourtId,
   style,
 }: CourtMapProps) {
   const t = useTheme();
@@ -37,7 +39,12 @@ export default function CourtMap({
       {showUserLocation && <UserLocation />}
       {courts.map((pin) => (
         <Marker key={pin.id} lngLat={[pin.lng, pin.lat]}>
-          <CourtPinMarker pin={pin} onPress={() => onPinPress?.(pin.id)} />
+          <CourtPinMarker
+            pin={pin}
+            mode={mode}
+            selected={pin.id === selectedCourtId}
+            onPress={() => onPinPress?.(pin.id)}
+          />
         </Marker>
       ))}
     </Map>

@@ -7,6 +7,11 @@ export interface CourtPin {
   lng: number;
   activeCount: number;
   status: "pending" | "verified" | "rejected";
+  /** "Now" mode's activity weight for this pin (mapped from active_count for
+   * now; a later task swaps in scrubbed forecasts). Falls back to
+   * activeCount when omitted. */
+  expectedCount?: number;
+  selected?: boolean;
 }
 
 export interface LatLng {
@@ -26,6 +31,10 @@ export interface CourtMapProps {
   onPinPress?: (courtId: string) => void;
   /** Show the OS blue-dot user location. */
   showUserLocation?: boolean;
+  /** "now" weights pins by expectedCount and shrinks quiet courts to dots;
+   * "all" gives every court the equal-weight marker look. */
+  mode: "now" | "all";
+  selectedCourtId?: string | null;
   style?: object;
 }
 
@@ -35,5 +44,5 @@ export interface CourtMapProps {
 export function mapStyleURL(scheme: "light" | "dark"): string {
   return scheme === "dark"
     ? "https://tiles.openfreemap.org/styles/dark"
-    : "https://tiles.openfreemap.org/styles/liberty";
+    : "https://tiles.openfreemap.org/styles/positron";
 }
