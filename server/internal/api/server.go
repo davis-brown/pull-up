@@ -130,6 +130,7 @@ func (s *Server) Routes() http.Handler {
 			r.Post("/users/{id}/follow-requests/reject", s.handleRejectFollowRequest)
 			r.Get("/me/check-ins/current", s.handleCurrentCheckIn)
 			r.Get("/me/check-ins", s.handleCheckInHistory)
+			r.Get("/me/stats", s.handleMeStats)
 			r.Get("/me/favorites", s.handleListFavorites)
 			r.Post("/me/push-token", s.handleRegisterPushToken)
 			r.Get("/feed", s.handleGetFeed)
