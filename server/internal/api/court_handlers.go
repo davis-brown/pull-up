@@ -87,6 +87,21 @@ func optBool(q url.Values, key string) *bool {
 	}
 }
 
+// optInt returns an *int32 for a positive integer query value, nil when
+// absent, zero, or invalid (min_hoops=0/absent is a no-op filter).
+func optInt(q url.Values, key string) *int32 {
+	v := q.Get(key)
+	if v == "" {
+		return nil
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil || n <= 0 {
+		return nil
+	}
+	i := int32(n)
+	return &i
+}
+
 func optSurface(q url.Values) *string {
 	switch s := q.Get("surface"); s {
 	case "asphalt", "concrete", "hardwood", "rubber", "other":
@@ -134,6 +149,7 @@ func (s *Server) handleListCourts(w http.ResponseWriter, r *http.Request) {
 		Toilets:  optBool(q, "toilets"),
 		Parking:  optBool(q, "parking"),
 		Fenced:   optBool(q, "fenced"),
+		MinHoops: optInt(q, "min_hoops"),
 	})
 	if err != nil {
 		s.internalError(w, "courts nearby", err)
@@ -188,6 +204,7 @@ func (s *Server) listCourtsInBBox(w http.ResponseWriter, r *http.Request, bbox s
 		Toilets:  optBool(q, "toilets"),
 		Parking:  optBool(q, "parking"),
 		Fenced:   optBool(q, "fenced"),
+		MinHoops: optInt(q, "min_hoops"),
 	})
 	if err != nil {
 		s.internalError(w, "courts in bbox", err)

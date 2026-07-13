@@ -11,4 +11,11 @@ describe("filtersToQuery", () => {
   it("drops false booleans (no-op filters)", () => {
     expect(filtersToQuery({ lit: false })).toBe("");
   });
+  it("serializes min_hoops when set", () => {
+    expect(filtersToQuery({ min_hoops: 4 })).toBe("&min_hoops=4");
+  });
+  it("omits min_hoops when 0 or unset", () => {
+    expect(filtersToQuery({ min_hoops: 0 })).toBe("");
+    expect(filtersToQuery({})).toBe("");
+  });
 });

@@ -74,6 +74,7 @@ WHERE c.status <> 'rejected'
   AND ($13::bool  IS NULL OR ($13 = false) OR c.toilets = true)
   AND ($14::bool  IS NULL OR ($14 = false) OR c.parking = true)
   AND ($15::bool   IS NULL OR ($15 = false) OR c.fenced = true)
+  AND ($16::int IS NULL OR c.hoop_count >= $16)
 LIMIT 200
 `
 
@@ -93,6 +94,7 @@ type CourtsInBBoxParams struct {
 	Toilets  *bool   `json:"toilets"`
 	Parking  *bool   `json:"parking"`
 	Fenced   *bool   `json:"fenced"`
+	MinHoops *int32  `json:"min_hoops"`
 }
 
 type CourtsInBBoxRow struct {
@@ -135,6 +137,7 @@ func (q *Queries) CourtsInBBox(ctx context.Context, arg CourtsInBBoxParams) ([]C
 		arg.Toilets,
 		arg.Parking,
 		arg.Fenced,
+		arg.MinHoops,
 	)
 	if err != nil {
 		return nil, err
@@ -214,6 +217,7 @@ WHERE c.status <> 'rejected'
   AND ($12::bool  IS NULL OR ($12 = false) OR c.toilets = true)
   AND ($13::bool  IS NULL OR ($13 = false) OR c.parking = true)
   AND ($14::bool   IS NULL OR ($14 = false) OR c.fenced = true)
+  AND ($15::int IS NULL OR c.hoop_count >= $15)
 ORDER BY distance_m
 LIMIT 100
 `
@@ -233,6 +237,7 @@ type CourtsNearbyParams struct {
 	Toilets  *bool   `json:"toilets"`
 	Parking  *bool   `json:"parking"`
 	Fenced   *bool   `json:"fenced"`
+	MinHoops *int32  `json:"min_hoops"`
 }
 
 type CourtsNearbyRow struct {
@@ -275,6 +280,7 @@ func (q *Queries) CourtsNearby(ctx context.Context, arg CourtsNearbyParams) ([]C
 		arg.Toilets,
 		arg.Parking,
 		arg.Fenced,
+		arg.MinHoops,
 	)
 	if err != nil {
 		return nil, err

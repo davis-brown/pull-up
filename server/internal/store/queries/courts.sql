@@ -38,6 +38,7 @@ WHERE c.status <> 'rejected'
   AND (sqlc.narg('toilets')::bool  IS NULL OR (sqlc.narg('toilets') = false) OR c.toilets = true)
   AND (sqlc.narg('parking')::bool  IS NULL OR (sqlc.narg('parking') = false) OR c.parking = true)
   AND (sqlc.narg('fenced')::bool   IS NULL OR (sqlc.narg('fenced') = false) OR c.fenced = true)
+  AND (sqlc.narg('min_hoops')::int IS NULL OR c.hoop_count >= sqlc.narg('min_hoops'))
 LIMIT 200;
 
 -- name: CourtsNearby :many
@@ -79,6 +80,7 @@ WHERE c.status <> 'rejected'
   AND (sqlc.narg('toilets')::bool  IS NULL OR (sqlc.narg('toilets') = false) OR c.toilets = true)
   AND (sqlc.narg('parking')::bool  IS NULL OR (sqlc.narg('parking') = false) OR c.parking = true)
   AND (sqlc.narg('fenced')::bool   IS NULL OR (sqlc.narg('fenced') = false) OR c.fenced = true)
+  AND (sqlc.narg('min_hoops')::int IS NULL OR c.hoop_count >= sqlc.narg('min_hoops'))
 ORDER BY distance_m
 LIMIT 100;
 

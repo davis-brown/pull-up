@@ -16,6 +16,7 @@ export interface CourtFilters {
   parking?: boolean;
   fenced?: boolean;
   surface?: Surface;
+  min_hoops?: number;
 }
 
 const BOOL_KEYS = ["indoor", "lit", "has_hoops", "public", "free", "covered", "water", "toilets", "parking", "fenced"] as const;
@@ -27,5 +28,6 @@ export function filtersToQuery(f: CourtFilters): string {
     if (f[k]) q += `&${k}=true`;
   }
   if (f.surface) q += `&surface=${f.surface}`;
+  if (f.min_hoops) q += `&min_hoops=${f.min_hoops}`;
   return q;
 }

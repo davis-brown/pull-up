@@ -159,6 +159,79 @@ func TestListCourtsFilter(t *testing.T) {
 	resp.Body.Close()
 }
 
+func TestListCourtsFilterMinHoops(t *testing.T) {
+	ts, _ := newTestServer(t)
+	u := registerUser(t, ts, "minhoops@test.local", "MinHoops")
+
+	two := doJSON(t, ts, http.MethodPost, "/courts", u.AccessToken, map[string]any{
+		"name": "Two Hoops", "lat": ruckerLat, "lng": ruckerLng, "indoor": false, "hoop_count": 2,
+	})
+	if two.StatusCode != http.StatusCreated {
+		defer two.Body.Close()
+		t.Fatalf("create two-hoop court: status %d: %s", two.StatusCode, readBody(t, two))
+	}
+	twoCourt := decodeJSON[courtResp](t, two)
+
+	four := doJSON(t, ts, http.MethodPost, "/courts", u.AccessToken, map[string]any{
+		"name": "Four Hoops", "lat": ruckerLat + 0.001, "lng": ruckerLng, "indoor": false, "hoop_count": 4,
+	})
+	if four.StatusCode != http.StatusCreated {
+		defer four.Body.Close()
+		t.Fatalf("create four-hoop court: status %d: %s", four.StatusCode, readBody(t, four))
+	}
+	fourCourt := decodeJSON[courtResp](t, four)
+
+	// bbox path: min_hoops=4 returns only the four-hoop court.
+	resp := doJSON(t, ts, http.MethodGet, "/courts?bbox=-73.946,40.819,-73.926,40.839&min_hoops=4", "", nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("min_hoops bbox list: status %d: %s", resp.StatusCode, readBody(t, resp))
+	}
+	result := decodeJSON[struct {
+		Courts []courtResp `json:"courts"`
+	}](t, resp)
+	if len(result.Courts) != 1 || result.Courts[0].ID != fourCourt.ID {
+		t.Fatalf("min_hoops=4 bbox result = %+v, want only Four Hoops", result.Courts)
+	}
+
+	// min_hoops=0 (and absent) is a no-op: both courts come back.
+	resp = doJSON(t, ts, http.MethodGet, "/courts?bbox=-73.946,40.819,-73.926,40.839&min_hoops=0", "", nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("min_hoops=0 bbox list: status %d: %s", resp.StatusCode, readBody(t, resp))
+	}
+	zeroResult := decodeJSON[struct {
+		Courts []courtResp `json:"courts"`
+	}](t, resp)
+	if len(zeroResult.Courts) != 2 {
+		t.Fatalf("min_hoops=0 bbox result = %+v, want both courts", zeroResult.Courts)
+	}
+
+	resp = doJSON(t, ts, http.MethodGet, "/courts?bbox=-73.946,40.819,-73.926,40.839", "", nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("no min_hoops bbox list: status %d: %s", resp.StatusCode, readBody(t, resp))
+	}
+	absentResult := decodeJSON[struct {
+		Courts []courtResp `json:"courts"`
+	}](t, resp)
+	if len(absentResult.Courts) != 2 {
+		t.Fatalf("absent min_hoops bbox result = %+v, want both courts", absentResult.Courts)
+	}
+
+	// near-me path also accepts min_hoops.
+	latStr := strconv.FormatFloat(ruckerLat, 'f', -1, 64)
+	lngStr := strconv.FormatFloat(ruckerLng, 'f', -1, 64)
+	resp = doJSON(t, ts, http.MethodGet, "/courts?lat="+latStr+"&lng="+lngStr+"&radius_m=2000&min_hoops=4", "", nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("min_hoops near list: status %d: %s", resp.StatusCode, readBody(t, resp))
+	}
+	nearResult := decodeJSON[struct {
+		Courts []courtResp `json:"courts"`
+	}](t, resp)
+	if len(nearResult.Courts) != 1 || nearResult.Courts[0].ID != fourCourt.ID {
+		t.Fatalf("min_hoops=4 near result = %+v, want only Four Hoops", nearResult.Courts)
+	}
+	_ = twoCourt
+}
+
 func TestVoteCourtRejection(t *testing.T) {
 	ts, _ := newTestServer(t)
 	submitter := registerUser(t, ts, "submitter2@test.local", "Submitter2")
