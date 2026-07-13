@@ -90,6 +90,7 @@ export default function NewCourtScreen() {
                 initialZoom={16}
                 onRegionChange={onRegionChange}
                 showUserLocation
+                mode="all"
               />
               <View pointerEvents="none" style={styles.crosshair}>
                 <View style={[styles.crosshairRing, { borderColor: t.colors.accent }]} />
