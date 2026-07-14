@@ -14,20 +14,35 @@ import (
 
 const courtHourlyCheckInHistory = `-- name: CourtHourlyCheckInHistory :many
 
-SELECT ci.court_id,
-       EXTRACT(HOUR FROM (ci.created_at + ($1::int * interval '1 minute')))::int AS local_hour,
-       coalesce(sum(ci.party_size), 0)::int AS total_heads
-FROM check_ins ci
-WHERE ci.court_id = ANY($2::uuid[])
-  AND ci.created_at > now() - interval '56 days'
-  AND EXTRACT(DOW FROM (ci.created_at + ($1::int * interval '1 minute'))) = $3::int
-GROUP BY ci.court_id, local_hour
+WITH windows AS (
+    SELECT
+        ci.court_id,
+        ci.party_size,
+        (ci.created_at + ($2::int * interval '1 minute')) AS local_start,
+        (LEAST(coalesce(ci.checked_out_at, ci.expires_at), ci.created_at + interval '6 hours')
+            + ($2::int * interval '1 minute')) AS local_end
+    FROM check_ins ci
+    WHERE ci.court_id = ANY($3::uuid[])
+      AND ci.created_at > now() - interval '56 days'
+)
+SELECT
+    w.court_id,
+    EXTRACT(HOUR FROM bucket)::int AS local_hour,
+    coalesce(sum(w.party_size), 0)::int AS total_heads
+FROM windows w
+CROSS JOIN LATERAL generate_series(
+    date_trunc('hour', w.local_start),
+    date_trunc('hour', w.local_end - interval '1 microsecond'),
+    interval '1 hour'
+) AS bucket
+WHERE EXTRACT(DOW FROM bucket) = $1::int
+GROUP BY w.court_id, local_hour
 `
 
 type CourtHourlyCheckInHistoryParams struct {
+	Dow             int32       `json:"dow"`
 	TzOffsetMinutes int32       `json:"tz_offset_minutes"`
 	CourtIds        []uuid.UUID `json:"court_ids"`
-	Dow             int32       `json:"dow"`
 }
 
 type CourtHourlyCheckInHistoryRow struct {
@@ -38,10 +53,16 @@ type CourtHourlyCheckInHistoryRow struct {
 
 // Task 5: hourly turnout forecast. Powers a client-side time scrubber that
 // fetches per-court hourly expected headcounts once and scrubs locally.
-// Buckets by check-in start hour in the caller's local offset; a cheap proxy
-// for concurrency that only needs the check_ins table.
+// Buckets each check-in's active window [created_at, coalesce(checked_out_at,
+// expires_at)) into EVERY local hour it overlaps (an average concurrent
+// headcount, not just a start-hour proxy), in the caller's local offset.
+// Windows are clamped to 6 hours from created_at so a bad/missing
+// checked_out_at/expires_at can't blow up the generate_series. The
+// day-of-week filter applies to each BUCKET's local timestamp, not the
+// check-in's start, so a Sat 11:30pm check-in's spillover hours land on
+// Sunday.
 func (q *Queries) CourtHourlyCheckInHistory(ctx context.Context, arg CourtHourlyCheckInHistoryParams) ([]CourtHourlyCheckInHistoryRow, error) {
-	rows, err := q.db.Query(ctx, courtHourlyCheckInHistory, arg.TzOffsetMinutes, arg.CourtIds, arg.Dow)
+	rows, err := q.db.Query(ctx, courtHourlyCheckInHistory, arg.Dow, arg.TzOffsetMinutes, arg.CourtIds)
 	if err != nil {
 		return nil, err
 	}
