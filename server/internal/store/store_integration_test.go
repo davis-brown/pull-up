@@ -246,6 +246,59 @@ func TestCheckInExpiryFiltering(t *testing.T) {
 	}
 }
 
+// TestCourtHourlyCheckInHistoryOverlapsBuckets is the store-level regression
+// for the Gate-2 finding: a check-in must contribute its party_size to EVERY
+// local hour its active window [created_at, checked_out_at/expires_at)
+// overlaps, not just its start hour. A check-in starting at 10:30 and active
+// until 12:00 (90 minutes, tz_offset 0) must land in both the 10 and 11
+// o'clock buckets, and must not leak into 9 or 12.
+func TestCourtHourlyCheckInHistoryOverlapsBuckets(t *testing.T) {
+	st := testStore(t)
+	ctx := context.Background()
+	uid := createUser(t, st, "overlap@test.local")
+	court := createCourt(t, st, "Overlap Court", ruckerLat, ruckerLng, uid)
+
+	// Anchor to today (comfortably inside the trailing 56-day window) at a
+	// fixed UTC hour that can't wrap past midnight, so dow is unambiguous.
+	today := time.Now().UTC().Truncate(24 * time.Hour)
+	createdAt := today.Add(10*time.Hour + 30*time.Minute)
+	expiresAt := createdAt.Add(90 * time.Minute) // 12:00 -> spans hours 10 and 11
+
+	const partySize = 4
+	if _, err := st.Pool.Exec(ctx, `
+		INSERT INTO check_ins (court_id, user_id, source, created_at, expires_at, party_size)
+		VALUES ($1, $2, 'manual', $3, $4, $5)`,
+		court.ID, uid, createdAt, expiresAt, partySize); err != nil {
+		t.Fatalf("insert check-in: %v", err)
+	}
+
+	rows, err := st.Queries.CourtHourlyCheckInHistory(ctx, gen.CourtHourlyCheckInHistoryParams{
+		TzOffsetMinutes: 0,
+		CourtIds:        []uuid.UUID{court.ID},
+		Dow:             int32(createdAt.Weekday()),
+	})
+	if err != nil {
+		t.Fatalf("history: %v", err)
+	}
+
+	byHour := make(map[int]int32, len(rows))
+	for _, r := range rows {
+		byHour[int(r.LocalHour)] = r.TotalHeads
+	}
+	if byHour[10] != partySize {
+		t.Errorf("hour 10 total_heads = %d, want %d", byHour[10], partySize)
+	}
+	if byHour[11] != partySize {
+		t.Errorf("hour 11 total_heads = %d, want %d (window overlap must spill into the second hour)", byHour[11], partySize)
+	}
+	if _, ok := byHour[9]; ok {
+		t.Errorf("hour 9 should have no rows, got %d", byHour[9])
+	}
+	if _, ok := byHour[12]; ok {
+		t.Errorf("hour 12 should have no rows (window ends exactly at 12:00, exclusive), got %d", byHour[12])
+	}
+}
+
 func TestFindNearbyCourtsDupeCheck(t *testing.T) {
 	st := testStore(t)
 	ctx := context.Background()
