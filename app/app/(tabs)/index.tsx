@@ -203,6 +203,7 @@ export default function MapScreen() {
             onPress={() => setFilterSheetOpen(true)}
             style={({ pressed }) => [
               styles.filterButton,
+              styles.filterButtonFloating,
               t.shadows.chrome,
               {
                 top: 12,
@@ -232,7 +233,7 @@ export default function MapScreen() {
               </View>
             )}
           </Pressable>
-          <View style={[styles.chrome, { top: 12 }]}>
+          <View style={[styles.chromeCentered, { top: 12 }]}>
             <SegmentedToggle
               options={[
                 { key: "now", label: "Now" },
@@ -292,48 +293,62 @@ export default function MapScreen() {
         mode={mode}
         selectedCourtId={selectedCourtId}
       />
-      <Pressable
-        onPress={() => setFilterSheetOpen(true)}
-        style={({ pressed }) => [
-          styles.filterButton,
-          t.shadows.chrome,
-          {
-            top: insets.top + 12,
-            backgroundColor: t.colors.surface,
-            borderRadius: t.radius.full,
-            opacity: pressed ? 0.85 : 1,
-          },
-        ]}
+      {/* One shared top row: [spacer 44][centered toggle][filter 44]. The
+          toggle stays visually centered (both sides reserve the button's
+          width) and can never overlap the filter button, at any screen
+          width or OS font scale. */}
+      <View
+        pointerEvents="box-none"
+        style={[styles.chrome, { top: insets.top + 12 }]}
       >
-        <Ionicons name="options" size={20} color={t.colors.textPrimary} />
-        {activeFilterCount > 0 && (
-          <View
-            style={[
-              styles.filterBadge,
-              { backgroundColor: t.colors.accent, borderRadius: t.radius.full },
+        <View style={styles.chromeSpacer} />
+        <View pointerEvents="box-none" style={styles.chromeCenter}>
+          <SegmentedToggle
+            options={[
+              { key: "now", label: "Now" },
+              { key: "all", label: "All courts" },
             ]}
-          >
-            <Text
+            value={mode}
+            onChange={(key) => setMode(key as "now" | "all")}
+          />
+        </View>
+        <Pressable
+          onPress={() => setFilterSheetOpen(true)}
+          style={({ pressed }) => [
+            styles.filterButton,
+            t.shadows.chrome,
+            {
+              backgroundColor: t.colors.surface,
+              borderRadius: t.radius.full,
+              opacity: pressed ? 0.85 : 1,
+            },
+          ]}
+        >
+          <Ionicons name="options" size={20} color={t.colors.textPrimary} />
+          {activeFilterCount > 0 && (
+            <View
               style={[
-                t.type.caption,
-                styles.filterBadgeText,
-                { color: t.colors.onAccent },
+                styles.filterBadge,
+                { backgroundColor: t.colors.accent, borderRadius: t.radius.full },
               ]}
             >
-              {activeFilterCount}
-            </Text>
-          </View>
-        )}
-      </Pressable>
-      <View style={[styles.chrome, { top: insets.top + 12 }]}>
-        <SegmentedToggle
-          options={[
-            { key: "now", label: "Now" },
-            { key: "all", label: "All courts" },
-          ]}
-          value={mode}
-          onChange={(key) => setMode(key as "now" | "all")}
-        />
+              <Text
+                style={[
+                  t.type.caption,
+                  styles.filterBadgeText,
+                  { color: t.colors.onAccent },
+                ]}
+              >
+                {activeFilterCount}
+              </Text>
+            </View>
+          )}
+        </Pressable>
+      </View>
+      <View
+        pointerEvents="box-none"
+        style={[styles.chromeCentered, { top: insets.top + 12 + 44 }]}
+      >
         {bbox != null && state !== "has-courts" && (
           <View
             style={[
@@ -423,12 +438,16 @@ const styles = StyleSheet.create({
   },
   loading: { flex: 1, alignItems: "center", justifyContent: "center" },
   filterButton: {
-    position: "absolute",
-    right: 16,
     width: 44,
     height: 44,
     alignItems: "center",
     justifyContent: "center",
+  },
+  // Desktop keeps the button floating on the map pane; on mobile it lives
+  // in the shared top chrome row instead.
+  filterButtonFloating: {
+    position: "absolute",
+    right: 16,
   },
   filterBadge: {
     position: "absolute",
@@ -445,6 +464,21 @@ const styles = StyleSheet.create({
     lineHeight: 13,
   },
   chrome: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    paddingHorizontal: 16,
+    flexDirection: "row",
+    alignItems: "flex-start",
+  },
+  chromeSpacer: {
+    width: 44,
+  },
+  chromeCenter: {
+    flex: 1,
+    alignItems: "center",
+  },
+  chromeCentered: {
     position: "absolute",
     left: 0,
     right: 0,
