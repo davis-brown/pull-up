@@ -38,6 +38,11 @@ export interface CourtMapProps {
   /** Desktop web only (Task 14): the court hovered in the side panel, raised
    * to a 36px pin even when quiet. Ignored by the native map. */
   hoveredCourtId?: string | null;
+  /** Web only: which map corner gets the attribution ⓘ. The mobile layout
+   * puts its Add-court FAB bottom-right, so it moves attribution
+   * bottom-left; desktop keeps the default (its status chip sits
+   * bottom-left). Ignored by the native map. */
+  attributionPosition?: "top-left" | "top-right" | "bottom-left" | "bottom-right";
   style?: object;
 }
 
