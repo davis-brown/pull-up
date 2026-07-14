@@ -1,7 +1,7 @@
 // Web implementation of CourtMap: the native MapLibre module does not run on
 // Expo web, so Metro resolves this file instead (.web.tsx).
 import "maplibre-gl/dist/maplibre-gl.css";
-import Map, { GeolocateControl, Marker } from "react-map-gl/maplibre";
+import Map, { AttributionControl, GeolocateControl, Marker } from "react-map-gl/maplibre";
 import { useTheme } from "@/lib/theme";
 import { CourtPinMarker } from "./pin";
 import { mapStyleURL, type CourtMapProps } from "./types";
@@ -16,6 +16,7 @@ export default function CourtMap({
   mode,
   selectedCourtId,
   hoveredCourtId,
+  attributionPosition = "bottom-right",
   style,
 }: CourtMapProps) {
   const t = useTheme();
@@ -28,6 +29,7 @@ export default function CourtMap({
       }}
       style={{ flex: 1, ...style }}
       mapStyle={mapStyleURL(t.scheme)}
+      attributionControl={false}
       onMoveEnd={(evt) => {
         const b = evt.target.getBounds();
         if (!b) return;
@@ -39,7 +41,19 @@ export default function CourtMap({
         });
       }}
     >
-      {showUserLocation && <GeolocateControl trackUserLocation />}
+      {/* OSM attribution must stay visible; the position prop keeps it out
+          of whichever corner the host layout occupies. */}
+      <AttributionControl compact position={attributionPosition} />
+      {/* Top-left: the one corner the app's own chrome reserves but never
+          fills (the toggle row's spacer slot), so the locate button can't
+          collide with the filter button (top-right) or the FAB. */}
+      {showUserLocation && (
+        <GeolocateControl
+          trackUserLocation
+          position="top-left"
+          style={{ marginTop: 19, marginLeft: 16 }}
+        />
+      )}
       {courts.map((pin) => (
         <Marker
           key={pin.id}

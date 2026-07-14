@@ -297,16 +297,18 @@ export default function MapScreen() {
         }}
         mode={mode}
         selectedCourtId={selectedCourtId}
+        attributionPosition="bottom-left"
       />
       {/* One shared top row: [spacer 44][centered toggle][filter 44]. The
           toggle stays visually centered (both sides reserve the button's
           width) and can never overlap the filter button, at any screen
-          width or OS font scale. */}
+          width or OS font scale. The map's geolocate control renders in
+          the spacer slot underneath, so the spacer must not eat clicks. */}
       <View
         pointerEvents="box-none"
         style={[styles.chrome, { top: insets.top + 12 }]}
       >
-        <View style={styles.chromeSpacer} />
+        <View pointerEvents="none" style={styles.chromeSpacer} />
         <View pointerEvents="box-none" style={styles.chromeCenter}>
           <SegmentedToggle
             options={[
