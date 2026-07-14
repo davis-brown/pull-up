@@ -134,6 +134,16 @@ func TestAverageHeads(t *testing.T) {
 }
 
 // -- buildForecasts (the pure assembly logic; no DB needed) ---------------
+//
+// These tests exercise Go assembly from fake gen.CourtHourlyCheckInHistoryRow
+// rows and are agnostic to how the store computed TotalHeads per bucket.
+// CourtHourlyCheckInHistory (forecast.sql) buckets a check-in's ENTIRE active
+// window [created_at, coalesce(checked_out_at, expires_at)) into every local
+// hour it overlaps (an average concurrent headcount), not just its start
+// hour — see TestCourtHourlyCheckInHistoryOverlapsBuckets in
+// internal/store/store_integration_test.go for the DB-backed overlap case.
+// The row contract consumed here (court_id, local_hour, total_heads) is
+// unchanged by that bucketing, so these fakes remain valid regardless.
 
 func TestBuildForecastsAssemblesInIDsOrderWithHistoryAndSessions(t *testing.T) {
 	courtA := uuid.New()
