@@ -43,8 +43,13 @@ const SURFACES: Array<{ value: Surface; label: string }> = [
 // editable afterward, and editing them off a preset's exact bundle clears
 // its highlight (see `activePreset`). The count on the CTA is computed
 // client-side over the already-loaded viewport courts against the DRAFT
-// state; Apply commits the draft to the real filters (triggering the
-// server-filtered refetch) and closes.
+// state. That loaded court set is itself already server-filtered by the
+// COMMITTED filters (not the draft) — so broadening the draft (e.g.
+// clearing a toggle the committed filters had set) can undercount, since
+// courts the wider draft would match were never fetched; the count is only
+// accurate again once Apply commits the draft and the server-filtered
+// refetch completes. Apply commits the draft to the real filters
+// (triggering that refetch) and closes.
 export function FilterSheet({
   visible,
   filters,
