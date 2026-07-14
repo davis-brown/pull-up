@@ -7,7 +7,7 @@ import {
 import { api, API_URL } from "./api";
 import { useAuth } from "./auth-context";
 import { filtersToQuery, type CourtFilters } from "./court-filters";
-import type { CourtForecast } from "./forecast";
+import { forecastIdSet, type CourtForecast } from "./forecast";
 import type {
   AdminAction,
   AdminUser,
@@ -66,21 +66,27 @@ export function useCourtsInBBox(bbox: BBox | null, filters?: CourtFilters) {
 
 // Forecast lookups are batched by id set, not per-court — the scrubber reads
 // the response locally (see lib/forecast.ts) so dragging it never refetches.
-// Sorting the ids before joining keeps the query key (and therefore the
-// cache entry) stable regardless of array order; capping at 50 keeps the
-// query string bounded for very large viewports.
+// Ids are deduped and sorted (via forecastIdSet) before joining, keeping the
+// query key (and therefore the cache entry) stable regardless of array
+// order; capping at 50 keeps the query string bounded for very large
+// viewports. priorityId (the map sheet's selected court, if any) is
+// guaranteed a slot in the capped set even if it would otherwise sort
+// outside it — see forecastIdSet's doc comment.
 const MAX_FORECAST_IDS = 50;
 
-export function useForecasts(courtIds: string[]): Record<string, CourtForecast> {
-  const sortedIds = [...new Set(courtIds)].sort().slice(0, MAX_FORECAST_IDS);
+export function useForecasts(
+  courtIds: string[],
+  priorityId?: string | null,
+): Record<string, CourtForecast> {
+  const ids = forecastIdSet(courtIds, priorityId, MAX_FORECAST_IDS);
   const { data } = useQuery({
-    queryKey: ["courts", "forecast", sortedIds],
-    enabled: sortedIds.length > 0,
+    queryKey: ["courts", "forecast", ids],
+    enabled: ids.length > 0,
     staleTime: 5 * 60_000,
     queryFn: async () => {
       const tzOffsetMinutes = -new Date().getTimezoneOffset();
       const res = await api<{ forecasts: CourtForecast[] }>(
-        `/courts/forecast?ids=${sortedIds.join(",")}&tz_offset_minutes=${tzOffsetMinutes}`,
+        `/courts/forecast?ids=${ids.join(",")}&tz_offset_minutes=${tzOffsetMinutes}`,
       );
       return res.forecasts;
     },

@@ -110,8 +110,13 @@ export default function MapScreen() {
   };
 
   // One batched forecast fetch per visible id set (only in "now" mode) —
-  // scrubbing below reads it locally via expectedAt, never refetching.
-  const forecasts = useForecasts(mode === "now" ? courts.map((c) => c.id) : []);
+  // scrubbing below reads it locally via expectedAt, never refetching. The
+  // selected court is passed as priorityId so it's never dropped by the
+  // 50-id cap even when the viewport has more courts than that.
+  const forecasts = useForecasts(
+    mode === "now" ? courts.map((c) => c.id) : [],
+    mode === "now" ? selectedCourtId : null,
+  );
   const atNow = scrubHour === hours[0];
 
   const pins = useMemo<CourtPin[]>(
@@ -362,6 +367,7 @@ export default function MapScreen() {
           onPress={() => router.push("/court/new")}
           style={({ pressed }) => [
             styles.fab,
+            t.shadows.chrome,
             {
               bottom: insets.bottom + 24,
               backgroundColor: t.colors.accent,
@@ -452,11 +458,6 @@ const styles = StyleSheet.create({
     gap: 6,
     paddingVertical: 12,
     paddingHorizontal: 18,
-    shadowColor: "#000",
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 5,
   },
   banner: {
     marginTop: 12,

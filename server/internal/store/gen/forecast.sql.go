@@ -12,6 +12,51 @@ import (
 	"github.com/google/uuid"
 )
 
+const courtHistoryWeeks = `-- name: CourtHistoryWeeks :many
+SELECT
+    ci.court_id,
+    count(DISTINCT date_trunc('week', ci.created_at + ($1::int * interval '1 minute')))::int AS week_count
+FROM check_ins ci
+WHERE ci.court_id = ANY($2::uuid[])
+  AND ci.created_at > now() - interval '56 days'
+GROUP BY ci.court_id
+`
+
+type CourtHistoryWeeksParams struct {
+	TzOffsetMinutes int32       `json:"tz_offset_minutes"`
+	CourtIds        []uuid.UUID `json:"court_ids"`
+}
+
+type CourtHistoryWeeksRow struct {
+	CourtID   uuid.UUID `json:"court_id"`
+	WeekCount int32     `json:"week_count"`
+}
+
+// Distinct local calendar weeks each court has at least one check-in within
+// the same trailing 56-day window CourtHourlyCheckInHistory buckets from.
+// averageHeads divides a court's bucket totals by this (clamped 1-8)
+// instead of always by 8, so a court with only a few weeks of history
+// doesn't read as artificially quiet.
+func (q *Queries) CourtHistoryWeeks(ctx context.Context, arg CourtHistoryWeeksParams) ([]CourtHistoryWeeksRow, error) {
+	rows, err := q.db.Query(ctx, courtHistoryWeeks, arg.TzOffsetMinutes, arg.CourtIds)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CourtHistoryWeeksRow
+	for rows.Next() {
+		var i CourtHistoryWeeksRow
+		if err := rows.Scan(&i.CourtID, &i.WeekCount); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const courtHourlyCheckInHistory = `-- name: CourtHourlyCheckInHistory :many
 
 WITH windows AS (
