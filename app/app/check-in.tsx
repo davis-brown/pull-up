@@ -208,7 +208,11 @@ export default function CheckInScreen() {
                     style={[
                       t.type.button,
                       styles.bringChipLabel,
-                      { color: selected ? t.colors.onAccent : t.colors.textMuted },
+                      // Selected chip is ink text on the accent-orange
+                      // background, not onAccent (white) — t.colors.background
+                      // is the dark palette's ink literal (#16150F), and this
+                      // screen is always dark (darkTheme()).
+                      { color: selected ? t.colors.background : t.colors.textMuted },
                     ]}
                   >
                     {n === 0 ? "JUST ME" : `+${n}`}

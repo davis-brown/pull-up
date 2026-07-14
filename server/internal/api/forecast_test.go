@@ -54,6 +54,15 @@ func TestParseForecastIDs(t *testing.T) {
 	if len(ids) != 2 || ids[0] != a || ids[1] != b {
 		t.Errorf("parseForecastIDs order = %v, want [%s %s]", ids, a, b)
 	}
+
+	// Duplicates are dropped, keeping first-occurrence order.
+	dedup, ok := parseForecastIDs(a.String() + "," + b.String() + "," + a.String())
+	if !ok {
+		t.Fatalf("csv with duplicates should be accepted")
+	}
+	if len(dedup) != 2 || dedup[0] != a || dedup[1] != b {
+		t.Errorf("parseForecastIDs dedup = %v, want [%s %s]", dedup, a, b)
+	}
 }
 
 // -- parseTzOffsetMinutes ------------------------------------------------
@@ -116,20 +125,34 @@ func TestLocalHour(t *testing.T) {
 // -- averageHeads ----------------------------------------------------------
 
 func TestAverageHeads(t *testing.T) {
-	// The brief's example: total 24 over 8 weeks -> 3.
-	if got := averageHeads(24); got != 3 {
-		t.Errorf("averageHeads(24) = %d, want 3", got)
+	// The brief's example: total 24 over 8 weeks -> 3 (unchanged behavior).
+	if got := averageHeads(24, 8); got != 3 {
+		t.Errorf("averageHeads(24, 8) = %d, want 3", got)
+	}
+	// A court with only 3 weeks of history divides by 3, not 8.
+	if got := averageHeads(24, 3); got != 8 {
+		t.Errorf("averageHeads(24, 3) = %d, want 8", got)
 	}
 	// Rounding, not truncation: 20/8 = 2.5 -> rounds to 3 (round-half-away-from-zero).
-	if got := averageHeads(20); got != 3 {
-		t.Errorf("averageHeads(20) = %d, want 3 (rounded, not truncated)", got)
+	if got := averageHeads(20, 8); got != 3 {
+		t.Errorf("averageHeads(20, 8) = %d, want 3 (rounded, not truncated)", got)
 	}
 	// 19/8 = 2.375 -> rounds down to 2.
-	if got := averageHeads(19); got != 2 {
-		t.Errorf("averageHeads(19) = %d, want 2", got)
+	if got := averageHeads(19, 8); got != 2 {
+		t.Errorf("averageHeads(19, 8) = %d, want 2", got)
 	}
-	if got := averageHeads(0); got != 0 {
-		t.Errorf("averageHeads(0) = %d, want 0", got)
+	if got := averageHeads(0, 8); got != 0 {
+		t.Errorf("averageHeads(0, 8) = %d, want 0", got)
+	}
+	// weeks is clamped to a floor of 1, so 0 (or bogus negative) history
+	// weeks can't divide by zero or inflate the average unboundedly.
+	if got := averageHeads(5, 0); got != 5 {
+		t.Errorf("averageHeads(5, 0) = %d, want 5 (weeks clamped to 1)", got)
+	}
+	// weeks is clamped to a ceiling of forecastWeeks (8) — more distinct
+	// weeks than the trailing window can supply doesn't over-divide.
+	if got := averageHeads(80, 20); got != 10 {
+		t.Errorf("averageHeads(80, 20) = %d, want 10 (weeks clamped to 8)", got)
 	}
 }
 
@@ -155,6 +178,10 @@ func TestBuildForecastsAssemblesInIDsOrderWithHistoryAndSessions(t *testing.T) {
 	history := []gen.CourtHourlyCheckInHistoryRow{
 		{CourtID: courtA, LocalHour: 18, TotalHeads: 24},
 	}
+	// Court A has a full 8 weeks of history -> divisor unchanged at 8.
+	weeks := []gen.CourtHistoryWeeksRow{
+		{CourtID: courtA, WeekCount: 8},
+	}
 	// Session starts at a UTC instant that's 19:00 local once shifted by the
 	// offset (UTC-5): localHour(startsAt, offsetMinutes) must equal 19.
 	offsetMinutes := -300 // UTC-5
@@ -164,7 +191,7 @@ func TestBuildForecastsAssemblesInIDsOrderWithHistoryAndSessions(t *testing.T) {
 	}
 
 	ids := []uuid.UUID{courtA, courtB}
-	got := buildForecasts(ids, history, sessions, offsetMinutes)
+	got := buildForecasts(ids, history, weeks, sessions, offsetMinutes)
 
 	if len(got) != 2 {
 		t.Fatalf("len(forecasts) = %d, want 2", len(got))
@@ -219,12 +246,54 @@ func TestBuildForecastsIgnoresRowsForUnrequestedCourts(t *testing.T) {
 	history := []gen.CourtHourlyCheckInHistoryRow{
 		{CourtID: other, LocalHour: 10, TotalHeads: 8},
 	}
-	got := buildForecasts([]uuid.UUID{requested}, history, nil, 0)
+	got := buildForecasts([]uuid.UUID{requested}, history, nil, nil, 0)
 	if len(got) != 1 {
 		t.Fatalf("len(forecasts) = %d, want 1", len(got))
 	}
 	if got[0].HasHistory {
 		t.Error("row for a court not in ids must not be attributed to the requested court")
+	}
+}
+
+// TestBuildForecastsDividesByActualWeekCount is the regression case for the
+// "reads at ~3/8 of its true average" bug: a court with only 3 weeks of
+// check-in history must divide by 3, not a flat 8.
+func TestBuildForecastsDividesByActualWeekCount(t *testing.T) {
+	court := uuid.New()
+	history := []gen.CourtHourlyCheckInHistoryRow{
+		{CourtID: court, LocalHour: 18, TotalHeads: 24},
+	}
+	weeks := []gen.CourtHistoryWeeksRow{
+		{CourtID: court, WeekCount: 3},
+	}
+	got := buildForecasts([]uuid.UUID{court}, history, weeks, nil, 0)
+	if len(got) != 1 {
+		t.Fatalf("len(forecasts) = %d, want 1", len(got))
+	}
+	if !got[0].HasHistory {
+		t.Error("has_history should be true")
+	}
+	if got[0].Hours[18] != 8 {
+		t.Errorf("hours[18] = %d, want 8 (24 total / 3 weeks of history)", got[0].Hours[18])
+	}
+}
+
+// TestBuildForecastsNoHistoryRowsZerosOut covers the 0-rows case: a court
+// with no matching history rows at all gets has_history:false and every
+// hour zero, regardless of what CourtHistoryWeeks might separately report.
+func TestBuildForecastsNoHistoryRowsZerosOut(t *testing.T) {
+	court := uuid.New()
+	got := buildForecasts([]uuid.UUID{court}, nil, nil, nil, 0)
+	if len(got) != 1 {
+		t.Fatalf("len(forecasts) = %d, want 1", len(got))
+	}
+	if got[0].HasHistory {
+		t.Error("has_history should be false with zero history rows")
+	}
+	for h, v := range got[0].Hours {
+		if v != 0 {
+			t.Errorf("hours[%d] = %d, want 0", h, v)
+		}
 	}
 }
 

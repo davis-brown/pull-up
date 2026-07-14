@@ -71,7 +71,7 @@ export function PlayerCard({
             />
           </View>
           <View style={styles.headerText}>
-            <Text style={[dark.type.display, { color: dark.colors.textPrimary, fontSize: 22 }]} numberOfLines={1}>
+            <Text style={[dark.type.display, { color: dark.colors.textPrimary }]} numberOfLines={1}>
               {user.display_name}
             </Text>
             {subline ? (

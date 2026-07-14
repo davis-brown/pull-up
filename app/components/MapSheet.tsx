@@ -1,7 +1,6 @@
 import { usePathname, useRouter, type Href } from "expo-router";
 import { useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { TimeScrubber } from "@/components/TimeScrubber";
 import { Button } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
@@ -37,7 +36,6 @@ export function MapSheet({
   const t = useTheme();
   const router = useRouter();
   const pathname = usePathname();
-  const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const rsvp = useRSVP(court.id);
   // Session ids already RSVP'd from this sheet, so the button can settle
@@ -85,7 +83,13 @@ export function MapSheet({
         t.shadows.sheet,
         {
           backgroundColor: t.colors.surface,
-          paddingBottom: Math.max(insets.bottom, t.spacing.lg),
+          // No safe-area inset added here: this sheet renders inside the
+          // (tabs) map screen, whose content area already sits flush above
+          // the bottom tab bar — and the tab bar itself already pads for
+          // the home-indicator inset. Adding insets.bottom again on top of
+          // that double-counted it, floating the sheet a few px above the
+          // tab bar on notched iPhones.
+          paddingBottom: t.spacing.lg,
         },
       ]}
     >

@@ -48,6 +48,8 @@ type courtForecast struct {
 // parseForecastIDs parses the comma-separated ids query param into 1-50
 // UUIDs. ok is false when the value is missing/empty, exceeds 50 ids, or
 // contains any invalid UUID — all of which the caller maps to a 400.
+// Duplicate ids are dropped, keeping the first occurrence's position, so the
+// ids-order-preserving response never repeats a court's forecast.
 func parseForecastIDs(raw string) (ids []uuid.UUID, ok bool) {
 	if strings.TrimSpace(raw) == "" {
 		return nil, false
@@ -56,12 +58,17 @@ func parseForecastIDs(raw string) (ids []uuid.UUID, ok bool) {
 	if len(parts) > forecastMaxIDs {
 		return nil, false
 	}
+	seen := make(map[uuid.UUID]bool, len(parts))
 	out := make([]uuid.UUID, 0, len(parts))
 	for _, p := range parts {
 		id, err := uuid.Parse(strings.TrimSpace(p))
 		if err != nil {
 			return nil, false
 		}
+		if seen[id] {
+			continue
+		}
+		seen[id] = true
 		out = append(out, id)
 	}
 	return out, true
@@ -106,18 +113,34 @@ func localHour(t time.Time, offsetMinutes int) int {
 	return t.UTC().Add(time.Duration(offsetMinutes) * time.Minute).Hour()
 }
 
-// averageHeads turns an 8-week bucket total into an average concurrent
-// headcount, rounded to the nearest int (not truncated).
-func averageHeads(total int32) int {
-	return int(math.Round(float64(total) / forecastWeeks))
+// averageHeads turns a bucket total into an average concurrent headcount,
+// rounded to the nearest int (not truncated). weeks is the number of
+// distinct local weeks the court actually has check-in history for within
+// the trailing window (see CourtHistoryWeeks) — a court with only a few
+// weeks of history is divided by that smaller count instead of always by 8,
+// so it doesn't read as artificially quiet. weeks is clamped to [1,
+// forecastWeeks] so missing/bogus data (0 or negative) can't divide by zero
+// or inflate the divisor past the actual trailing window.
+func averageHeads(total int32, weeks int) int {
+	divisor := weeks
+	if divisor < 1 {
+		divisor = 1
+	}
+	if divisor > int(forecastWeeks) {
+		divisor = int(forecastWeeks)
+	}
+	return int(math.Round(float64(total) / float64(divisor)))
 }
 
 // buildForecasts assembles the per-court forecast payloads in ids order.
 // A court with no matching history rows gets has_history:false and
-// all-zero hours; sessions are attached independently of history.
+// all-zero hours; sessions are attached independently of history. weeksRows
+// supplies each court's actual distinct-week count (see CourtHistoryWeeks),
+// used as averageHeads' divisor instead of a flat 8 weeks.
 func buildForecasts(
 	ids []uuid.UUID,
 	historyRows []gen.CourtHourlyCheckInHistoryRow,
+	weeksRows []gen.CourtHistoryWeeksRow,
 	sessionRows []gen.CourtSessionsForDayRow,
 	offsetMinutes int,
 ) []courtForecast {
@@ -126,6 +149,10 @@ func buildForecasts(
 	for i, id := range ids {
 		out[i] = courtForecast{CourtID: id, Sessions: []forecastSession{}}
 		byCourt[id] = &out[i]
+	}
+	weeksByCourt := make(map[uuid.UUID]int, len(weeksRows))
+	for _, row := range weeksRows {
+		weeksByCourt[row.CourtID] = int(row.WeekCount)
 	}
 	for _, row := range historyRows {
 		cf, found := byCourt[row.CourtID]
@@ -136,7 +163,7 @@ func buildForecasts(
 		if hour < 0 || hour > 23 {
 			continue // defensive; EXTRACT(HOUR) never leaves 0-23
 		}
-		cf.Hours[hour] = averageHeads(row.TotalHeads)
+		cf.Hours[hour] = averageHeads(row.TotalHeads, weeksByCourt[row.CourtID])
 		cf.HasHistory = true
 	}
 	for _, row := range sessionRows {
@@ -182,6 +209,14 @@ func (s *Server) handleForecast(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, "court hourly check-in history", err)
 		return
 	}
+	weeksRows, err := s.store.Queries.CourtHistoryWeeks(r.Context(), gen.CourtHistoryWeeksParams{
+		TzOffsetMinutes: int32(offsetMinutes),
+		CourtIds:        ids,
+	})
+	if err != nil {
+		s.internalError(w, "court history weeks", err)
+		return
+	}
 	sessionRows, err := s.store.Queries.CourtSessionsForDay(r.Context(), gen.CourtSessionsForDayParams{
 		CourtIds: ids,
 		DayStart: dayStart,
@@ -192,6 +227,6 @@ func (s *Server) handleForecast(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	forecasts := buildForecasts(ids, historyRows, sessionRows, offsetMinutes)
+	forecasts := buildForecasts(ids, historyRows, weeksRows, sessionRows, offsetMinutes)
 	writeJSON(w, http.StatusOK, map[string]any{"forecasts": forecasts})
 }

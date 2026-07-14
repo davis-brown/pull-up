@@ -1,6 +1,7 @@
 import {
   busiestWindow,
   expectedAt,
+  forecastIdSet,
   scrubHours,
   sessionAt,
   type CourtForecast,
@@ -71,6 +72,42 @@ describe("busiestWindow", () => {
 
   it("returns null when every hour is zero", () => {
     expect(busiestWindow(Array(24).fill(0))).toBeNull();
+  });
+});
+
+describe("forecastIdSet", () => {
+  it("dedupes and sorts when under the cap", () => {
+    expect(forecastIdSet(["b", "a", "b", "c"], null, 50)).toEqual(["a", "b", "c"]);
+  });
+
+  it("caps at the given size, keeping the lexicographically-first ids", () => {
+    const ids = ["c", "a", "b"];
+    expect(forecastIdSet(ids, null, 2)).toEqual(["a", "b"]);
+  });
+
+  it("always includes priorityId even when it would sort outside the cap", () => {
+    // "z-court" sorts last, so a naive sort-then-slice(0, 2) would drop it.
+    const ids = ["a-court", "b-court", "z-court"];
+    expect(forecastIdSet(ids, "z-court", 2)).toEqual(["a-court", "z-court"]);
+  });
+
+  it("adds priorityId to the set even when it isn't already in ids", () => {
+    expect(forecastIdSet(["a", "b"], "z", 50)).toEqual(["a", "b", "z"]);
+  });
+
+  it("is a no-op cap-wise when priorityId is null", () => {
+    expect(forecastIdSet(["b", "a"], null, 50)).toEqual(["a", "b"]);
+  });
+
+  it("produces a deterministic (sorted) result regardless of input order or priorityId", () => {
+    const a = forecastIdSet(["c", "a", "b"], "b", 50);
+    const b = forecastIdSet(["a", "b", "c"], null, 50);
+    expect(a).toEqual(["a", "b", "c"]);
+    expect(b).toEqual(["a", "b", "c"]);
+  });
+
+  it("doesn't duplicate priorityId when it's already within the cap", () => {
+    expect(forecastIdSet(["a", "b", "c"], "a", 2)).toEqual(["a", "b"]);
   });
 });
 

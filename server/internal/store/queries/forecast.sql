@@ -34,6 +34,20 @@ CROSS JOIN LATERAL generate_series(
 WHERE EXTRACT(DOW FROM bucket) = sqlc.arg(dow)::int
 GROUP BY w.court_id, local_hour;
 
+-- name: CourtHistoryWeeks :many
+-- Distinct local calendar weeks each court has at least one check-in within
+-- the same trailing 56-day window CourtHourlyCheckInHistory buckets from.
+-- averageHeads divides a court's bucket totals by this (clamped 1-8)
+-- instead of always by 8, so a court with only a few weeks of history
+-- doesn't read as artificially quiet.
+SELECT
+    ci.court_id,
+    count(DISTINCT date_trunc('week', ci.created_at + (sqlc.arg(tz_offset_minutes)::int * interval '1 minute')))::int AS week_count
+FROM check_ins ci
+WHERE ci.court_id = ANY(sqlc.arg(court_ids)::uuid[])
+  AND ci.created_at > now() - interval '56 days'
+GROUP BY ci.court_id;
+
 -- name: CourtSessionsForDay :many
 SELECT s.id, s.court_id, s.starts_at,
        count(r.user_id) FILTER (WHERE r.status = 'going')::int AS going

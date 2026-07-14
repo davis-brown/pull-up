@@ -49,6 +49,31 @@ export function busiestWindow(hours: number[]): { start: number; end: number } |
   return { start: bestStart, end: bestStart + 2 };
 }
 
+// Builds the deterministic set of court ids to request a forecast for,
+// capped at `cap`. priorityId (the map sheet's currently-selected court, if
+// any) is always kept in the capped set, even when the viewport has more
+// than `cap` courts and priorityId would otherwise sort outside the first
+// `cap` entries lexicographically — without this, the selected court's
+// scrubbed count could silently read 0. When capping is needed, priorityId
+// is pulled to the front of the sorted set before slicing so it survives
+// the cut, then the result is sorted again — sorting AFTER ensuring
+// inclusion keeps the output (and therefore the query cache key)
+// deterministic for a given input set, regardless of array order or which
+// id is priority.
+export function forecastIdSet(
+  ids: string[],
+  priorityId: string | null | undefined,
+  cap: number,
+): string[] {
+  const unique = new Set(ids);
+  if (priorityId) unique.add(priorityId);
+  const sorted = [...unique].sort();
+  if (sorted.length <= cap) return sorted;
+  const rest = priorityId ? sorted.filter((id) => id !== priorityId) : sorted;
+  const capped = priorityId ? [priorityId, ...rest.slice(0, cap - 1)] : rest.slice(0, cap);
+  return capped.sort();
+}
+
 // The scrubbable hour range for "today": from the current hour through
 // closeHour (10 PM default) inclusive. Always returns at least one hour,
 // even when now is already past closeHour (e.g. 11 PM) — the scrubber still

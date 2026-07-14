@@ -191,7 +191,14 @@ function ProfileContent() {
     heightDraft !== initialHeight ||
     styleTagsDraft.join(",") !== (user?.style_tags ?? []).join(",");
 
+  // Server clamps height_cm to 120-250 (400s outside that range) — validate
+  // the same bound client-side so the save button reflects it instead of
+  // round-tripping to a guaranteed error.
+  const heightOutOfRange =
+    heightDraft.trim() !== "" && (Number(heightDraft) < 120 || Number(heightDraft) > 250);
+
   const saveDetails = async () => {
+    if (heightOutOfRange) return;
     setProfileError(null);
     setSavingDetails(true);
     try {
@@ -336,11 +343,12 @@ function ProfileContent() {
             keyboardType="number-pad"
             placeholder="e.g. 185"
           />
-          {heightDraft.trim() ? (
+          {heightDraft.trim() && !heightOutOfRange ? (
             <Text style={[t.type.caption, { color: t.colors.textMuted, marginTop: -4, marginBottom: t.spacing.sm }]}>
               {formatHeight(Number(heightDraft))}
             </Text>
           ) : null}
+          {heightOutOfRange ? <ErrorText message="Height must be 120-250 cm" /> : null}
 
           <Text style={[t.type.label, { color: t.colors.textSecondary, marginBottom: t.spacing.xs + 2 }]}>
             Style tags (up to {MAX_STYLE_TAGS})
@@ -357,7 +365,7 @@ function ProfileContent() {
             })}
           </View>
 
-          {detailsChanged ? (
+          {detailsChanged && !heightOutOfRange ? (
             <Button
               title="Save player details"
               variant="secondary"
