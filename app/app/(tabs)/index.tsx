@@ -277,6 +277,11 @@ export default function MapScreen() {
   return (
     <View style={styles.container}>
       <GetTheAppBanner />
+      {/* Overlays anchor to this map area, not the screen container — on
+          mobile web the get-the-app banner above occupies the top of the
+          container in normal flow, and container-anchored chrome would
+          render on top of it (insets.top is 0 in a browser). */}
+      <View style={styles.mapArea}>
       <CourtMap
         courts={pins}
         initialCenter={center}
@@ -406,6 +411,7 @@ export default function MapScreen() {
           forecast={forecasts[selectedCourt.id]}
         />
       )}
+      </View>
       <PermissionPrimer
         visible={showLocationPrimer}
         icon="location-outline"
@@ -428,6 +434,7 @@ export default function MapScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
+  mapArea: { flex: 1 },
   desktopRow: { flex: 1, flexDirection: "row" },
   mapPane: { flex: 1 },
   statusChip: {
