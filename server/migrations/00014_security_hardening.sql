@@ -89,8 +89,7 @@ CREATE TABLE pending_uploads (
     created_at  timestamptz NOT NULL DEFAULT now()
 );
 CREATE INDEX pending_uploads_owner_idx ON pending_uploads (owner_id);
-CREATE INDEX pending_uploads_stale_idx ON pending_uploads (created_at)
-    WHERE created_at < now() - interval '30 minutes';
+CREATE INDEX pending_uploads_stale_idx ON pending_uploads (created_at);
 
 CREATE FUNCTION enqueue_owned_object(key_to_delete text) RETURNS void AS $$
 BEGIN
