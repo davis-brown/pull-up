@@ -7,6 +7,8 @@ package gen
 
 import (
 	"context"
+
+	"github.com/google/uuid"
 )
 
 const ackObjectDeletions = `-- name: AckObjectDeletions :execrows
@@ -28,6 +30,7 @@ WITH candidates AS (
     FROM object_deletion_queue q
     WHERE q.requested_at <= now()
       AND (q.claimed_at IS NULL OR q.claimed_at < now() - interval '5 minutes')
+      AND q.storage_key NOT IN (SELECT storage_key FROM pending_uploads)
       AND NOT EXISTS (
           SELECT 1 FROM users u WHERE u.avatar_url = '/photos/' || q.storage_key
       )
@@ -66,6 +69,57 @@ func (q *Queries) ClaimObjectDeletions(ctx context.Context, batchSize int32) ([]
 	return items, nil
 }
 
+const claimPendingUpload = `-- name: ClaimPendingUpload :one
+DELETE FROM pending_uploads
+WHERE storage_key = $1 AND owner_id = $2 AND purpose = $3
+RETURNING storage_key
+`
+
+type ClaimPendingUploadParams struct {
+	StorageKey string    `json:"storage_key"`
+	OwnerID    uuid.UUID `json:"owner_id"`
+	Purpose    string    `json:"purpose"`
+}
+
+// Atomically removes a pending upload row and returns the owner, so an avatar
+// update can only reference keys that were actually authorized for this user.
+func (q *Queries) ClaimPendingUpload(ctx context.Context, arg ClaimPendingUploadParams) (string, error) {
+	row := q.db.QueryRow(ctx, claimPendingUpload, arg.StorageKey, arg.OwnerID, arg.Purpose)
+	var storage_key string
+	err := row.Scan(&storage_key)
+	return storage_key, err
+}
+
+const createPendingUpload = `-- name: CreatePendingUpload :exec
+INSERT INTO pending_uploads (storage_key, owner_id, purpose)
+VALUES ($1, $2, $3)
+ON CONFLICT (storage_key) DO NOTHING
+`
+
+type CreatePendingUploadParams struct {
+	StorageKey string    `json:"storage_key"`
+	OwnerID    uuid.UUID `json:"owner_id"`
+	Purpose    string    `json:"purpose"`
+}
+
+func (q *Queries) CreatePendingUpload(ctx context.Context, arg CreatePendingUploadParams) error {
+	_, err := q.db.Exec(ctx, createPendingUpload, arg.StorageKey, arg.OwnerID, arg.Purpose)
+	return err
+}
+
+const deletePendingUploads = `-- name: DeletePendingUploads :execrows
+DELETE FROM pending_uploads
+WHERE storage_key = ANY($1::text[])
+`
+
+func (q *Queries) DeletePendingUploads(ctx context.Context, storageKeys []string) (int64, error) {
+	result, err := q.db.Exec(ctx, deletePendingUploads, storageKeys)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const isMediaKeyAuthorized = `-- name: IsMediaKeyAuthorized :one
 
 SELECT EXISTS (
@@ -82,6 +136,47 @@ func (q *Queries) IsMediaKeyAuthorized(ctx context.Context, storageKey string) (
 	var authorized bool
 	err := row.Scan(&authorized)
 	return authorized, err
+}
+
+const isPendingUpload = `-- name: IsPendingUpload :one
+SELECT EXISTS (
+    SELECT 1 FROM pending_uploads WHERE storage_key = $1
+)::bool AS pending
+`
+
+func (q *Queries) IsPendingUpload(ctx context.Context, storageKey string) (bool, error) {
+	row := q.db.QueryRow(ctx, isPendingUpload, storageKey)
+	var pending bool
+	err := row.Scan(&pending)
+	return pending, err
+}
+
+const listStalePendingUploads = `-- name: ListStalePendingUploads :many
+SELECT storage_key
+FROM pending_uploads
+WHERE created_at < now() - interval '30 minutes'
+ORDER BY created_at
+LIMIT $1
+`
+
+func (q *Queries) ListStalePendingUploads(ctx context.Context, batchSize int32) ([]string, error) {
+	rows, err := q.db.Query(ctx, listStalePendingUploads, batchSize)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var storage_key string
+		if err := rows.Scan(&storage_key); err != nil {
+			return nil, err
+		}
+		items = append(items, storage_key)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const markCourtPhotoUploaded = `-- name: MarkCourtPhotoUploaded :execrows

@@ -245,14 +245,11 @@ describe("auth transitions and logout", () => {
       .mockResolvedValueOnce(fakeResponse(
         202,
         { verification_required: true },
-        undefined,
-        { "X-Pull-Up-Email-Sent": "true" },
       ))
       .mockResolvedValueOnce(fakeResponse(200, tokenResponse("verified-a", "verified-r")));
 
     await expect(client.register("new@test.local", "password123", "New Player")).resolves.toEqual({
       verificationRequired: true,
-      emailSent: true,
     });
     expect(stored["pullup.token_pair"]).toBeUndefined();
 

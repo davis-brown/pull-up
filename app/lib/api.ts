@@ -25,11 +25,11 @@ interface TokenResponse {
 
 export interface RegistrationResult {
   verificationRequired: true;
-  emailSent: boolean;
 }
 
 export interface LogoutOptions {
   pushToken?: Promise<string | null> | string | null;
+  onPushTokenRemoved?: () => void | Promise<void>;
 }
 
 export class ApiError extends Error {
@@ -394,6 +394,37 @@ function requestSignal(epoch: number, external?: AbortSignal | null): {
   };
 }
 
+type ScopedResponse = {
+  response: Response;
+  release: () => void;
+};
+
+async function rawRequestScoped(
+  path: string,
+  options: RequestInit = {},
+  accessToken?: string | null,
+  epoch?: number,
+  timeoutMs = REQUEST_TIMEOUT_MS,
+): Promise<ScopedResponse> {
+  const scoped = epoch == null ? null : requestSignal(epoch, options.signal);
+  const response = await fetchWithTimeout(
+    `${API_BASE_URL}/api/v1${path}`,
+    {
+      ...options,
+      credentials: "include",
+      headers: headersFor(options, accessToken),
+      signal: scoped?.signal ?? options.signal,
+    },
+    timeoutMs,
+  );
+  return {
+    response,
+    release: () => {
+      scoped?.release();
+    },
+  };
+}
+
 async function rawRequest(
   path: string,
   options: RequestInit = {},
@@ -401,21 +432,9 @@ async function rawRequest(
   epoch?: number,
   timeoutMs = REQUEST_TIMEOUT_MS,
 ): Promise<Response> {
-  const scoped = epoch == null ? null : requestSignal(epoch, options.signal);
-  try {
-    return await fetchWithTimeout(
-      `${API_BASE_URL}/api/v1${path}`,
-      {
-        ...options,
-        credentials: "include",
-        headers: headersFor(options, accessToken),
-        signal: scoped?.signal ?? options.signal,
-      },
-      timeoutMs,
-    );
-  } finally {
-    scoped?.release();
-  }
+  const scoped = await rawRequestScoped(path, options, accessToken, epoch, timeoutMs);
+  scoped.release();
+  return scoped.response;
 }
 
 async function readJSON(response: Response): Promise<unknown> {
@@ -452,6 +471,34 @@ export function onSessionExpired(listener: SessionExpiredListener): () => void {
   return () => {
     sessionExpiredListeners = sessionExpiredListeners.filter((item) => item !== listener);
   };
+}
+
+let expectedUserId: string | null = null;
+
+// Set the user identity that the current credential session is expected to
+// represent. Refresh results that return a different user are treated as a
+// session mismatch and trigger expiration, preventing one tab/account from
+// silently inheriting another's refreshed token.
+export function setExpectedUserId(id: string | null): void {
+  expectedUserId = id;
+}
+
+export function getExpectedUserId(): string | null {
+  return expectedUserId;
+}
+
+// Serializes web auth operations that mutate the HttpOnly refresh cookie.
+// This prevents an in-flight logout response from clearing a cookie set by a
+// subsequent login.
+let cookieMutex: Promise<unknown> = Promise.resolve();
+
+function runCookieMutating<T>(operation: () => Promise<T>): Promise<T> {
+  if (!isWeb()) return operation();
+  const next = cookieMutex.then(operation).finally(() => {
+    if (cookieMutex === next) cookieMutex = Promise.resolve();
+  });
+  cookieMutex = next;
+  return next;
 }
 
 async function expireSession(epoch: number): Promise<void> {
@@ -492,24 +539,32 @@ async function performRefresh(epoch: number): Promise<RefreshResult> {
         ? { refresh_token: migrationToken }
         : {}
       : { refresh_token: tokens!.refreshToken };
-    const response = await rawRequest(
-      "/auth/refresh",
-      { method: "POST", body: JSON.stringify(body) },
-      null,
-      epoch,
-    );
-    const value = await readJSON(response);
-    if (!response.ok) {
-      const error = new ApiError(response.status, errorBody(value));
-      if (isTerminalRefreshStatus(response.status)) {
+  const scoped = await rawRequestScoped(
+    "/auth/refresh",
+    { method: "POST", body: JSON.stringify(body) },
+    null,
+    epoch,
+  );
+  try {
+    const value = await readJSON(scoped.response);
+    if (!scoped.response.ok) {
+      const error = new ApiError(scoped.response.status, errorBody(value));
+      if (isTerminalRefreshStatus(scoped.response.status)) {
         await expireSession(epoch);
         return { kind: "expired" };
       }
       return { kind: "transient", error };
     }
     const token = validateTokenResponse(value);
+    if (expectedUserId != null && token.user.id !== expectedUserId) {
+      await expireSession(epoch);
+      return { kind: "expired" };
+    }
     await storeTokenResponse(token, epoch);
     return { kind: "refreshed" };
+  } finally {
+    scoped.release();
+  }
   } catch (error) {
     if (error instanceof SessionChangedError || sessionEpoch !== epoch) {
       return { kind: "transient", error: new SessionChangedError() };
@@ -534,19 +589,34 @@ function refreshSession(epoch: number): Promise<RefreshResult> {
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
   const epoch = sessionEpoch;
   const tokens = await getTokens(epoch);
-  let response = await rawRequest(path, options, tokens?.accessToken, epoch);
-  if (sessionEpoch !== epoch) throw new SessionChangedError();
-  if (response.status === 401) {
-    void response.body?.cancel().catch(() => {});
-    const refreshed = await refreshSession(epoch);
-    if (refreshed.kind === "transient") throw refreshed.error;
-    if (refreshed.kind === "refreshed") {
-      const next = await getTokens(epoch);
-      response = await rawRequest(path, options, next?.accessToken, epoch);
+  let scoped = await rawRequestScoped(path, options, tokens?.accessToken, epoch);
+  try {
+    if (sessionEpoch !== epoch) throw new SessionChangedError();
+    if (scoped.response.status === 401) {
+      void scoped.response.body?.cancel().catch(() => {});
+      scoped.release();
+      const refreshed = await refreshSession(epoch);
+      if (refreshed.kind === "transient") throw refreshed.error;
+      if (refreshed.kind === "refreshed") {
+        const next = await getTokens(epoch);
+        scoped = await rawRequestScoped(path, options, next?.accessToken, epoch);
+      } else {
+        // Expired: leave the caller to handle the 401 after releasing scope.
+      }
     }
+    if (sessionEpoch !== epoch) throw new SessionChangedError();
+    if (scoped.response.status === 204 || scoped.response.status === 205) {
+      return undefined as T;
+    }
+    const value = await readJSON(scoped.response);
+    if (!scoped.response.ok) throw new ApiError(scoped.response.status, errorBody(value));
+    if (value === undefined) {
+      throw new ApiError(502, { error: "Invalid response from server" });
+    }
+    return value as T;
+  } finally {
+    scoped.release();
   }
-  if (sessionEpoch !== epoch) throw new SessionChangedError();
-  return responseValue<T>(response);
 }
 
 async function authenticate(
@@ -556,9 +626,9 @@ async function authenticate(
   const epoch = clearMemorySession();
   const clearPromise = queueStoredTokenClear();
   await clearPromise;
-  let response: Response;
+  let scoped: ScopedResponse;
   try {
-    response = await rawRequest(
+    scoped = await rawRequestScoped(
       path,
       { method: "POST", body: JSON.stringify(body) },
       null,
@@ -568,16 +638,36 @@ async function authenticate(
     if (sessionEpoch !== epoch) throw new SessionChangedError();
     throw error;
   }
-  const value = await readJSON(response);
-  if (sessionEpoch !== epoch) throw new SessionChangedError();
-  if (!response.ok) throw new ApiError(response.status, errorBody(value));
-  const token = validateTokenResponse(value);
-  await storeTokenResponse(token, epoch);
-  return token.user;
+  try {
+    const value = await readJSON(scoped.response);
+    if (sessionEpoch !== epoch) throw new SessionChangedError();
+    if (!scoped.response.ok) throw new ApiError(scoped.response.status, errorBody(value));
+    const token = validateTokenResponse(value);
+    await storeTokenResponse(token, epoch);
+    return token.user;
+  } finally {
+    scoped.release();
+  }
 }
 
 export function login(email: string, password: string): Promise<User> {
-  return authenticate("/auth/login", { email, password });
+  return runCookieMutating(() => authenticate("/auth/login", { email, password }));
+}
+
+export function oauthLogin(
+  provider: "google" | "apple",
+  idToken: string,
+  displayName?: string,
+): Promise<User> {
+  return runCookieMutating(() => authenticate("/auth/oauth", {
+    provider,
+    id_token: idToken,
+    ...(displayName ? { display_name: displayName } : {}),
+  }));
+}
+
+export function verifyEmail(token: string): Promise<User> {
+  return runCookieMutating(() => authenticate("/auth/email-verification/verify", { token }));
 }
 
 export async function register(
@@ -587,7 +677,7 @@ export async function register(
 ): Promise<RegistrationResult> {
   const epoch = clearMemorySession();
   await queueStoredTokenClear();
-  const response = await rawRequest(
+  const scoped = await rawRequestScoped(
     "/auth/register",
     {
       method: "POST",
@@ -596,92 +686,87 @@ export async function register(
     null,
     epoch,
   );
-  const value = await readJSON(response);
-  if (sessionEpoch !== epoch) throw new SessionChangedError();
-  if (!response.ok) throw new ApiError(response.status, errorBody(value));
-  const body = errorBody(value);
-  if (response.status !== 202 || body.verification_required !== true) {
-    throw new ApiError(502, { error: "Invalid registration response" });
+  try {
+    const value = await readJSON(scoped.response);
+    if (sessionEpoch !== epoch) throw new SessionChangedError();
+    if (!scoped.response.ok) throw new ApiError(scoped.response.status, errorBody(value));
+    const body = errorBody(value);
+    if (scoped.response.status !== 202 || body.verification_required !== true) {
+      throw new ApiError(502, { error: "Invalid registration response" });
+    }
+    return {
+      verificationRequired: true,
+    };
+  } finally {
+    scoped.release();
   }
-  return {
-    verificationRequired: true,
-    emailSent: response.headers.get("X-Pull-Up-Email-Sent") !== "false",
-  };
 }
 
-export function verifyEmail(token: string): Promise<User> {
-  return authenticate("/auth/email-verification/verify", { token });
-}
-
-export async function requestEmailVerification(email: string): Promise<{ emailSent: boolean }> {
+export async function requestEmailVerification(email: string): Promise<void> {
   const epoch = sessionEpoch;
-  const response = await rawRequest(
+  const scoped = await rawRequestScoped(
     "/auth/email-verification/request",
     { method: "POST", body: JSON.stringify({ email }) },
     null,
     epoch,
   );
-  await responseValue<unknown>(response);
-  return { emailSent: response.headers.get("X-Pull-Up-Email-Sent") !== "false" };
-}
-
-export function oauthLogin(
-  provider: "google" | "apple",
-  idToken: string,
-  displayName?: string,
-): Promise<User> {
-  return authenticate("/auth/oauth", {
-    provider,
-    id_token: idToken,
-    ...(displayName ? { display_name: displayName } : {}),
-  });
+  try {
+    await responseValue<unknown>(scoped.response);
+  } finally {
+    scoped.release();
+  }
 }
 
 export async function logout(options: LogoutOptions = {}): Promise<void> {
-  const tokens = memoryTokens;
-  clearMemorySession();
-  const clearPromise = queueStoredTokenClear();
+  return runCookieMutating(async () => {
+    const tokens = memoryTokens;
+    clearMemorySession();
+    const clearPromise = queueStoredTokenClear();
 
-  // These calls deliberately use the captured credentials outside the new
-  // epoch. Local state is already gone; server revocation is bounded and
-  // best-effort so a bad network can never trap the user in a signed-in UI.
-  const serverCalls: Promise<unknown>[] = [];
-  if (tokens?.accessToken && options.pushToken !== undefined) {
-    serverCalls.push(
-      Promise.resolve(options.pushToken).then((pushToken) => {
-        if (!pushToken) return;
-        return rawRequest(
-          "/me/push-token",
-          { method: "DELETE", body: JSON.stringify({ token: pushToken }) },
-          tokens.accessToken,
+    // These calls deliberately use the captured credentials outside the new
+    // epoch. Local state is already gone; server revocation is bounded and
+    // best-effort so a bad network can never trap the user in a signed-in UI.
+    const serverCalls: Promise<unknown>[] = [];
+    if (tokens?.accessToken && options.pushToken !== undefined) {
+      serverCalls.push(
+        Promise.resolve(options.pushToken).then(async (pushToken) => {
+          if (!pushToken) return;
+          const res = await rawRequest(
+            "/me/push-token",
+            { method: "DELETE", body: JSON.stringify({ token: pushToken }) },
+            tokens.accessToken,
+            undefined,
+            LOGOUT_TIMEOUT_MS,
+          );
+          if (res.ok) {
+            await options.onPushTokenRemoved?.();
+          }
+        }),
+      );
+    }
+    if (isWeb() || tokens?.refreshToken) {
+      serverCalls.push(
+        rawRequest(
+          "/auth/logout",
+          {
+            method: "POST",
+            body: JSON.stringify(
+              isWeb() ? {} : { refresh_token: tokens!.refreshToken },
+            ),
+          },
+          null,
           undefined,
           LOGOUT_TIMEOUT_MS,
-        );
-      }),
-    );
-  }
-  if (isWeb() || tokens?.refreshToken) {
-    serverCalls.push(
-      rawRequest(
-        "/auth/logout",
-        {
-          method: "POST",
-          body: JSON.stringify(
-            isWeb() ? {} : { refresh_token: tokens!.refreshToken },
-          ),
-        },
-        null,
-        undefined,
-        LOGOUT_TIMEOUT_MS,
-      ),
-    );
-  }
-  const cleanup = Promise.allSettled([clearPromise, ...serverCalls]);
-  await new Promise<void>((resolve) => {
-    const timer = setTimeout(resolve, LOGOUT_TIMEOUT_MS);
-    cleanup.then(() => {
-      clearTimeout(timer);
-      resolve();
+        ),
+      );
+    }
+    const cleanup = Promise.allSettled([clearPromise, ...serverCalls]);
+    await new Promise<void>((resolve) => {
+      const timer = setTimeout(resolve, LOGOUT_TIMEOUT_MS);
+      cleanup.then(() => {
+        clearTimeout(timer);
+        resolve();
+      });
     });
   });
 }
