@@ -185,10 +185,10 @@ func (s *Server) handleRefresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if row.RevokedAt != nil {
-		// A revoked token presented again within a short grace window is almost
-		// certainly a legitimate concurrent refresh (e.g., two tabs racing).
-		// Reissue a fresh pair without revoking the family. Beyond the window we
-		// treat it as token theft and revoke the whole chain.
+		// A revoked token presented again is either a benign concurrent replay
+		// (e.g., two tabs racing) or an attacker replaying a stolen token. We
+		// allow a short grace window before treating it as theft and revoking
+		// the whole family. In either case we refuse the refresh.
 		if now.Sub(*row.RevokedAt) > refreshReplayGrace {
 			if err := q.RevokeRefreshTokenFamily(r.Context(), row.FamilyID); err != nil {
 				s.internalError(w, "revoke refresh token family", err)
@@ -202,12 +202,16 @@ func (s *Server) handleRefresh(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusUnauthorized, "refresh token reuse detected; please log in again")
 			return
 		}
+		// Within the grace window: reject without revoking the family so the
+		// legitimate concurrent request's rotated token remains valid.
+		s.clearRefreshCookie(w, r)
+		writeError(w, http.StatusUnauthorized, "refresh token reuse detected")
+		return
 	}
-	if row.RevokedAt == nil {
-		if err := q.RevokeRefreshToken(r.Context(), row.ID); err != nil {
-			s.internalError(w, "rotate refresh token", err)
-			return
-		}
+
+	if err := q.RevokeRefreshToken(r.Context(), row.ID); err != nil {
+		s.internalError(w, "rotate refresh token", err)
+		return
 	}
 	user, err := q.GetUserByID(r.Context(), row.UserID)
 	if err != nil {
@@ -364,10 +368,12 @@ func (s *Server) createEmailVerificationToken(r *http.Request, email string) (st
 	if err != nil {
 		return "", time.Time{}, false, err
 	}
-	// We deliberately do NOT invalidate existing tokens here. A resend creates
-	// a fresh token, but the previously emailed token remains valid until it
-	// expires or is consumed. This prevents a transient email-send failure from
-	// leaving the user with no working link.
+	// A resend creates a fresh token. Invalidate any unconsumed token so the
+	// unique one-active-token-per-user constraint is satisfied and the latest
+	// emailed token is the only one that can be verified.
+	if err := q.InvalidateEmailVerificationTokens(r.Context(), uid); err != nil {
+		return "", time.Time{}, false, err
+	}
 	token, hash, err := auth.NewEmailVerificationToken()
 	if err != nil {
 		return "", time.Time{}, false, err

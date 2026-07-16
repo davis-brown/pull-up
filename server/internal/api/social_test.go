@@ -164,11 +164,21 @@ func TestAdminClearAvatar(t *testing.T) {
 	bootstrapAdmin(t, st, admin.User.ID)
 	target := registerUser(t, ts, "clearavatartarget@test.local", "ClearAvatarTarget")
 
-	// Give the target an avatar to clear.
+	// Give the target an avatar to clear. The handler requires a pending
+	// upload for the key, so create one via the avatar upload endpoint first.
+	resp := doJSON(t, ts, http.MethodPost, "/me/avatar", target.AccessToken, nil)
+	if resp.StatusCode != http.StatusOK {
+		defer resp.Body.Close()
+		t.Fatalf("create avatar upload: status %d: %s", resp.StatusCode, readBody(t, resp))
+	}
+	avatar := decodeJSON[struct {
+		AvatarURL  string `json:"avatar_url"`
+		UploadPath string `json:"upload_path"`
+	}](t, resp)
 	doJSON(t, ts, http.MethodPatch, "/me", target.AccessToken, map[string]any{
-		"avatar_url": "/photos/avatars/" + target.User.ID + "/seed.jpg",
+		"avatar_url": avatar.AvatarURL,
 	}).Body.Close()
-	resp := doJSON(t, ts, http.MethodGet, "/users/"+target.User.ID, "", nil)
+	resp = doJSON(t, ts, http.MethodGet, "/users/"+target.User.ID, "", nil)
 	if p := decodeJSON[struct {
 		AvatarURL *string `json:"avatar_url"`
 	}](t, resp); p.AvatarURL == nil {
