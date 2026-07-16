@@ -173,6 +173,13 @@ type ObjectDeletionQueue struct {
 	Attempts    int32      `json:"attempts"`
 }
 
+type PendingUpload struct {
+	StorageKey string    `json:"storage_key"`
+	OwnerID    uuid.UUID `json:"owner_id"`
+	Purpose    string    `json:"purpose"`
+	CreatedAt  time.Time `json:"created_at"`
+}
+
 type PushToken struct {
 	Token     string    `json:"token"`
 	UserID    uuid.UUID `json:"user_id"`
@@ -181,13 +188,14 @@ type PushToken struct {
 }
 
 type RefreshToken struct {
-	ID        uuid.UUID  `json:"id"`
-	UserID    uuid.UUID  `json:"user_id"`
-	TokenHash string     `json:"token_hash"`
-	ExpiresAt time.Time  `json:"expires_at"`
-	RevokedAt *time.Time `json:"revoked_at"`
-	CreatedAt time.Time  `json:"created_at"`
-	FamilyID  uuid.UUID  `json:"family_id"`
+	ID             uuid.UUID  `json:"id"`
+	UserID         uuid.UUID  `json:"user_id"`
+	TokenHash      string     `json:"token_hash"`
+	ExpiresAt      time.Time  `json:"expires_at"`
+	RevokedAt      *time.Time `json:"revoked_at"`
+	CreatedAt      time.Time  `json:"created_at"`
+	FamilyID       uuid.UUID  `json:"family_id"`
+	ReplacedByHash *string    `json:"replaced_by_hash"`
 }
 
 type SeedRegion struct {

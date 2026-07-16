@@ -122,6 +122,16 @@ func (s *Server) handlePatchMe(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "avatar_url must reference your avatar upload")
 			return
 		}
+		key := strings.TrimPrefix(value, "/photos/")
+		claimed, err := s.store.Queries.ClaimPendingUpload(r.Context(), gen.ClaimPendingUploadParams{
+			StorageKey: key,
+			OwnerID:    uid,
+			Purpose:    "avatar",
+		})
+		if err != nil || claimed != key {
+			writeError(w, http.StatusBadRequest, "avatar_url must reference a pending upload")
+			return
+		}
 		req.AvatarURL.Value = &value
 	}
 	var jerseyNumber *int16
@@ -175,6 +185,14 @@ func validAvatarURL(uid uuid.UUID, value string) bool {
 func (s *Server) handleCreateAvatarUpload(w http.ResponseWriter, r *http.Request) {
 	uid := userID(r)
 	key := fmt.Sprintf("avatars/%s/%s.jpg", uid, uuid.NewString())
+	if err := s.store.Queries.CreatePendingUpload(r.Context(), gen.CreatePendingUploadParams{
+		StorageKey: key,
+		OwnerID:    uid,
+		Purpose:    "avatar",
+	}); err != nil {
+		s.internalError(w, "record pending upload", err)
+		return
+	}
 	exp := time.Now().Add(uploadURLTTL).Unix()
 	writeJSON(w, http.StatusOK, map[string]any{
 		"avatar_url":           "/photos/" + key,

@@ -14,6 +14,7 @@ WITH candidates AS (
     FROM object_deletion_queue q
     WHERE q.requested_at <= now()
       AND (q.claimed_at IS NULL OR q.claimed_at < now() - interval '5 minutes')
+      AND q.storage_key NOT IN (SELECT storage_key FROM pending_uploads)
       AND NOT EXISTS (
           SELECT 1 FROM users u WHERE u.avatar_url = '/photos/' || q.storage_key
       )
@@ -44,3 +45,31 @@ WHERE storage_key = $1 AND status IN ('pending', 'visible');
 INSERT INTO object_deletion_queue (storage_key, requested_at)
 VALUES ($1, now() + interval '1 hour')
 ON CONFLICT (storage_key) DO NOTHING;
+
+-- name: CreatePendingUpload :exec
+INSERT INTO pending_uploads (storage_key, owner_id, purpose)
+VALUES ($1, $2, $3)
+ON CONFLICT (storage_key) DO NOTHING;
+
+-- name: ClaimPendingUpload :one
+-- Atomically removes a pending upload row and returns the owner, so an avatar
+-- update can only reference keys that were actually authorized for this user.
+DELETE FROM pending_uploads
+WHERE storage_key = $1 AND owner_id = $2 AND purpose = $3
+RETURNING storage_key;
+
+-- name: IsPendingUpload :one
+SELECT EXISTS (
+    SELECT 1 FROM pending_uploads WHERE storage_key = sqlc.arg(storage_key)
+)::bool AS pending;
+
+-- name: ListStalePendingUploads :many
+SELECT storage_key
+FROM pending_uploads
+WHERE created_at < now() - interval '30 minutes'
+ORDER BY created_at
+LIMIT sqlc.arg(batch_size);
+
+-- name: DeletePendingUploads :execrows
+DELETE FROM pending_uploads
+WHERE storage_key = ANY(sqlc.arg(storage_keys)::text[]);

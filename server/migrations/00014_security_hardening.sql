@@ -8,6 +8,10 @@ ALTER TABLE refresh_tokens ADD COLUMN family_id uuid;
 UPDATE refresh_tokens SET family_id = user_id;
 ALTER TABLE refresh_tokens ALTER COLUMN family_id SET NOT NULL;
 CREATE INDEX refresh_tokens_family_idx ON refresh_tokens (family_id);
+-- Record the replacement token so a concurrent replay of the same old token
+-- can be answered with the same new pair instead of revoking the family.
+ALTER TABLE refresh_tokens ADD COLUMN replaced_by_hash text;
+CREATE INDEX refresh_tokens_replaced_by_hash_idx ON refresh_tokens (replaced_by_hash) WHERE replaced_by_hash IS NOT NULL;
 
 -- Existing accounts predate verification and remain verified. New password
 -- accounts are created with NULL; OAuth accounts are marked by their insert.
@@ -72,6 +76,22 @@ CREATE INDEX object_deletion_queue_claim_idx
     ON object_deletion_queue (requested_at)
     WHERE claimed_at IS NULL;
 
+CREATE INDEX court_photos_storage_key_idx ON court_photos (storage_key);
+CREATE INDEX users_avatar_url_idx ON users (avatar_url);
+
+-- Pending uploads: keys that have been authorized but not yet referenced by
+-- durable metadata. Stale rows are cleaned up by the cron and their R2 objects
+-- removed, preventing orphan bytes when a client abandons an upload.
+CREATE TABLE pending_uploads (
+    storage_key text PRIMARY KEY,
+    owner_id    uuid NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    purpose     text NOT NULL CHECK (purpose IN ('avatar','court_photo')),
+    created_at  timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX pending_uploads_owner_idx ON pending_uploads (owner_id);
+CREATE INDEX pending_uploads_stale_idx ON pending_uploads (created_at)
+    WHERE created_at < now() - interval '30 minutes';
+
 CREATE FUNCTION enqueue_owned_object(key_to_delete text) RETURNS void AS $$
 BEGIN
     IF key_to_delete IS NULL OR key_to_delete = '' OR key_to_delete LIKE '/%'
@@ -133,6 +153,20 @@ AFTER UPDATE OR DELETE ON court_photos
 FOR EACH ROW EXECUTE FUNCTION queue_court_photo_object();
 
 -- +goose Down
+
+-- Reversing the verification requirement is unsafe while unverified password
+-- accounts exist: the pre-migration code would treat them as fully verified.
+-- Abort the rollback so operators must explicitly handle those accounts first.
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM users
+        WHERE auth_provider = 'password' AND email_verified_at IS NULL
+    ) THEN
+        RAISE EXCEPTION 'Cannot roll back 00014: unverified password users exist. Verify or delete them first.';
+    END IF;
+END $$;
+
 DROP TRIGGER court_photos_queue_object ON court_photos;
 DROP FUNCTION queue_court_photo_object();
 DROP TRIGGER users_queue_deleted_avatar ON users;
@@ -141,6 +175,13 @@ DROP FUNCTION queue_deleted_avatar();
 DROP FUNCTION queue_replaced_avatar();
 DROP FUNCTION enqueue_owned_object(text);
 DROP TABLE object_deletion_queue;
+
+DROP INDEX pending_uploads_stale_idx;
+DROP INDEX pending_uploads_owner_idx;
+DROP TABLE pending_uploads;
+
+DROP INDEX users_avatar_url_idx;
+DROP INDEX court_photos_storage_key_idx;
 
 DROP INDEX check_ins_one_open_per_user;
 ALTER TABLE check_ins ADD COLUMN reported_location geography(Point, 4326);
@@ -156,5 +197,7 @@ ALTER TABLE users DROP COLUMN email_verified_at;
 ALTER TABLE courts DROP COLUMN enrich_attempts;
 ALTER TABLE courts DROP COLUMN enrich_claimed_at;
 
+DROP INDEX refresh_tokens_replaced_by_hash_idx;
+ALTER TABLE refresh_tokens DROP COLUMN replaced_by_hash;
 DROP INDEX refresh_tokens_family_idx;
 ALTER TABLE refresh_tokens DROP COLUMN family_id;
