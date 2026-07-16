@@ -60,12 +60,8 @@ export default function VerifyEmailScreen() {
     setBusy(true);
     setError(null);
     try {
-      const result = await requestEmailVerification(normalized);
-      setMessage(
-        result.emailSent
-          ? "If that account is awaiting verification, a new link is on its way."
-          : "The email service is temporarily unavailable. Please try again.",
-      );
+      await requestEmailVerification(normalized);
+      setMessage("If that account is awaiting verification, a new link is on its way.");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not request a new link.");
     } finally {

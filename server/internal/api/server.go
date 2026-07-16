@@ -116,6 +116,7 @@ func (s *Server) Routes() http.Handler {
 		// Secret-guarded Worker/scheduler integration endpoints.
 		r.Route("/internal", func(r chi.Router) {
 			r.Use(s.requireInternalSecret)
+			r.Get("/version", s.handleInternalVersion)
 			r.Post("/drain", s.handleInternalDrain)
 			r.Post("/media/authorize", s.handleInternalAuthorizeMedia)
 			r.Post("/media/uploaded", s.handleInternalMediaUploaded)
