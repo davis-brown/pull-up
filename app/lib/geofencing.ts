@@ -12,10 +12,17 @@ import * as Location from "expo-location";
 import * as Notifications from "expo-notifications";
 import * as TaskManager from "expo-task-manager";
 import { Platform } from "react-native";
-import { api, onSessionExpired } from "./api";
+import { api, getExpectedUserId, onSessionExpired } from "./api";
 import { parseRouteId, safePathSegment } from "./routes";
 import { backgroundStorage as storage } from "./storage";
 import type { CheckIn, CourtDetail, CourtSummary } from "./types";
+
+class AccountChangedError extends Error {
+  constructor() {
+    super("Account changed during geofence task");
+    this.name = "AccountChangedError";
+  }
+}
 
 const GEOFENCE_TASK = "pullup-court-geofence";
 const ACTIVE_USER_KEY = "pullup.geofence_user";
@@ -104,13 +111,14 @@ if (geofencingSupported) {
     };
     const courtId = parseRouteId(region.identifier);
     if (!courtId) return;
+    const expectedUser = getExpectedUserId();
     const mode = await getGeofenceMode();
     if (mode === "off") return;
     try {
       if (eventType === Location.GeofencingEventType.Enter) {
-        await onEnter(courtId, mode);
+        await onEnter(courtId, mode, expectedUser);
       } else if (eventType === Location.GeofencingEventType.Exit) {
-        await onExit(courtId);
+        await onExit(courtId, expectedUser);
       }
     } catch {
       // Background context: nothing to surface; the next event retries.
@@ -118,9 +126,17 @@ if (geofencingSupported) {
   });
 }
 
-async function onEnter(courtId: string, mode: GeofenceMode): Promise<void> {
+function checkAccountLease(expectedUser: string | null): void {
+  if (expectedUser !== getExpectedUserId()) {
+    throw new AccountChangedError();
+  }
+}
+
+async function onEnter(courtId: string, mode: GeofenceMode, leaseUser: string | null): Promise<void> {
   const segment = safePathSegment(courtId);
+  checkAccountLease(leaseUser);
   const court = await api<CourtDetail>(`/courts/${segment}`);
+  checkAccountLease(leaseUser);
 
   if (mode === "prompt") {
     await Notifications.scheduleNotificationAsync({
@@ -139,6 +155,7 @@ async function onEnter(courtId: string, mode: GeofenceMode): Promise<void> {
   const pos = await Location.getCurrentPositionAsync({
     accuracy: Location.Accuracy.High,
   });
+  checkAccountLease(leaseUser);
   await api<CheckIn>(`/courts/${segment}/check-ins`, {
     method: "POST",
     body: JSON.stringify({
@@ -157,10 +174,12 @@ async function onEnter(courtId: string, mode: GeofenceMode): Promise<void> {
   });
 }
 
-async function onExit(courtId: string): Promise<void> {
+async function onExit(courtId: string, leaseUser: string | null): Promise<void> {
+  checkAccountLease(leaseUser);
   // Only automatic check-ins are auto-closed; a manual check-in is the
   // user's own statement and stays until they leave it or it expires.
   const res = await api<{ check_in: CheckIn | null }>("/me/check-ins/current");
+  checkAccountLease(leaseUser);
   const current = res.check_in;
   if (current && current.court_id === courtId && current.source === "geofence_auto") {
     await api<void>("/check-ins/current", { method: "DELETE" });

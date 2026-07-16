@@ -46,6 +46,26 @@ jobs:
         run: npm --prefix deploy/api run deploy
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      - name: Wait for container version to match deployed commit
+        env:
+          API_ORIGIN: ${{ secrets.EXPO_PUBLIC_API_URL }}
+          INTERNAL_TASK_SECRET: ${{ secrets.INTERNAL_TASK_SECRET }}
+          EXPECTED_COMMIT: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          test -n "$API_ORIGIN"
+          for i in $(seq 1 60); do
+            got="$(curl --fail --silent --show-error --max-time 10 \
+              -H "X-Internal-Task: ${INTERNAL_TASK_SECRET}" \
+              "${API_ORIGIN%/}/api/v1/internal/version" | node -e 'let d="";process.stdin.on("data",c=>d+=c);process.stdin.on("end",()=>{try{console.log(JSON.parse(d).commit)}catch{}})')" || true
+            if [ "$got" = "$EXPECTED_COMMIT" ]; then
+              echo "Container is running commit $got"
+              exit 0
+            fi
+            echo "Waiting for container rollout... ($i)"
+            sleep 10
+          done
+          echo "Container did not reach expected commit $EXPECTED_COMMIT"
+          exit 1
       - name: Smoke API health and upload authorization
         env:
           API_ORIGIN: ${{ secrets.EXPO_PUBLIC_API_URL }}

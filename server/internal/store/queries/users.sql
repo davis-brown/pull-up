@@ -41,8 +41,8 @@ RETURNING id, email, display_name, avatar_url, reputation, created_at, is_admin,
 UPDATE users SET avatar_url = NULL WHERE id = $1;
 
 -- name: CreateRefreshToken :one
-INSERT INTO refresh_tokens (user_id, family_id, token_hash, expires_at)
-VALUES ($1, $2, $3, $4)
+INSERT INTO refresh_tokens (user_id, family_id, token_hash, replaced_by_hash, expires_at)
+VALUES ($1, $2, $3, sqlc.narg('replaced_by_hash'), $4)
 RETURNING id;
 
 -- name: GetRefreshTokenByHash :one
@@ -51,10 +51,16 @@ FROM refresh_tokens
 WHERE token_hash = $1;
 
 -- name: GetRefreshTokenByHashForUpdate :one
-SELECT id, user_id, family_id, token_hash, expires_at, revoked_at, created_at
+SELECT id, user_id, family_id, token_hash, expires_at, revoked_at, replaced_by_hash, created_at
 FROM refresh_tokens
 WHERE token_hash = $1
 FOR UPDATE;
+
+-- name: GetRefreshTokenReplacement :one
+-- Returns the token that replaced a recently rotated one, if any.
+SELECT id, user_id, family_id, token_hash, expires_at, revoked_at, replaced_by_hash, created_at
+FROM refresh_tokens
+WHERE token_hash = $1 AND revoked_at IS NULL;
 
 -- name: RevokeRefreshToken :exec
 UPDATE refresh_tokens SET revoked_at = now()
@@ -63,6 +69,11 @@ WHERE id = $1 AND revoked_at IS NULL;
 -- name: RevokeRefreshTokenFamily :exec
 UPDATE refresh_tokens SET revoked_at = now()
 WHERE family_id = $1 AND revoked_at IS NULL;
+
+-- name: SetRefreshTokenReplacement :exec
+UPDATE refresh_tokens
+SET replaced_by_hash = $2
+WHERE id = $1 AND replaced_by_hash IS NULL;
 
 -- Email verification -------------------------------------------------------
 

@@ -175,6 +175,7 @@ func (s *Server) handleRefresh(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, "lock refresh token", err)
 		return
 	}
+	const refreshReplayGrace = 5 * time.Second
 	now := time.Now()
 	// Expiry is checked before reuse. An expired, previously rotated token is
 	// inert and cannot be used to force-log-out the still-current family.
@@ -184,21 +185,29 @@ func (s *Server) handleRefresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if row.RevokedAt != nil {
-		if err := q.RevokeRefreshTokenFamily(r.Context(), row.FamilyID); err != nil {
-			s.internalError(w, "revoke refresh token family", err)
+		// A revoked token presented again within a short grace window is almost
+		// certainly a legitimate concurrent refresh (e.g., two tabs racing).
+		// Reissue a fresh pair without revoking the family. Beyond the window we
+		// treat it as token theft and revoke the whole chain.
+		if now.Sub(*row.RevokedAt) > refreshReplayGrace {
+			if err := q.RevokeRefreshTokenFamily(r.Context(), row.FamilyID); err != nil {
+				s.internalError(w, "revoke refresh token family", err)
+				return
+			}
+			if err := tx.Commit(r.Context()); err != nil {
+				s.internalError(w, "commit refresh family revocation", err)
+				return
+			}
+			s.clearRefreshCookie(w, r)
+			writeError(w, http.StatusUnauthorized, "refresh token reuse detected; please log in again")
 			return
 		}
-		if err := tx.Commit(r.Context()); err != nil {
-			s.internalError(w, "commit refresh family revocation", err)
-			return
-		}
-		s.clearRefreshCookie(w, r)
-		writeError(w, http.StatusUnauthorized, "refresh token reuse detected; please log in again")
-		return
 	}
-	if err := q.RevokeRefreshToken(r.Context(), row.ID); err != nil {
-		s.internalError(w, "rotate refresh token", err)
-		return
+	if row.RevokedAt == nil {
+		if err := q.RevokeRefreshToken(r.Context(), row.ID); err != nil {
+			s.internalError(w, "rotate refresh token", err)
+			return
+		}
 	}
 	user, err := q.GetUserByID(r.Context(), row.UserID)
 	if err != nil {
@@ -221,6 +230,18 @@ func (s *Server) handleRefresh(w http.ResponseWriter, r *http.Request) {
 	}); err != nil {
 		s.internalError(w, "store rotated refresh token", err)
 		return
+	}
+	// Record the replacement on the consumed token so we can identify benign
+	// replays and audit reuse chains.
+	if row.RevokedAt == nil {
+		replacementHash := &refreshHash
+		if err := q.SetRefreshTokenReplacement(r.Context(), gen.SetRefreshTokenReplacementParams{
+			ID:             row.ID,
+			ReplacedByHash: replacementHash,
+		}); err != nil {
+			s.internalError(w, "set refresh token replacement", err)
+			return
+		}
 	}
 	if err := tx.Commit(r.Context()); err != nil {
 		s.internalError(w, "commit refresh rotation", err)
@@ -304,28 +325,32 @@ func (s *Server) handleRequestEmailVerification(w http.ResponseWriter, r *http.R
 	if !readJSON(w, r, &req) {
 		return
 	}
-	// Missing internal authentication deliberately performs no database
-	// mutation. This prevents an attacker from invalidating a victim's emailed
-	// token while retaining a non-enumerating public response.
-	if s.internalSecretValid(r) {
-		token, expiresAt, eligible, err := s.replaceEmailVerificationToken(
-			r, strings.TrimSpace(strings.ToLower(req.Email)))
-		if err != nil {
-			s.internalError(w, "replace email verification token", err)
-			return
-		}
-		if eligible {
-			w.Header().Set(emailVerificationTokenHeader, token)
-			w.Header().Set(emailVerificationExpiryHeader, expiresAt.UTC().Format(time.RFC3339))
-			w.Header().Set(emailVerificationToHeader, strings.TrimSpace(strings.ToLower(req.Email)))
-		}
+	// This route is only reachable from the API Worker, which forwards the
+	// public resend request after applying its own rate limits. The internal
+	// secret gate is defense-in-depth against direct container access.
+	if !s.internalSecretValid(r) {
+		writeJSON(w, http.StatusAccepted, map[string]string{
+			"status": "if the account is eligible, a verification message will be sent",
+		})
+		return
+	}
+	token, expiresAt, eligible, err := s.createEmailVerificationToken(
+		r, strings.TrimSpace(strings.ToLower(req.Email)))
+	if err != nil {
+		s.internalError(w, "create email verification token", err)
+		return
+	}
+	if eligible {
+		w.Header().Set(emailVerificationTokenHeader, token)
+		w.Header().Set(emailVerificationExpiryHeader, expiresAt.UTC().Format(time.RFC3339))
+		w.Header().Set(emailVerificationToHeader, strings.TrimSpace(strings.ToLower(req.Email)))
 	}
 	writeJSON(w, http.StatusAccepted, map[string]string{
 		"status": "if the account is eligible, a verification message will be sent",
 	})
 }
 
-func (s *Server) replaceEmailVerificationToken(r *http.Request, email string) (string, time.Time, bool, error) {
+func (s *Server) createEmailVerificationToken(r *http.Request, email string) (string, time.Time, bool, error) {
 	tx, err := s.store.Pool.Begin(r.Context())
 	if err != nil {
 		return "", time.Time{}, false, err
@@ -339,9 +364,10 @@ func (s *Server) replaceEmailVerificationToken(r *http.Request, email string) (s
 	if err != nil {
 		return "", time.Time{}, false, err
 	}
-	if err := q.InvalidateEmailVerificationTokens(r.Context(), uid); err != nil {
-		return "", time.Time{}, false, err
-	}
+	// We deliberately do NOT invalidate existing tokens here. A resend creates
+	// a fresh token, but the previously emailed token remains valid until it
+	// expires or is consumed. This prevents a transient email-send failure from
+	// leaving the user with no working link.
 	token, hash, err := auth.NewEmailVerificationToken()
 	if err != nil {
 		return "", time.Time{}, false, err

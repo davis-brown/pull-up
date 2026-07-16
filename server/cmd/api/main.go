@@ -19,8 +19,16 @@ import (
 	"github.com/davisbrown/pull-up/server/internal/store"
 )
 
+var (
+	version = "dev"
+	commit  = "unknown"
+)
+
 func main() {
 	log := slog.New(slog.NewTextHandler(os.Stderr, nil))
+
+	os.Setenv("VERSION", version)
+	os.Setenv("COMMIT", commit)
 
 	cfg, err := config.Load()
 	if err != nil {

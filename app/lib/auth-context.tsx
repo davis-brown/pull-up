@@ -33,7 +33,7 @@ interface AuthState {
     displayName: string,
   ) => Promise<apiClient.RegistrationResult>;
   verifyEmail: (token: string) => Promise<void>;
-  requestEmailVerification: (email: string) => Promise<{ emailSent: boolean }>;
+  requestEmailVerification: (email: string) => Promise<void>;
   oauthSignIn: (
     provider: "google" | "apple",
     idToken: string,
@@ -66,6 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       void queryClient.cancelQueries().catch(() => {});
       queryClient.clear();
     }
+    apiClient.setExpectedUserId(nextId);
     userRef.current = next;
     setUser(next);
   }, [queryClient]);
@@ -76,6 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void deactivateGeofencing().catch(() => {});
     return pushToken;
   }, []);
+
 
   const startIdentityServices = useCallback((next: User) => {
     const services = ++servicesRef.current;
@@ -177,10 +179,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const operation = ++operationRef.current;
     restorePendingRef.current = false;
     const previousId = userRef.current?.id ?? null;
-    const pushToken = stopIdentityServices(previousId);
+    const pushAssociation = await stopIdentityServices(previousId);
     applyIdentity(null);
     if (previousId) {
-      await apiClient.logout({ pushToken });
+      await apiClient.logout({
+        pushToken: pushAssociation?.token,
+        onPushTokenRemoved: pushAssociation?.commit,
+      });
       if (operation !== operationRef.current) throw new apiClient.SessionChangedError();
     }
     const next = await request();
@@ -196,10 +201,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const operation = ++operationRef.current;
     restorePendingRef.current = false;
     const previousId = userRef.current?.id ?? null;
-    const pushToken = stopIdentityServices(previousId);
+    const pushAssociation = await stopIdentityServices(previousId);
     applyIdentity(null);
     if (previousId) {
-      await apiClient.logout({ pushToken });
+      await apiClient.logout({
+        pushToken: pushAssociation?.token,
+        onPushTokenRemoved: pushAssociation?.commit,
+      });
       if (operation !== operationRef.current) throw new apiClient.SessionChangedError();
     }
     const result = await apiClient.register(email, password, displayName);
@@ -223,10 +231,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     operationRef.current += 1;
     restorePendingRef.current = false;
     const previousId = userRef.current?.id ?? null;
-    const pushToken = stopIdentityServices(previousId);
+    const pushAssociation = await stopIdentityServices(previousId);
     // Local identity and all account data disappear before the first await.
     applyIdentity(null);
-    await apiClient.logout({ pushToken });
+    await apiClient.logout({
+      pushToken: pushAssociation?.token,
+      onPushTokenRemoved: pushAssociation?.commit,
+    });
   };
 
   const refreshUser = async () => {

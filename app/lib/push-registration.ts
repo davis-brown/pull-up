@@ -24,7 +24,7 @@ export function setPushRegistrationUser(userId: string): void {
 
 export async function cancelPushTokenAssociation(
   userId: string | null,
-): Promise<string | null> {
+): Promise<{ token: string | null; commit: () => Promise<void> } | null> {
   registrationGeneration += 1;
   activeUserId = null;
   if (!userId || Platform.OS === "web") return null;
@@ -37,12 +37,18 @@ export async function cancelPushTokenAssociation(
     }
   }
   memoryTokens.delete(userId);
-  try {
-    await storage.remove(tokenKey(userId));
-  } catch {
-    // Server unregistration and the session epoch still prevent reassignment.
-  }
-  return token;
+  const commit = async () => {
+    try {
+      await storage.remove(tokenKey(userId));
+    } catch {
+      // Best-effort cleanup.
+    }
+  };
+  return { token, commit };
+}
+
+export async function getStoredPushToken(userId: string): Promise<string | null> {
+  return memoryTokens.get(userId) ?? storage.get(tokenKey(userId)).catch(() => null);
 }
 
 export async function registerPushToken(opts?: {

@@ -40,16 +40,17 @@ func (q *Queries) CreateEmailVerificationToken(ctx context.Context, arg CreateEm
 }
 
 const createRefreshToken = `-- name: CreateRefreshToken :one
-INSERT INTO refresh_tokens (user_id, family_id, token_hash, expires_at)
-VALUES ($1, $2, $3, $4)
+INSERT INTO refresh_tokens (user_id, family_id, token_hash, replaced_by_hash, expires_at)
+VALUES ($1, $2, $3, $5, $4)
 RETURNING id
 `
 
 type CreateRefreshTokenParams struct {
-	UserID    uuid.UUID `json:"user_id"`
-	FamilyID  uuid.UUID `json:"family_id"`
-	TokenHash string    `json:"token_hash"`
-	ExpiresAt time.Time `json:"expires_at"`
+	UserID         uuid.UUID `json:"user_id"`
+	FamilyID       uuid.UUID `json:"family_id"`
+	TokenHash      string    `json:"token_hash"`
+	ExpiresAt      time.Time `json:"expires_at"`
+	ReplacedByHash *string   `json:"replaced_by_hash"`
 }
 
 func (q *Queries) CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) (uuid.UUID, error) {
@@ -58,6 +59,7 @@ func (q *Queries) CreateRefreshToken(ctx context.Context, arg CreateRefreshToken
 		arg.FamilyID,
 		arg.TokenHash,
 		arg.ExpiresAt,
+		arg.ReplacedByHash,
 	)
 	var id uuid.UUID
 	err := row.Scan(&id)
@@ -147,20 +149,21 @@ func (q *Queries) GetRefreshTokenByHash(ctx context.Context, tokenHash string) (
 }
 
 const getRefreshTokenByHashForUpdate = `-- name: GetRefreshTokenByHashForUpdate :one
-SELECT id, user_id, family_id, token_hash, expires_at, revoked_at, created_at
+SELECT id, user_id, family_id, token_hash, expires_at, revoked_at, replaced_by_hash, created_at
 FROM refresh_tokens
 WHERE token_hash = $1
 FOR UPDATE
 `
 
 type GetRefreshTokenByHashForUpdateRow struct {
-	ID        uuid.UUID  `json:"id"`
-	UserID    uuid.UUID  `json:"user_id"`
-	FamilyID  uuid.UUID  `json:"family_id"`
-	TokenHash string     `json:"token_hash"`
-	ExpiresAt time.Time  `json:"expires_at"`
-	RevokedAt *time.Time `json:"revoked_at"`
-	CreatedAt time.Time  `json:"created_at"`
+	ID             uuid.UUID  `json:"id"`
+	UserID         uuid.UUID  `json:"user_id"`
+	FamilyID       uuid.UUID  `json:"family_id"`
+	TokenHash      string     `json:"token_hash"`
+	ExpiresAt      time.Time  `json:"expires_at"`
+	RevokedAt      *time.Time `json:"revoked_at"`
+	ReplacedByHash *string    `json:"replaced_by_hash"`
+	CreatedAt      time.Time  `json:"created_at"`
 }
 
 func (q *Queries) GetRefreshTokenByHashForUpdate(ctx context.Context, tokenHash string) (GetRefreshTokenByHashForUpdateRow, error) {
@@ -173,6 +176,41 @@ func (q *Queries) GetRefreshTokenByHashForUpdate(ctx context.Context, tokenHash 
 		&i.TokenHash,
 		&i.ExpiresAt,
 		&i.RevokedAt,
+		&i.ReplacedByHash,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getRefreshTokenReplacement = `-- name: GetRefreshTokenReplacement :one
+SELECT id, user_id, family_id, token_hash, expires_at, revoked_at, replaced_by_hash, created_at
+FROM refresh_tokens
+WHERE token_hash = $1 AND revoked_at IS NULL
+`
+
+type GetRefreshTokenReplacementRow struct {
+	ID             uuid.UUID  `json:"id"`
+	UserID         uuid.UUID  `json:"user_id"`
+	FamilyID       uuid.UUID  `json:"family_id"`
+	TokenHash      string     `json:"token_hash"`
+	ExpiresAt      time.Time  `json:"expires_at"`
+	RevokedAt      *time.Time `json:"revoked_at"`
+	ReplacedByHash *string    `json:"replaced_by_hash"`
+	CreatedAt      time.Time  `json:"created_at"`
+}
+
+// Returns the token that replaced a recently rotated one, if any.
+func (q *Queries) GetRefreshTokenReplacement(ctx context.Context, tokenHash string) (GetRefreshTokenReplacementRow, error) {
+	row := q.db.QueryRow(ctx, getRefreshTokenReplacement, tokenHash)
+	var i GetRefreshTokenReplacementRow
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.FamilyID,
+		&i.TokenHash,
+		&i.ExpiresAt,
+		&i.RevokedAt,
+		&i.ReplacedByHash,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -312,6 +350,22 @@ WHERE family_id = $1 AND revoked_at IS NULL
 
 func (q *Queries) RevokeRefreshTokenFamily(ctx context.Context, familyID uuid.UUID) error {
 	_, err := q.db.Exec(ctx, revokeRefreshTokenFamily, familyID)
+	return err
+}
+
+const setRefreshTokenReplacement = `-- name: SetRefreshTokenReplacement :exec
+UPDATE refresh_tokens
+SET replaced_by_hash = $2
+WHERE id = $1 AND replaced_by_hash IS NULL
+`
+
+type SetRefreshTokenReplacementParams struct {
+	ID             uuid.UUID `json:"id"`
+	ReplacedByHash *string   `json:"replaced_by_hash"`
+}
+
+func (q *Queries) SetRefreshTokenReplacement(ctx context.Context, arg SetRefreshTokenReplacementParams) error {
+	_, err := q.db.Exec(ctx, setRefreshTokenReplacement, arg.ID, arg.ReplacedByHash)
 	return err
 }
 

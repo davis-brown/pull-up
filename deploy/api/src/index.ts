@@ -26,6 +26,8 @@ const INTERNAL_PREFIX = "/api/v1/internal";
 const DENY_ALL_CORS_ORIGIN = "https://cors.invalid";
 const MAX_INTERNAL_JSON_BYTES = 256 * 1024;
 const MAX_DELETION_BATCH = 100;
+const PHOTO_READ_WINDOW_MS = 60_000;
+const PHOTO_READ_MAX_PER_WINDOW = 100;
 const EMAIL_TOKEN_HEADER = "X-Pull-Up-Email-Verification-Token";
 const EMAIL_EXPIRY_HEADER = "X-Pull-Up-Email-Verification-Expires";
 const EMAIL_TO_HEADER = "X-Pull-Up-Email-Verification-To";
@@ -58,6 +60,22 @@ export class ApiContainer extends Container<RuntimeEnv> {
 }
 
 class UploadBodyError extends Error {}
+
+// Simple in-memory sliding-window rate limiter for anonymous photo reads.
+// Keys are per-PoP and per-object; the limit is intentionally lenient for
+// legitimate gallery browsing but blocks blind scanning.
+const readRateLimit = new Map<string, { count: number; resetAt: number }>();
+
+function trackPhotoRead(key: string): { allowed: boolean; count: number } {
+  const now = Date.now();
+  const entry = readRateLimit.get(key);
+  if (!entry || now >= entry.resetAt) {
+    readRateLimit.set(key, { count: 1, resetAt: now + PHOTO_READ_WINDOW_MS });
+    return { allowed: true, count: 1 };
+  }
+  entry.count += 1;
+  return { allowed: entry.count <= PHOTO_READ_MAX_PER_WINDOW, count: entry.count };
+}
 
 function jsonResponse(body: unknown, status: number, headers?: HeadersInit): Response {
   const responseHeaders = new Headers(headers);
@@ -122,12 +140,12 @@ function containerProxyRequest(request: Request, internalSecret?: string): Reque
   return new Request(request, { headers });
 }
 
-function sanitizedEmailResponse(response: Response, emailSent?: boolean): Response {
+function sanitizedEmailResponse(response: Response): Response {
   const headers = new Headers(response.headers);
   headers.delete(EMAIL_TOKEN_HEADER);
   headers.delete(EMAIL_EXPIRY_HEADER);
   headers.delete(EMAIL_TO_HEADER);
-  if (emailSent !== undefined) headers.set(EMAIL_SENT_HEADER, String(emailSent));
+  headers.delete(EMAIL_SENT_HEADER);
   return new Response(response.body, {
     status: response.status,
     statusText: response.statusText,
@@ -142,7 +160,7 @@ async function deliverVerificationEmail(response: Response, env: RuntimeEnv): Pr
   if (!token || !expires || !recipient) {
     // Resend responses deliberately look the same for unknown and verified
     // addresses, preventing account enumeration.
-    return sanitizedEmailResponse(response, response.ok ? true : undefined);
+    return sanitizedEmailResponse(response);
   }
 
   let webOrigin: string;
@@ -157,13 +175,13 @@ async function deliverVerificationEmail(response: Response, env: RuntimeEnv): Pr
       message: "verification email configuration invalid",
       error: error instanceof Error ? error.message : String(error),
     }));
-    return sanitizedEmailResponse(response, false);
+    return sanitizedEmailResponse(response);
   }
 
   const from = env.EMAIL_FROM?.trim() ?? "";
   if (!/^\S+@\S+\.\S+$/.test(from) || !/^\S+@\S+\.\S+$/.test(recipient)) {
     console.error(JSON.stringify({ message: "verification email address configuration invalid" }));
-    return sanitizedEmailResponse(response, false);
+    return sanitizedEmailResponse(response);
   }
 
   const verificationUrl = new URL("/verify-email", webOrigin);
@@ -194,13 +212,13 @@ async function deliverVerificationEmail(response: Response, env: RuntimeEnv): Pr
       text,
       html,
     });
-    return sanitizedEmailResponse(response, true);
+    return sanitizedEmailResponse(response);
   } catch (error) {
     console.error(JSON.stringify({
       message: "verification email send failed",
       error: error instanceof Error ? error.message : String(error),
     }));
-    return sanitizedEmailResponse(response, false);
+    return sanitizedEmailResponse(response);
   }
 }
 
@@ -306,11 +324,25 @@ async function handlePhotoUpload(
         if (existing?.customMetadata?.validated !== "image/jpeg") {
           return photoError(request, env, 409, "photo already uploaded");
         }
-        await recordMediaUploaded(env, key);
+        try {
+          await recordMediaUploaded(env, key);
+        } catch (finalizeError) {
+          // Leave the existing validated object in place; finalization was
+          // only a re-confirmation. The error is still logged and surfaced.
+          throw finalizeError;
+        }
         return withPhotoHeaders(jsonResponse({ ok: true }, 200), request, env);
       }
       await upload.pump;
-      await recordMediaUploaded(env, key);
+      try {
+        await recordMediaUploaded(env, key);
+      } catch (finalizeError) {
+        // Finalization failed but the object was already written. Remove the
+        // orphan so we do not retain unreferenced bytes. The client will retry
+        // with a fresh key if it chooses to.
+        await env.PHOTOS.delete(key).catch(() => {});
+        throw finalizeError;
+      }
     } catch (error) {
       const pumpError = await upload.cancel();
       throw pumpError instanceof UploadBodyError ? pumpError : error;
@@ -445,6 +477,21 @@ async function handlePhotoRead(
   env: RuntimeEnv,
   key: string,
 ): Promise<Response> {
+  // Rate-limit anonymous reads at the edge before any backend work.
+  const rateLimitKey = `${request.cf?.colo ?? "unknown"}:${key}`;
+  const readLimit = trackPhotoRead(rateLimitKey);
+  if (!readLimit.allowed) {
+    return photoError(request, env, 429, "too many photo reads");
+  }
+
+  // Check R2 existence first. A missing object is the common case for random
+  // keys, and this avoids pointless database/container load.
+  const headOnly = request.method === "HEAD";
+  const object = headOnly ? await env.PHOTOS.head(key) : await env.PHOTOS.get(key);
+  if (!object) {
+    return photoError(request, env, 404, "not found");
+  }
+
   let authorized: boolean;
   try {
     authorized = await authorizeMedia(env, key);
@@ -457,10 +504,6 @@ async function handlePhotoRead(
     return photoError(request, env, 503, "media authorization unavailable");
   }
   if (!authorized) return photoError(request, env, 404, "not found");
-
-  const headOnly = request.method === "HEAD";
-  const object = headOnly ? await env.PHOTOS.head(key) : await env.PHOTOS.get(key);
-  if (!object) return photoError(request, env, 404, "not found");
 
   const headers = new Headers();
   object.writeHttpMetadata(headers);

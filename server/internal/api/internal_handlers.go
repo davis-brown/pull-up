@@ -7,6 +7,13 @@ import (
 	"time"
 )
 
+func (s *Server) handleInternalVersion(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]string{
+		"version": s.cfg.Version,
+		"commit":  s.cfg.Commit,
+	})
+}
+
 // handleInternalDrain lets an external scheduler (Cloudflare cron, GitHub
 // Actions, any pinger) advance the background queues for a bounded window, so
 // backlog drains even with no organic traffic. Secret-guarded; not in the
@@ -30,7 +37,48 @@ func (s *Server) handleInternalDrain(w http.ResponseWriter, r *http.Request) {
 			break // nothing claimable
 		}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"tiles": tiles, "courts": courts})
+	stale, err := s.drainStalePendingUploads(ctx)
+	if err != nil {
+		s.internalError(w, "drain stale pending uploads", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"tiles": tiles, "courts": courts, "stale_pending_uploads": stale})
+}
+
+func (s *Server) drainStalePendingUploads(ctx context.Context) (int, error) {
+	const batchSize = 50
+	total := 0
+	for {
+		keys, err := s.store.Queries.ListStalePendingUploads(ctx, batchSize)
+		if err != nil {
+			return total, err
+		}
+		if len(keys) == 0 {
+			return total, nil
+		}
+		tx, err := s.store.Pool.Begin(ctx)
+		if err != nil {
+			return total, err
+		}
+		q := s.store.Queries.WithTx(tx)
+		for _, key := range keys {
+			if err := q.ScheduleUploadedObjectCleanup(ctx, key); err != nil {
+				tx.Rollback(ctx)
+				return total, err
+			}
+		}
+		if _, err := q.DeletePendingUploads(ctx, keys); err != nil {
+			tx.Rollback(ctx)
+			return total, err
+		}
+		if err := tx.Commit(ctx); err != nil {
+			return total, err
+		}
+		total += len(keys)
+		if len(keys) < batchSize {
+			return total, nil
+		}
+	}
 }
 
 type mediaKeyRequest struct {
@@ -87,6 +135,14 @@ func (s *Server) handleInternalMediaUploaded(w http.ResponseWriter, r *http.Requ
 			return
 		}
 	}
+	// Remove the pending-upload record so the key can be referenced durably.
+	// Avatars are finalized via UpdateUser, which already claims the pending row;
+	// this handles court photos that were created as pending.
+	if _, err := q.DeletePendingUploads(r.Context(), []string{req.Key}); err != nil {
+		s.internalError(w, "remove pending upload", err)
+		return
+	}
+	// Schedule cleanup of any future object that becomes orphaned at this key.
 	if err := q.ScheduleUploadedObjectCleanup(r.Context(), req.Key); err != nil {
 		s.internalError(w, "schedule abandoned upload cleanup", err)
 		return

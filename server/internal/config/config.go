@@ -46,6 +46,11 @@ type Config struct {
 	// InternalTaskSecret guards scheduler, email-delivery, and media Worker
 	// integration requests.
 	InternalTaskSecret string
+	// Version and Commit identify the running container image. They are exposed
+	// on /internal/version so deploy workflows can confirm rollout before
+	// turning on new Worker behavior.
+	Version string
+	Commit  string
 }
 
 func Load() (*Config, error) {
@@ -69,6 +74,8 @@ func Load() (*Config, error) {
 		RateLimitDiscoveryPerMin: getenvInt("RATE_LIMIT_DISCOVERY_PER_MIN", 120),
 		TrustCloudflareHeaders:   getenv("TRUST_CF_CONNECTING_IP", "false") == "true",
 		InternalTaskSecret:       getenv("INTERNAL_TASK_SECRET", ""),
+		Version:                  getenv("VERSION", "dev"),
+		Commit:                   getenv("COMMIT", "unknown"),
 	}
 	if c.DatabaseURL == "" {
 		return nil, fmt.Errorf("DATABASE_URL is required")
