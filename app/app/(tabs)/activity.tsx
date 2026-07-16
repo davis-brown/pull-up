@@ -21,6 +21,7 @@ import { useAuth } from "@/lib/auth-context";
 import { filtersToQuery, type CourtFilters } from "@/lib/court-filters";
 import { useFeed } from "@/lib/hooks";
 import { FALLBACK_CENTER, tryGetPosition, type Coords } from "@/lib/location";
+import { safePathSegment } from "@/lib/routes";
 import { useTheme } from "@/lib/theme";
 import type { CourtSummary } from "@/lib/types";
 
@@ -52,9 +53,16 @@ export default function ActivityScreen() {
     queryKey: ["courts", "nearby", pos, filters],
     enabled: pos != null,
     refetchInterval: (q) => (q.state.data?.seeding ? 5_000 : 45_000),
+    refetchIntervalInBackground: false,
     queryFn: async () => {
       const res = await api<{ courts: CourtSummary[]; seeding?: boolean }>(
-        `/courts?lat=${pos!.lat}&lng=${pos!.lng}&radius_m=10000${filtersToQuery(filters)}`,
+        "/courts/search",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            query: `lat=${pos!.lat}&lng=${pos!.lng}&radius_m=10000${filtersToQuery(filters)}`,
+          }),
+        },
       );
       const sorted = [...res.courts].sort(
         (a, b) => b.active_count - a.active_count,
@@ -142,11 +150,15 @@ export default function ActivityScreen() {
               )}
             </Pressable>
             {user ? (
-              <FeedHeader
-                friendsHere={feed.data?.friends_here ?? []}
-                runs={feed.data?.upcoming_runs ?? []}
-                loading={feed.isLoading}
-              />
+              feed.error && !feed.data ? (
+                <QueryError error={feed.error} onRetry={() => void feed.refetch()} />
+              ) : (
+                <FeedHeader
+                  friendsHere={feed.data?.friends_here ?? []}
+                  runs={feed.data?.upcoming_runs ?? []}
+                  loading={feed.isLoading}
+                />
+              )
             ) : null}
           </>
         }
@@ -177,7 +189,7 @@ export default function ActivityScreen() {
           const live = item.active_count > 0;
           const report = item.latest_report;
           return (
-            <Pressable onPress={() => router.push(`/court/${item.id}`)}>
+            <Pressable onPress={() => router.push(`/court/${safePathSegment(item.id)}`)}>
               <Card>
                 <View style={styles.cardHeader}>
                   <Text

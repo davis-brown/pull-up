@@ -120,14 +120,17 @@ func TestAvatarUploadAndClear(t *testing.T) {
 		t.Fatalf("create avatar upload: status %d: %s", resp.StatusCode, readBody(t, resp))
 	}
 	body := decodeJSON[struct {
-		AvatarURL  string `json:"avatar_url"`
-		UploadPath string `json:"upload_path"`
+		AvatarURL           string `json:"avatar_url"`
+		UploadPath          string `json:"upload_path"`
+		UploadAuthorization string `json:"upload_authorization"`
 	}](t, resp)
 	if !strings.HasPrefix(body.AvatarURL, "/photos/avatars/") {
 		t.Errorf("avatar_url = %q, want /photos/avatars/ prefix", body.AvatarURL)
 	}
-	if !strings.Contains(body.UploadPath, "avatars/") || !strings.Contains(body.UploadPath, "sig=") {
-		t.Errorf("upload_path missing avatars key or signature: %q", body.UploadPath)
+	if !strings.Contains(body.UploadPath, "avatars/") || strings.Contains(body.UploadPath, "?") ||
+		!strings.HasPrefix(body.UploadAuthorization, "PullUp-Upload ") {
+		t.Errorf("avatar upload contract invalid: path=%q authorization=%q",
+			body.UploadPath, body.UploadAuthorization)
 	}
 
 	// PATCH sets it, DELETE clears it.
@@ -163,7 +166,7 @@ func TestAdminClearAvatar(t *testing.T) {
 
 	// Give the target an avatar to clear.
 	doJSON(t, ts, http.MethodPatch, "/me", target.AccessToken, map[string]any{
-		"avatar_url": "/photos/avatars/seed.jpg",
+		"avatar_url": "/photos/avatars/" + target.User.ID + "/seed.jpg",
 	}).Body.Close()
 	resp := doJSON(t, ts, http.MethodGet, "/users/"+target.User.ID, "", nil)
 	if p := decodeJSON[struct {
@@ -339,6 +342,22 @@ func TestPatchMePlayerCard(t *testing.T) {
 	}
 	if len(card.StyleTags) != 2 {
 		t.Errorf("style_tags after rejected patches = %v, want len 2", card.StyleTags)
+	}
+
+	// Explicit null clears nullable player-card fields; omission remains a
+	// no-op, which cannot be represented with ordinary pointer decoding.
+	resp = doJSON(t, ts, http.MethodPatch, "/me", u.AccessToken, map[string]any{
+		"jersey_number": nil, "position": nil, "height_cm": nil,
+	})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("clear nullable fields: status %d: %s", resp.StatusCode, readBody(t, resp))
+	}
+	card = decodeJSON[playerCard](t, resp)
+	if card.JerseyNumber != nil || card.Position != nil || card.HeightCm != nil {
+		t.Fatalf("explicit null did not clear player fields: %+v", card)
+	}
+	if len(card.StyleTags) != 2 {
+		t.Errorf("nullable clear clobbered omitted style_tags: %v", card.StyleTags)
 	}
 }
 

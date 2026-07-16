@@ -1,13 +1,15 @@
-import { Link, useLocalSearchParams, type Href } from "expo-router";
+import { Link, useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useState } from "react";
 import { KeyboardAvoidingView, Platform, StyleSheet, Text, View } from "react-native";
 import { OAuthButtons } from "@/components/OAuthButtons";
 import { Button, ErrorText, Field } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
+import { ApiError } from "@/lib/api";
 import { useTheme } from "@/lib/theme";
 
 export default function LoginScreen() {
   const { signIn } = useAuth();
+  const router = useRouter();
   const t = useTheme();
   const { next } = useLocalSearchParams<{ next?: string }>();
   const [email, setEmail] = useState("");
@@ -21,6 +23,13 @@ export default function LoginScreen() {
     try {
       await signIn(email.trim(), password);
     } catch (e) {
+      if (e instanceof ApiError && e.status === 403 && e.message === "email verification required") {
+        router.push({
+          pathname: "/verify-email",
+          params: { email: email.trim().toLowerCase(), ...(next ? { next } : {}) },
+        } as Href);
+        return;
+      }
       setError(e instanceof Error ? e.message : "Sign in failed");
     } finally {
       setBusy(false);

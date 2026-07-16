@@ -1,9 +1,12 @@
 package api
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
 
@@ -45,13 +48,34 @@ func isValidStyleTag(tag string) bool {
 }
 
 type patchMeRequest struct {
-	DisplayName  *string  `json:"display_name"`
-	AvatarURL    *string  `json:"avatar_url"`
-	IsPrivate    *bool    `json:"is_private"`
-	JerseyNumber *int     `json:"jersey_number"`
-	Position     *string  `json:"position"`
-	HeightCm     *int     `json:"height_cm"`
-	StyleTags    []string `json:"style_tags"`
+	DisplayName  *string                  `json:"display_name"`
+	AvatarURL    optionalNullable[string] `json:"avatar_url"`
+	IsPrivate    *bool                    `json:"is_private"`
+	JerseyNumber optionalNullable[int]    `json:"jersey_number"`
+	Position     optionalNullable[string] `json:"position"`
+	HeightCm     optionalNullable[int]    `json:"height_cm"`
+	StyleTags    []string                 `json:"style_tags"`
+}
+
+// optionalNullable distinguishes an omitted PATCH field from an explicit
+// JSON null, allowing nullable columns to be cleared intentionally.
+type optionalNullable[T any] struct {
+	Set   bool
+	Value *T
+}
+
+func (f *optionalNullable[T]) UnmarshalJSON(data []byte) error {
+	f.Set = true
+	if bytes.Equal(bytes.TrimSpace(data), []byte("null")) {
+		f.Value = nil
+		return nil
+	}
+	var value T
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+	f.Value = &value
+	return nil
 }
 
 func (s *Server) handlePatchMe(w http.ResponseWriter, r *http.Request) {
@@ -67,15 +91,15 @@ func (s *Server) handlePatchMe(w http.ResponseWriter, r *http.Request) {
 		}
 		req.DisplayName = &trimmed
 	}
-	if req.JerseyNumber != nil && (*req.JerseyNumber < 0 || *req.JerseyNumber > 99) {
+	if req.JerseyNumber.Value != nil && (*req.JerseyNumber.Value < 0 || *req.JerseyNumber.Value > 99) {
 		writeError(w, http.StatusBadRequest, "jersey_number must be 0-99")
 		return
 	}
-	if req.Position != nil && !validPositions[*req.Position] {
+	if req.Position.Value != nil && !validPositions[*req.Position.Value] {
 		writeError(w, http.StatusBadRequest, "position must be one of guard, wing, forward, center")
 		return
 	}
-	if req.HeightCm != nil && (*req.HeightCm < 120 || *req.HeightCm > 250) {
+	if req.HeightCm.Value != nil && (*req.HeightCm.Value < 120 || *req.HeightCm.Value > 250) {
 		writeError(w, http.StatusBadRequest, "height_cm must be 120-250")
 		return
 	}
@@ -91,25 +115,38 @@ func (s *Server) handlePatchMe(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	uid := userID(r)
+	if req.AvatarURL.Value != nil {
+		value := strings.TrimSpace(*req.AvatarURL.Value)
+		if !validAvatarURL(uid, value) {
+			writeError(w, http.StatusBadRequest, "avatar_url must reference your avatar upload")
+			return
+		}
+		req.AvatarURL.Value = &value
+	}
 	var jerseyNumber *int16
-	if req.JerseyNumber != nil {
-		v := int16(*req.JerseyNumber)
+	if req.JerseyNumber.Value != nil {
+		v := int16(*req.JerseyNumber.Value)
 		jerseyNumber = &v
 	}
 	var heightCm *int16
-	if req.HeightCm != nil {
-		v := int16(*req.HeightCm)
+	if req.HeightCm.Value != nil {
+		v := int16(*req.HeightCm.Value)
 		heightCm = &v
 	}
 	user, err := s.store.Queries.UpdateUser(r.Context(), gen.UpdateUserParams{
-		ID:           userID(r),
-		DisplayName:  req.DisplayName,
-		AvatarUrl:    req.AvatarURL,
-		IsPrivate:    req.IsPrivate,
-		JerseyNumber: jerseyNumber,
-		Position:     req.Position,
-		HeightCm:     heightCm,
-		StyleTags:    req.StyleTags,
+		ID:              uid,
+		DisplayName:     req.DisplayName,
+		AvatarUrlSet:    req.AvatarURL.Set,
+		AvatarUrl:       req.AvatarURL.Value,
+		IsPrivate:       req.IsPrivate,
+		JerseyNumberSet: req.JerseyNumber.Set,
+		JerseyNumber:    jerseyNumber,
+		PositionSet:     req.Position.Set,
+		Position:        req.Position.Value,
+		HeightCmSet:     req.HeightCm.Set,
+		HeightCm:        heightCm,
+		StyleTags:       req.StyleTags,
 	})
 	if err != nil {
 		s.internalError(w, "update user", err)
@@ -118,14 +155,31 @@ func (s *Server) handlePatchMe(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, user)
 }
 
+var (
+	photoUUIDRe = "[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}"
+	photoKeyRe  = regexp.MustCompile(`^(?:courts|avatars)/` + photoUUIDRe + `/` + photoUUIDRe + `\.jpg$`)
+)
+
+func isAllowedPhotoKey(key string) bool {
+	return photoKeyRe.MatchString(key)
+}
+
+func validAvatarURL(uid uuid.UUID, value string) bool {
+	key := strings.TrimPrefix(value, "/photos/")
+	if key == value || len(value) > 300 {
+		return false
+	}
+	return isAllowedPhotoKey(key) && strings.HasPrefix(key, "avatars/"+uid.String()+"/")
+}
+
 func (s *Server) handleCreateAvatarUpload(w http.ResponseWriter, r *http.Request) {
 	uid := userID(r)
 	key := fmt.Sprintf("avatars/%s/%s.jpg", uid, uuid.NewString())
 	exp := time.Now().Add(uploadURLTTL).Unix()
 	writeJSON(w, http.StatusOK, map[string]any{
-		"avatar_url": "/photos/" + key,
-		"upload_path": fmt.Sprintf("/photos/upload/%s?exp=%d&sig=%s",
-			key, exp, signUpload(s.cfg.JWTSecret, key, exp)),
+		"avatar_url":           "/photos/" + key,
+		"upload_path":          "/photos/upload/" + key,
+		"upload_authorization": uploadAuthorization(s.cfg.UploadSigningSecret, key, exp),
 	})
 }
 

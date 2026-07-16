@@ -1,235 +1,377 @@
-import { ApiError, api, hasSession, login, logout, oauthLogin, register } from "./api";
-import { storage } from "./storage";
+let platformOS = "ios";
+const mockGet = jest.fn<Promise<string | null>, [string]>();
+const mockSet = jest.fn<Promise<void>, [string, string]>();
+const mockRemove = jest.fn<Promise<void>, [string]>();
 
 jest.mock("./storage", () => ({
+  get platformOS() {
+    return platformOS;
+  },
   storage: {
-    get: jest.fn(),
-    set: jest.fn(),
-    remove: jest.fn(),
+    get: mockGet,
+    set: mockSet,
+    remove: mockRemove,
+  },
+  backgroundStorage: {
+    get: mockGet,
+    set: mockSet,
+    remove: mockRemove,
   },
 }));
 
-const mockStorage = storage as jest.Mocked<typeof storage>;
+type ApiModule = typeof import("./api");
+let client: ApiModule;
+let stored: Record<string, string>;
 
-function fakeResponse(status: number, body: unknown): Response {
+function useStatefulStorage(initial: Record<string, string> = {}) {
+  stored = { ...initial };
+  mockGet.mockImplementation(async (key) => stored[key] ?? null);
+  mockSet.mockImplementation(async (key, value) => {
+    stored[key] = value;
+  });
+  mockRemove.mockImplementation(async (key) => {
+    delete stored[key];
+  });
+}
+
+function fakeResponse(
+  status: number,
+  body?: unknown,
+  rawText?: string,
+  headers?: HeadersInit,
+): Response {
+  const text = rawText ?? (body === undefined ? "" : JSON.stringify(body));
   return {
     ok: status >= 200 && status < 300,
     status,
-    json: async () => body,
+    text: async () => text,
+    blob: async () => new Blob([text]),
+    body: null,
+    headers: new Headers(headers),
   } as unknown as Response;
 }
 
-beforeEach(() => {
+function tokenResponse(access = "access", refresh = "refresh", id = "u1") {
+  return {
+    access_token: access,
+    refresh_token: refresh,
+    user: { id, email: `${id}@test.local` },
+  };
+}
+
+beforeEach(async () => {
+  jest.useRealTimers();
+  jest.resetModules();
   jest.clearAllMocks();
+  platformOS = "ios";
+  useStatefulStorage();
   (global as unknown as { fetch: jest.Mock }).fetch = jest.fn();
+  client = await import("./api");
 });
 
-describe("api()", () => {
-  it("attaches the stored access token as a bearer header", async () => {
-    mockStorage.get.mockResolvedValue("stored-access-token");
+describe("native session storage and refresh", () => {
+  it("migrates legacy keys to one atomic token pair and refreshes once", async () => {
+    useStatefulStorage({
+      "pullup.access_token": "expired-token",
+      "pullup.refresh_token": "valid-refresh-token",
+    });
     const fetchMock = global.fetch as jest.Mock;
-    fetchMock.mockResolvedValueOnce(fakeResponse(200, { ok: true }));
+    fetchMock
+      .mockResolvedValueOnce(fakeResponse(401, { error: "expired" }))
+      .mockResolvedValueOnce(fakeResponse(200, tokenResponse("new-access", "new-refresh")))
+      .mockResolvedValueOnce(fakeResponse(200, { ok: true }));
 
-    await api("/me");
+    await expect(client.api("/me")).resolves.toEqual({ ok: true });
 
-    const [, options] = fetchMock.mock.calls[0];
-    expect(options.headers.Authorization).toBe("Bearer stored-access-token");
+    const pairWrites = mockSet.mock.calls.filter(([key]) => key === "pullup.token_pair");
+    expect(pairWrites.length).toBeGreaterThanOrEqual(1);
+    expect(JSON.parse(pairWrites.at(-1)![1])).toEqual({
+      accessToken: "new-access",
+      refreshToken: "new-refresh",
+    });
+    expect(mockSet).not.toHaveBeenCalledWith("pullup.access_token", expect.anything());
+    expect(mockSet).not.toHaveBeenCalledWith("pullup.refresh_token", expect.anything());
+    expect(fetchMock.mock.calls[2][1].headers.Authorization).toBe("Bearer new-access");
   });
 
-  it("returns undefined for 204 responses without parsing a body", async () => {
-    mockStorage.get.mockResolvedValue(null);
-    (global.fetch as jest.Mock).mockResolvedValueOnce(fakeResponse(204, null));
+  it("collapses concurrent 401 responses into one refresh", async () => {
+    useStatefulStorage({
+      "pullup.token_pair": JSON.stringify({
+        accessToken: "expired",
+        refreshToken: "valid-refresh",
+      }),
+    });
+    const fetchMock = global.fetch as jest.Mock;
+    fetchMock.mockImplementation((url: string, options: RequestInit) => {
+      if (url.includes("/auth/refresh")) {
+        return Promise.resolve(fakeResponse(200, tokenResponse("fresh", "rotated")));
+      }
+      const authorization = (options.headers as Record<string, string>).Authorization;
+      return Promise.resolve(
+        authorization === "Bearer fresh"
+          ? fakeResponse(200, { ok: true })
+          : fakeResponse(401, { error: "expired" }),
+      );
+    });
 
-    await expect(api("/check-ins/current", { method: "DELETE" })).resolves.toBeUndefined();
+    await Promise.all([client.api("/me"), client.api("/me/favorites")]);
+
+    expect(fetchMock.mock.calls.filter(([url]) => url.includes("/auth/refresh"))).toHaveLength(1);
   });
 
-  it("throws ApiError with the server's error message on failure", async () => {
-    mockStorage.get.mockResolvedValue(null);
+  it.each([429, 500, 503])(
+    "preserves the token pair when refresh returns %s",
+    async (status) => {
+      useStatefulStorage({
+        "pullup.token_pair": JSON.stringify({
+          accessToken: "expired",
+          refreshToken: "keep-me",
+        }),
+      });
+      (global.fetch as jest.Mock)
+        .mockResolvedValueOnce(fakeResponse(401, { error: "expired" }))
+        .mockResolvedValueOnce(fakeResponse(status, { error: "try later" }));
+
+      await expect(client.api("/me")).rejects.toMatchObject({ status });
+      expect(stored["pullup.token_pair"]).toContain("keep-me");
+      expect(mockRemove).not.toHaveBeenCalledWith("pullup.token_pair");
+    },
+  );
+
+  it("preserves the token pair on a refresh transport failure", async () => {
+    useStatefulStorage({
+      "pullup.token_pair": JSON.stringify({
+        accessToken: "expired",
+        refreshToken: "keep-me",
+      }),
+    });
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce(fakeResponse(401, { error: "expired" }))
+      .mockRejectedValueOnce(new TypeError("network down"));
+
+    await expect(client.api("/me")).rejects.toThrow("network down");
+    expect(stored["pullup.token_pair"]).toContain("keep-me");
+  });
+
+  it("expires only a definitively rejected refresh session", async () => {
+    useStatefulStorage({
+      "pullup.token_pair": JSON.stringify({
+        accessToken: "expired",
+        refreshToken: "revoked",
+      }),
+    });
+    const expired = jest.fn();
+    client.onSessionExpired(expired);
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce(fakeResponse(401, { error: "expired" }))
+      .mockResolvedValueOnce(fakeResponse(401, { error: "invalid refresh token" }));
+
+    await expect(client.api("/me")).rejects.toBeInstanceOf(client.SessionChangedError);
+    expect(expired).toHaveBeenCalledTimes(1);
+    expect(stored["pullup.token_pair"]).toBeUndefined();
+  });
+
+  it("does not let a refresh response restore tokens after logout", async () => {
+    useStatefulStorage({
+      "pullup.token_pair": JSON.stringify({
+        accessToken: "expired",
+        refreshToken: "valid-refresh",
+      }),
+    });
+    let resolveRefresh!: (response: Response) => void;
+    const refreshResponse = new Promise<Response>((resolve) => {
+      resolveRefresh = resolve;
+    });
+    const fetchMock = global.fetch as jest.Mock;
+    fetchMock.mockImplementation((url: string) => {
+      if (url.includes("/auth/refresh")) return refreshResponse;
+      if (url.includes("/auth/logout")) return Promise.resolve(fakeResponse(204));
+      return Promise.resolve(fakeResponse(401, { error: "expired" }));
+    });
+
+    const request = client.api("/me");
+    while (!fetchMock.mock.calls.some(([url]) => url.includes("/auth/refresh"))) {
+      await Promise.resolve();
+    }
+    const logout = client.logout();
+    resolveRefresh(fakeResponse(200, tokenResponse("stale-access", "stale-refresh")));
+
+    await expect(request).rejects.toBeInstanceOf(client.SessionChangedError);
+    await logout;
+    expect(stored["pullup.token_pair"]).toBeUndefined();
+    expect(mockSet.mock.calls.some(([, value]) => value.includes("stale-access"))).toBe(false);
+  });
+});
+
+describe("auth transitions and logout", () => {
+  it("stores a successful login as one native pair", async () => {
     (global.fetch as jest.Mock).mockResolvedValueOnce(
-      fakeResponse(400, { error: "name is required" }),
+      fakeResponse(200, tokenResponse("a", "r")),
     );
 
-    await expect(api("/courts", { method: "POST" })).rejects.toMatchObject({
-      status: 400,
-      message: "name is required",
+    await expect(client.login("a@b.com", "password123")).resolves.toMatchObject({ id: "u1" });
+
+    expect(JSON.parse(stored["pullup.token_pair"])).toEqual({
+      accessToken: "a",
+      refreshToken: "r",
     });
   });
 
-  it("falls back to a generic message when the error body isn't JSON", async () => {
-    mockStorage.get.mockResolvedValue(null);
-    const badJsonResponse = {
-      ok: false,
-      status: 500,
-      json: async () => {
-        throw new Error("not json");
-      },
-    } as unknown as Response;
-    (global.fetch as jest.Mock).mockResolvedValueOnce(badJsonResponse);
+  it("lets only the latest concurrent login own the session", async () => {
+    let resolveFirst!: (response: Response) => void;
+    const first = new Promise<Response>((resolve) => {
+      resolveFirst = resolve;
+    });
+    const fetchMock = global.fetch as jest.Mock;
+    fetchMock
+      .mockReturnValueOnce(first)
+      .mockResolvedValueOnce(fakeResponse(200, tokenResponse("second-a", "second-r", "u2")));
 
-    await expect(api("/whatever")).rejects.toMatchObject({
+    const firstLogin = client.login("first@test.local", "password123");
+    while (fetchMock.mock.calls.length === 0) await Promise.resolve();
+    const secondLogin = client.login("second@test.local", "password123");
+    resolveFirst(fakeResponse(200, tokenResponse("first-a", "first-r", "u1")));
+
+    await expect(firstLogin).rejects.toBeInstanceOf(client.SessionChangedError);
+    await expect(secondLogin).resolves.toMatchObject({ id: "u2" });
+    expect(JSON.parse(stored["pullup.token_pair"])).toEqual({
+      accessToken: "second-a",
+      refreshToken: "second-r",
+    });
+  });
+
+  it("keeps registration signed out until email verification succeeds", async () => {
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce(fakeResponse(
+        202,
+        { verification_required: true },
+        undefined,
+        { "X-Pull-Up-Email-Sent": "true" },
+      ))
+      .mockResolvedValueOnce(fakeResponse(200, tokenResponse("verified-a", "verified-r")));
+
+    await expect(client.register("new@test.local", "password123", "New Player")).resolves.toEqual({
+      verificationRequired: true,
+      emailSent: true,
+    });
+    expect(stored["pullup.token_pair"]).toBeUndefined();
+
+    await expect(client.verifyEmail("one-time-token")).resolves.toMatchObject({ id: "u1" });
+    expect(JSON.parse(stored["pullup.token_pair"])).toEqual({
+      accessToken: "verified-a",
+      refreshToken: "verified-r",
+    });
+  });
+
+  it("clears local credentials even when logout requests fail", async () => {
+    (global.fetch as jest.Mock)
+      .mockResolvedValueOnce(fakeResponse(200, tokenResponse()))
+      .mockRejectedValue(new TypeError("network down"));
+    await client.login("a@b.com", "password123");
+
+    await expect(client.logout({ pushToken: "ExpoToken[test]" })).resolves.toBeUndefined();
+
+    expect(stored["pullup.token_pair"]).toBeUndefined();
+    const methods = (global.fetch as jest.Mock).mock.calls.slice(1).map(([, options]) => options.method);
+    expect(methods).toEqual(expect.arrayContaining(["DELETE", "POST"]));
+  });
+});
+
+describe("web cookie contract", () => {
+  beforeEach(async () => {
+    jest.resetModules();
+    jest.clearAllMocks();
+    platformOS = "web";
+    useStatefulStorage({
+      "pullup.access_token": "legacy-access",
+      "pullup.refresh_token": "legacy-refresh",
+    });
+    (global as unknown as { fetch: jest.Mock }).fetch = jest.fn();
+    client = await import("./api");
+  });
+
+  it("removes legacy web tokens and migrates refresh into the cookie flow once", async () => {
+    const fetchMock = global.fetch as jest.Mock;
+    fetchMock
+      .mockResolvedValueOnce(fakeResponse(401, { error: "missing access token" }))
+      .mockResolvedValueOnce(fakeResponse(200, {
+        access_token: "memory-access",
+        user: { id: "u1" },
+      }))
+      .mockResolvedValueOnce(fakeResponse(200, { ok: true }));
+
+    await expect(client.api("/me")).resolves.toEqual({ ok: true });
+
+    expect(stored["pullup.access_token"]).toBeUndefined();
+    expect(stored["pullup.refresh_token"]).toBeUndefined();
+    expect(mockSet).not.toHaveBeenCalled();
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({
+      refresh_token: "legacy-refresh",
+    });
+    for (const [, options] of fetchMock.mock.calls) {
+      expect(options.credentials).toBe("include");
+      expect(options.headers["X-Pull-Up-Platform"]).toBe("web");
+    }
+    expect(fetchMock.mock.calls[2][1].headers.Authorization).toBe("Bearer memory-access");
+  });
+
+  it("keeps a login access token in memory and ignores response refresh tokens", async () => {
+    const fetchMock = global.fetch as jest.Mock;
+    fetchMock
+      .mockResolvedValueOnce(fakeResponse(200, tokenResponse("memory-only", "do-not-store")))
+      .mockResolvedValueOnce(fakeResponse(200, { ok: true }));
+
+    await client.login("web@test.local", "password123");
+    await client.api("/me");
+
+    expect(mockSet).not.toHaveBeenCalled();
+    expect(fetchMock.mock.calls[1][1].headers.Authorization).toBe("Bearer memory-only");
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/v1/auth/login");
+  });
+});
+
+describe("request parsing and timeout", () => {
+  it("does not parse a body for a 204 response", async () => {
+    const response = fakeResponse(204);
+    response.text = jest.fn(async () => {
+      throw new Error("must not read");
+    });
+    (global.fetch as jest.Mock).mockResolvedValueOnce(response);
+
+    await expect(client.api("/check-ins/current", { method: "DELETE" })).resolves.toBeUndefined();
+    expect(response.text).not.toHaveBeenCalled();
+  });
+
+  it("uses a generic ApiError for non-JSON errors", async () => {
+    (global.fetch as jest.Mock).mockResolvedValueOnce(
+      fakeResponse(500, undefined, "upstream exploded"),
+    );
+
+    await expect(client.api("/whatever")).rejects.toMatchObject({
       status: 500,
       message: "HTTP 500",
     });
   });
 
-  // A stateful fake so that a storage.set() during refresh is actually
-  // visible to the next storage.get() call, the way SecureStore behaves.
-  function useStatefulStorage(initial: Record<string, string>) {
-    const tokens: Record<string, string> = { ...initial };
-    mockStorage.get.mockImplementation(async (key: string) => tokens[key] ?? null);
-    mockStorage.set.mockImplementation(async (key: string, value: string) => {
-      tokens[key] = value;
-    });
-    mockStorage.remove.mockImplementation(async (key: string) => {
-      delete tokens[key];
-    });
-    return tokens;
-  }
-
-  it("refreshes the access token on 401 and retries once", async () => {
-    useStatefulStorage({
-      "pullup.access_token": "expired-token",
-      "pullup.refresh_token": "valid-refresh-token",
-    });
-    const fetchMock = global.fetch as jest.Mock;
-    fetchMock
-      .mockResolvedValueOnce(fakeResponse(401, { error: "invalid or expired token" })) // original request
-      .mockResolvedValueOnce(
-        fakeResponse(200, {
-          access_token: "new-access-token",
-          refresh_token: "new-refresh-token",
-          user: { id: "u1" },
-        }),
-      ) // /auth/refresh
-      .mockResolvedValueOnce(fakeResponse(200, { ok: true })); // retried original request
-
-    const result = await api("/me");
-
-    expect(result).toEqual({ ok: true });
-    expect(fetchMock).toHaveBeenCalledTimes(3);
-    expect(fetchMock.mock.calls[1][0]).toContain("/auth/refresh");
-    expect(mockStorage.set).toHaveBeenCalledWith("pullup.access_token", "new-access-token");
-    // The retried request must use the freshly refreshed token.
-    const retryOptions = fetchMock.mock.calls[2][1];
-    expect(retryOptions.headers.Authorization).toBe("Bearer new-access-token");
-  });
-
-  it("clears tokens and surfaces the original 401 when refresh fails", async () => {
-    useStatefulStorage({
-      "pullup.access_token": "expired-token",
-      "pullup.refresh_token": "stale-refresh-token",
-    });
-    const fetchMock = global.fetch as jest.Mock;
-    fetchMock
-      .mockResolvedValueOnce(fakeResponse(401, { error: "invalid or expired token" })) // original request
-      .mockResolvedValueOnce(fakeResponse(401, { error: "invalid refresh token" })); // /auth/refresh fails
-
-    await expect(api("/me")).rejects.toMatchObject({ status: 401 });
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(mockStorage.remove).toHaveBeenCalled();
-  });
-
-  it("collapses concurrent 401s into a single refresh call", async () => {
-    useStatefulStorage({
-      "pullup.access_token": "expired-token",
-      "pullup.refresh_token": "valid-refresh-token",
-    });
-    const fetchMock = global.fetch as jest.Mock;
-    fetchMock.mockImplementation((url: string, options: { headers: Record<string, string> }) => {
-      if (url.includes("/auth/refresh")) {
-        return Promise.resolve(
-          fakeResponse(200, {
-            access_token: "new-access-token",
-            refresh_token: "new-refresh-token",
-            user: { id: "u1" },
-          }),
-        );
-      }
-      // Only requests carrying the freshly refreshed token succeed — this
-      // is what actually proves both callers waited for the same refresh.
-      if (options.headers.Authorization === "Bearer new-access-token") {
-        return Promise.resolve(fakeResponse(200, { ok: true }));
-      }
-      return Promise.resolve(fakeResponse(401, { error: "invalid or expired token" }));
-    });
-
-    await Promise.all([api("/me"), api("/me/favorites")]);
-
-    const refreshCalls = fetchMock.mock.calls.filter(([url]) => url.includes("/auth/refresh"));
-    expect(refreshCalls).toHaveLength(1);
-  });
-});
-
-describe("hasSession()", () => {
-  it("is true only when a refresh token is stored", async () => {
-    mockStorage.get.mockResolvedValueOnce(null);
-    await expect(hasSession()).resolves.toBe(false);
-
-    mockStorage.get.mockResolvedValueOnce("some-refresh-token");
-    await expect(hasSession()).resolves.toBe(true);
-  });
-});
-
-describe("auth endpoints", () => {
-  it("login() stores tokens and returns the user on success", async () => {
+  it("rejects malformed successful JSON instead of hanging or returning undefined", async () => {
     (global.fetch as jest.Mock).mockResolvedValueOnce(
-      fakeResponse(200, {
-        access_token: "a",
-        refresh_token: "r",
-        user: { id: "u1", email: "a@b.com" },
-      }),
+      fakeResponse(200, undefined, "not json"),
     );
 
-    const user = await login("a@b.com", "password123");
-
-    expect(user).toEqual({ id: "u1", email: "a@b.com" });
-    expect(mockStorage.set).toHaveBeenCalledWith("pullup.access_token", "a");
-    expect(mockStorage.set).toHaveBeenCalledWith("pullup.refresh_token", "r");
-  });
-
-  it("login() throws ApiError and stores nothing on bad credentials", async () => {
-    (global.fetch as jest.Mock).mockResolvedValueOnce(
-      fakeResponse(401, { error: "invalid email or password" }),
-    );
-
-    await expect(login("a@b.com", "wrong")).rejects.toBeInstanceOf(ApiError);
-    expect(mockStorage.set).not.toHaveBeenCalled();
-  });
-
-  it("register() posts display_name and stores tokens", async () => {
-    (global.fetch as jest.Mock).mockResolvedValueOnce(
-      fakeResponse(200, { access_token: "a", refresh_token: "r", user: { id: "u2" } }),
-    );
-
-    await register("new@test.local", "password123", "New Player");
-
-    const [, options] = (global.fetch as jest.Mock).mock.calls[0];
-    const body = JSON.parse(options.body);
-    expect(body).toEqual({
-      email: "new@test.local",
-      password: "password123",
-      display_name: "New Player",
+    await expect(client.api("/whatever")).rejects.toMatchObject({
+      status: 502,
+      message: "Invalid response from server",
     });
   });
 
-  it("oauthLogin() includes display_name only when provided", async () => {
-    (global.fetch as jest.Mock).mockResolvedValueOnce(
-      fakeResponse(200, { access_token: "a", refresh_token: "r", user: { id: "u3" } }),
-    );
+  it("settles a request when fetch does not respond", async () => {
+    jest.useFakeTimers();
+    (global.fetch as jest.Mock).mockReturnValue(new Promise(() => {}));
 
-    await oauthLogin("google", "id-token-value");
+    const request = client.fetchWithTimeout("https://api.test", {}, 50);
+    const result = expect(request).rejects.toBeInstanceOf(client.RequestTimeoutError);
+    await jest.advanceTimersByTimeAsync(51);
 
-    const [, options] = (global.fetch as jest.Mock).mock.calls[0];
-    const body = JSON.parse(options.body);
-    expect(body).toEqual({ provider: "google", id_token: "id-token-value" });
-  });
-
-  it("logout() clears tokens even when the network call fails", async () => {
-    mockStorage.get.mockResolvedValue("some-refresh-token");
-    (global.fetch as jest.Mock).mockRejectedValueOnce(new Error("network down"));
-
-    await expect(logout()).resolves.toBeUndefined();
-    expect(mockStorage.remove).toHaveBeenCalledWith("pullup.access_token");
-    expect(mockStorage.remove).toHaveBeenCalledWith("pullup.refresh_token");
+    await result;
   });
 });

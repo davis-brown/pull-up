@@ -3,7 +3,9 @@ import { useState } from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
 import { AuthGate } from "@/components/AuthGate";
 import { Button, Chip, ErrorText } from "@/components/ui";
+import { QueryError } from "@/components/QueryError";
 import { useCourt, usePatchCourtAttributes } from "@/lib/hooks";
+import { parseRouteId } from "@/lib/routes";
 import { useTheme } from "@/lib/theme";
 import type { CourtDetail, Surface } from "@/lib/types";
 
@@ -39,10 +41,36 @@ const toggles: Array<{ key: ToggleKey; label: string }> = [
 ];
 
 export default function EditCourtScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const params = useLocalSearchParams();
+  const id = parseRouteId(params.id);
+  if (!id) {
+    return (
+      <QueryError
+        error={new Error("Invalid court id")}
+        title="Invalid court link"
+        message="This court link is not valid."
+      />
+    );
+  }
+  return (
+    <AuthGate>
+      <EditCourtContent id={id} />
+    </AuthGate>
+  );
+}
+
+function EditCourtContent({ id }: { id: string }) {
   const router = useRouter();
   const t = useTheme();
-  const { data: court, isLoading } = useCourt(id);
+  const { data: court, isLoading, error, refetch } = useCourt(id);
+
+  if (error && !court) {
+    return (
+      <View style={[styles.center, { backgroundColor: t.colors.background }]}>
+        <QueryError error={error} onRetry={() => void refetch()} />
+      </View>
+    );
+  }
 
   if (isLoading || !court) {
     return (
@@ -52,7 +80,7 @@ export default function EditCourtScreen() {
     );
   }
 
-  return <EditForm court={court} courtId={id ?? ""} onSaved={() => router.back()} />;
+  return <EditForm court={court} courtId={id} onSaved={() => router.back()} />;
 }
 
 function EditForm({
@@ -113,11 +141,10 @@ function EditForm({
   };
 
   return (
-    <AuthGate>
-      <ScrollView
-        style={{ backgroundColor: t.colors.background }}
-        contentContainerStyle={{ padding: t.spacing.lg }}
-      >
+    <ScrollView
+      style={{ backgroundColor: t.colors.background }}
+      contentContainerStyle={{ padding: t.spacing.lg }}
+    >
         <Text style={[t.type.label, { color: t.colors.textSecondary, marginBottom: t.spacing.sm }]}>
           Surface
         </Text>
@@ -192,8 +219,7 @@ function EditForm({
           busy={patch.isPending}
           onPress={save}
         />
-      </ScrollView>
-    </AuthGate>
+    </ScrollView>
   );
 }
 

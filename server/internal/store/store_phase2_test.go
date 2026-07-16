@@ -155,7 +155,7 @@ func TestCheckInHistoryOrdering(t *testing.T) {
 
 	dm := float32(1)
 	if _, err := st.Queries.CreateCheckIn(ctx, gen.CreateCheckInParams{
-		CourtID: courtA.ID, UserID: uid, Source: "manual", Lng: ruckerLng, Lat: ruckerLat, DistanceM: &dm, PartySize: 1, HasBall: false,
+		CourtID: courtA.ID, UserID: uid, Source: "manual", DistanceM: &dm, PartySize: 1, HasBall: false,
 	}); err != nil {
 		t.Fatalf("check in A: %v", err)
 	}
@@ -163,7 +163,7 @@ func TestCheckInHistoryOrdering(t *testing.T) {
 		t.Fatalf("close A: %v", err)
 	}
 	if _, err := st.Queries.CreateCheckIn(ctx, gen.CreateCheckInParams{
-		CourtID: courtB.ID, UserID: uid, Source: "geofence_prompt", Lng: ruckerLng, Lat: ruckerLat + 0.05, DistanceM: &dm, PartySize: 1, HasBall: false,
+		CourtID: courtB.ID, UserID: uid, Source: "geofence_prompt", DistanceM: &dm, PartySize: 1, HasBall: false,
 	}); err != nil {
 		t.Fatalf("check in B: %v", err)
 	}
@@ -248,7 +248,7 @@ func TestFlagsAndModeration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create photo: %v", err)
 	}
-	if err := st.Queries.SetPhotoStatus(ctx, gen.SetPhotoStatusParams{ID: photo.ID, Status: "removed"}); err != nil {
+	if _, err := st.Queries.SetPhotoStatus(ctx, gen.SetPhotoStatusParams{ID: photo.ID, Status: "removed"}); err != nil {
 		t.Fatalf("set photo status: %v", err)
 	}
 	visible, err := st.Queries.ListCourtPhotos(ctx, court.ID)

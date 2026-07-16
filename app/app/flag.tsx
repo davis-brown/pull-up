@@ -3,7 +3,9 @@ import { useState } from "react";
 import { ScrollView, Text } from "react-native";
 import { AuthGate } from "@/components/AuthGate";
 import { Button, ErrorText, Field } from "@/components/ui";
+import { QueryError } from "@/components/QueryError";
 import { useCreateFlag } from "@/lib/hooks";
+import { parseRouteId, safePathSegment } from "@/lib/routes";
 import { useTheme } from "@/lib/theme";
 import type { FlagEntityType } from "@/lib/types";
 
@@ -16,11 +18,40 @@ const entityLabels: Record<FlagEntityType, string> = {
   user: "player",
 };
 
+function parseEntityType(value: unknown): FlagEntityType | undefined {
+  return typeof value === "string" && value in entityLabels
+    ? value as FlagEntityType
+    : undefined;
+}
+
 export default function FlagScreen() {
-  const { entityType, entityId } = useLocalSearchParams<{
-    entityType: FlagEntityType;
-    entityId: string;
-  }>();
+  const params = useLocalSearchParams();
+  const entityType = parseEntityType(params.entityType);
+  const entityId = parseRouteId(params.entityId);
+  if (!entityType || !entityId) {
+    return (
+      <QueryError
+        error={new Error("Invalid report target")}
+        title="Invalid report link"
+        message="Open the item you want to report and try again."
+      />
+    );
+  }
+  const next = `/flag?entityType=${entityType}&entityId=${safePathSegment(entityId)}`;
+  return (
+    <AuthGate next={next}>
+      <FlagContent entityType={entityType} entityId={entityId} />
+    </AuthGate>
+  );
+}
+
+function FlagContent({
+  entityType,
+  entityId,
+}: {
+  entityType: FlagEntityType;
+  entityId: string;
+}) {
   const router = useRouter();
   const t = useTheme();
   const createFlag = useCreateFlag();
@@ -44,11 +75,10 @@ export default function FlagScreen() {
   };
 
   return (
-    <AuthGate>
-      <ScrollView
-        style={{ backgroundColor: t.colors.background }}
-        contentContainerStyle={{ padding: t.spacing.lg }}
-      >
+    <ScrollView
+      style={{ backgroundColor: t.colors.background }}
+      contentContainerStyle={{ padding: t.spacing.lg }}
+    >
         <Text style={[t.type.body, { color: t.colors.textSecondary }]}>
           Report this {entityLabels[entityType] ?? "item"} to moderators. What's the issue?
         </Text>
@@ -62,7 +92,6 @@ export default function FlagScreen() {
         />
         <ErrorText message={error} />
         <Button title="Submit report" busy={createFlag.isPending} onPress={submit} />
-      </ScrollView>
-    </AuthGate>
+    </ScrollView>
   );
 }

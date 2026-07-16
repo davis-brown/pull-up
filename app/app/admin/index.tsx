@@ -2,6 +2,7 @@ import { Redirect, useRouter } from "expo-router";
 import { useState } from "react";
 import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
 import { AuthGate } from "@/components/AuthGate";
+import { QueryError } from "@/components/QueryError";
 import { Button, Card, ErrorText, Field, Overline } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
 import {
@@ -14,6 +15,7 @@ import {
   useSetUserAdmin,
 } from "@/lib/hooks";
 import { useTheme } from "@/lib/theme";
+import { safePathSegment } from "@/lib/routes";
 import type { AdminUser, Flag } from "@/lib/types";
 
 const entityLabels: Record<Flag["entity_type"], string> = {
@@ -65,7 +67,7 @@ function FlagRow({ flag }: { flag: Flag }) {
               <Button
                 title="View"
                 variant="secondary"
-                onPress={() => router.push(`/court/${flag.entity_id}`)}
+                onPress={() => router.push(`/court/${safePathSegment(flag.entity_id)}`)}
               />
             </View>
             <View style={styles.actionButton}>
@@ -145,7 +147,7 @@ function AdminManagementCard() {
   const [query, setQuery] = useState("");
   const [submitted, setSubmitted] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const { data: results, isFetching } = useAdminSearchUsers(submitted);
+  const { data: results, isFetching, error: queryError, refetch } = useAdminSearchUsers(submitted);
 
   return (
     <Card>
@@ -165,7 +167,10 @@ function AdminManagementCard() {
         onPress={() => setSubmitted(query)}
       />
       <ErrorText message={error} />
-      {submitted.trim() !== "" && !isFetching && (results?.length ?? 0) === 0 && (
+      {queryError && !results ? (
+        <QueryError error={queryError} onRetry={() => void refetch()} />
+      ) : null}
+      {submitted.trim() !== "" && !isFetching && !queryError && (results?.length ?? 0) === 0 && (
         <Text style={[t.type.caption, { color: t.colors.textMuted, marginTop: t.spacing.sm }]}>
           No users match "{submitted}".
         </Text>
@@ -179,7 +184,14 @@ function AdminManagementCard() {
 
 function AdminActionsCard() {
   const t = useTheme();
-  const { data: actions } = useAdminActions();
+  const { data: actions, error, refetch } = useAdminActions();
+  if (error && !actions) {
+    return (
+      <Card>
+        <QueryError error={error} onRetry={() => void refetch()} />
+      </Card>
+    );
+  }
   if ((actions?.length ?? 0) === 0) return null;
 
   return (
@@ -202,35 +214,46 @@ function AdminActionsCard() {
 }
 
 export default function AdminScreen() {
-  const { user } = useAuth();
-  const t = useTheme();
-  const { data: flags, isLoading } = useAdminFlags();
+  return (
+    <AuthGate>
+      <AdminAccess />
+    </AuthGate>
+  );
+}
 
+function AdminAccess() {
+  const { user } = useAuth();
   if (!user?.is_admin) {
     return <Redirect href="/profile" />;
   }
+  return <AdminContent />;
+}
+
+function AdminContent() {
+  const t = useTheme();
+  const { data: flags, isLoading, error, refetch } = useAdminFlags();
 
   return (
-    <AuthGate>
-      <ScrollView
-        style={{ backgroundColor: t.colors.background }}
-        contentContainerStyle={{ padding: t.spacing.lg }}
-      >
-        <SectionLabel>Flags</SectionLabel>
-        {isLoading ? (
-          <ActivityIndicator size="large" color={t.colors.accent} />
-        ) : (flags?.length ?? 0) === 0 ? (
-          <Text style={[t.type.body, { color: t.colors.textSecondary, marginBottom: t.spacing.md }]}>
-            No open reports — the queue is clear.
-          </Text>
-        ) : (
-          flags!.map((flag) => <FlagRow key={flag.id} flag={flag} />)
-        )}
+    <ScrollView
+      style={{ backgroundColor: t.colors.background }}
+      contentContainerStyle={{ padding: t.spacing.lg }}
+    >
+      <SectionLabel>Flags</SectionLabel>
+      {isLoading ? (
+        <ActivityIndicator size="large" color={t.colors.accent} />
+      ) : error && !flags ? (
+        <QueryError error={error} onRetry={() => void refetch()} />
+      ) : (flags?.length ?? 0) === 0 ? (
+        <Text style={[t.type.body, { color: t.colors.textSecondary, marginBottom: t.spacing.md }]}>
+          No open reports — the queue is clear.
+        </Text>
+      ) : (
+        flags!.map((flag) => <FlagRow key={flag.id} flag={flag} />)
+      )}
 
-        <AdminManagementCard />
-        <AdminActionsCard />
-      </ScrollView>
-    </AuthGate>
+      <AdminManagementCard />
+      <AdminActionsCard />
+    </ScrollView>
   );
 }
 

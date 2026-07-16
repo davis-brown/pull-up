@@ -25,17 +25,16 @@ type BlockedUser struct {
 }
 
 type CheckIn struct {
-	ID               uuid.UUID  `json:"id"`
-	CourtID          uuid.UUID  `json:"court_id"`
-	UserID           uuid.UUID  `json:"user_id"`
-	Source           string     `json:"source"`
-	ReportedLocation *string    `json:"reported_location"`
-	DistanceM        *float32   `json:"distance_m"`
-	CreatedAt        time.Time  `json:"created_at"`
-	ExpiresAt        time.Time  `json:"expires_at"`
-	CheckedOutAt     *time.Time `json:"checked_out_at"`
-	PartySize        int16      `json:"party_size"`
-	HasBall          bool       `json:"has_ball"`
+	ID           uuid.UUID  `json:"id"`
+	CourtID      uuid.UUID  `json:"court_id"`
+	UserID       uuid.UUID  `json:"user_id"`
+	Source       string     `json:"source"`
+	DistanceM    *float32   `json:"distance_m"`
+	CreatedAt    time.Time  `json:"created_at"`
+	ExpiresAt    time.Time  `json:"expires_at"`
+	CheckedOutAt *time.Time `json:"checked_out_at"`
+	PartySize    int16      `json:"party_size"`
+	HasBall      bool       `json:"has_ball"`
 }
 
 type Court struct {
@@ -67,6 +66,8 @@ type Court struct {
 	Parking           *bool      `json:"parking"`
 	Fenced            *bool      `json:"fenced"`
 	EnrichRequestedAt *time.Time `json:"enrich_requested_at"`
+	EnrichClaimedAt   *time.Time `json:"enrich_claimed_at"`
+	EnrichAttempts    int32      `json:"enrich_attempts"`
 }
 
 type CourtAttributeEdit struct {
@@ -116,6 +117,15 @@ type CrowdReport struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
+type EmailVerificationToken struct {
+	ID         uuid.UUID  `json:"id"`
+	UserID     uuid.UUID  `json:"user_id"`
+	TokenHash  string     `json:"token_hash"`
+	ExpiresAt  time.Time  `json:"expires_at"`
+	ConsumedAt *time.Time `json:"consumed_at"`
+	CreatedAt  time.Time  `json:"created_at"`
+}
+
 type ExternalPhoto struct {
 	ID          uuid.UUID `json:"id"`
 	CourtID     uuid.UUID `json:"court_id"`
@@ -156,6 +166,13 @@ type FollowRequest struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
+type ObjectDeletionQueue struct {
+	StorageKey  string     `json:"storage_key"`
+	RequestedAt time.Time  `json:"requested_at"`
+	ClaimedAt   *time.Time `json:"claimed_at"`
+	Attempts    int32      `json:"attempts"`
+}
+
 type PushToken struct {
 	Token     string    `json:"token"`
 	UserID    uuid.UUID `json:"user_id"`
@@ -170,6 +187,7 @@ type RefreshToken struct {
 	ExpiresAt time.Time  `json:"expires_at"`
 	RevokedAt *time.Time `json:"revoked_at"`
 	CreatedAt time.Time  `json:"created_at"`
+	FamilyID  uuid.UUID  `json:"family_id"`
 }
 
 type SeedRegion struct {
@@ -201,19 +219,20 @@ type SessionRsvp struct {
 }
 
 type User struct {
-	ID           uuid.UUID `json:"id"`
-	Email        string    `json:"email"`
-	PasswordHash *string   `json:"password_hash"`
-	DisplayName  string    `json:"display_name"`
-	AvatarUrl    *string   `json:"avatar_url"`
-	Reputation   int32     `json:"reputation"`
-	CreatedAt    time.Time `json:"created_at"`
-	AuthProvider string    `json:"auth_provider"`
-	OauthSubject *string   `json:"oauth_subject"`
-	IsAdmin      bool      `json:"is_admin"`
-	IsPrivate    bool      `json:"is_private"`
-	JerseyNumber *int16    `json:"jersey_number"`
-	Position     *string   `json:"position"`
-	HeightCm     *int16    `json:"height_cm"`
-	StyleTags    []string  `json:"style_tags"`
+	ID              uuid.UUID  `json:"id"`
+	Email           string     `json:"email"`
+	PasswordHash    *string    `json:"password_hash"`
+	DisplayName     string     `json:"display_name"`
+	AvatarUrl       *string    `json:"avatar_url"`
+	Reputation      int32      `json:"reputation"`
+	CreatedAt       time.Time  `json:"created_at"`
+	AuthProvider    string     `json:"auth_provider"`
+	OauthSubject    *string    `json:"oauth_subject"`
+	IsAdmin         bool       `json:"is_admin"`
+	IsPrivate       bool       `json:"is_private"`
+	JerseyNumber    *int16     `json:"jersey_number"`
+	Position        *string    `json:"position"`
+	HeightCm        *int16     `json:"height_cm"`
+	StyleTags       []string   `json:"style_tags"`
+	EmailVerifiedAt *time.Time `json:"email_verified_at"`
 }

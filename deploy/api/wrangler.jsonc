@@ -5,7 +5,23 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "pull-up-api",
   "main": "src/index.ts",
-  "compatibility_date": "2026-06-01",
+  // Reviewed against Workers runtime/types on 2026-07-15.
+  "compatibility_date": "2026-07-15",
+  "compatibility_flags": ["nodejs_compat"],
+  "preview_urls": false,
+  "keep_vars": true,
+  "vars": {
+    "EMAIL_FROM": "verify@pullup.app",
+    "WEB_ORIGIN": "https://pullup.app"
+  },
+  "secrets": {
+    "required": [
+      "DATABASE_URL",
+      "JWT_SECRET",
+      "UPLOAD_SIGNING_SECRET",
+      "INTERNAL_TASK_SECRET"
+    ]
+  },
   "triggers": {
     "crons": [
       "*/15 * * * *"
@@ -42,7 +58,20 @@
       "bucket_name": "pull-up-photos"
     }
   ],
+  "send_email": [
+    {
+      "name": "EMAIL"
+    }
+  ],
   "observability": {
-    "enabled": true
+    "enabled": true,
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1
+    },
+    "traces": {
+      "enabled": true,
+      "head_sampling_rate": 0.1
+    }
   }
 }

@@ -44,6 +44,19 @@ func (q *Queries) CancelSession(ctx context.Context, arg CancelSessionParams) (i
 	return result.RowsAffected(), nil
 }
 
+const countSessionAttendees = `-- name: CountSessionAttendees :one
+SELECT count(*)::int AS going_count
+FROM session_rsvps
+WHERE session_id = $1 AND status = 'going'
+`
+
+func (q *Queries) CountSessionAttendees(ctx context.Context, sessionID uuid.UUID) (int32, error) {
+	row := q.db.QueryRow(ctx, countSessionAttendees, sessionID)
+	var going_count int32
+	err := row.Scan(&going_count)
+	return going_count, err
+}
+
 const courtVoteStatsWeighted = `-- name: CourtVoteStatsWeighted :one
 SELECT
     coalesce(sum(v.vote * w.weight), 0)::int AS net_weighted,
@@ -287,9 +300,29 @@ SELECT r.user_id, u.display_name, r.created_at
 FROM session_rsvps r
 JOIN users u ON u.id = r.user_id
 WHERE r.session_id = $1 AND r.status = 'going'
+  AND $2::uuid <> '00000000-0000-0000-0000-000000000000'::uuid
+  AND EXISTS (SELECT 1 FROM users viewer WHERE viewer.id = $2)
+  AND (
+      r.user_id = $2
+      OR NOT u.is_private
+      OR EXISTS (
+          SELECT 1 FROM follows f
+          WHERE f.follower_id = $2 AND f.followee_id = r.user_id
+      )
+  )
+  AND NOT EXISTS (
+      SELECT 1 FROM blocked_users b
+      WHERE (b.blocker_id = $2 AND b.blocked_id = r.user_id)
+         OR (b.blocker_id = r.user_id AND b.blocked_id = $2)
+  )
 ORDER BY r.created_at
 LIMIT 50
 `
+
+type ListSessionAttendeesParams struct {
+	SessionID uuid.UUID `json:"session_id"`
+	ViewerID  uuid.UUID `json:"viewer_id"`
+}
 
 type ListSessionAttendeesRow struct {
 	UserID      uuid.UUID `json:"user_id"`
@@ -297,8 +330,8 @@ type ListSessionAttendeesRow struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
-func (q *Queries) ListSessionAttendees(ctx context.Context, sessionID uuid.UUID) ([]ListSessionAttendeesRow, error) {
-	rows, err := q.db.Query(ctx, listSessionAttendees, sessionID)
+func (q *Queries) ListSessionAttendees(ctx context.Context, arg ListSessionAttendeesParams) ([]ListSessionAttendeesRow, error) {
+	rows, err := q.db.Query(ctx, listSessionAttendees, arg.SessionID, arg.ViewerID)
 	if err != nil {
 		return nil, err
 	}

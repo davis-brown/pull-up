@@ -63,6 +63,42 @@ func TestLimitBody(t *testing.T) {
 	}
 }
 
+func TestAuthorizationCachePolicy(t *testing.T) {
+	r := chi.NewRouter()
+	r.Use(authCachePolicy)
+	r.Get("/api/v1/courts/x/activity", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
+	r.Post("/api/v1/auth/login", func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+
+	req, _ := http.NewRequest(http.MethodGet, ts.URL+"/api/v1/courts/x/activity", nil)
+	req.Header.Set("Authorization", "Bearer token")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.Header.Get("Cache-Control") != "no-store" {
+		t.Errorf("personalized Cache-Control = %q", resp.Header.Get("Cache-Control"))
+	}
+	if !strings.Contains(resp.Header.Get("Vary"), "Authorization") {
+		t.Errorf("personalized Vary = %q", resp.Header.Get("Vary"))
+	}
+
+	resp, err = http.Post(ts.URL+"/api/v1/auth/login", "application/json", strings.NewReader("{}"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.Header.Get("Cache-Control") != "no-store" {
+		t.Errorf("auth Cache-Control = %q", resp.Header.Get("Cache-Control"))
+	}
+}
+
 // TestValidStyleTagAndPosition exercises the player-card validation helpers
 // directly; unlike the HTTP-level PATCH /me tests, this needs no Postgres
 // connection so it always runs.

@@ -1,8 +1,8 @@
 // Package enrich lazily augments courts with data from free services:
 // a reverse-geocoded address from Nominatim and openly-licensed photos
 // from Wikimedia Commons. Both are shared community services, so a single
-// worker processes courts one at a time with courtesy delays, and each
-// court is attempted exactly once (courts.enriched_at is the claim).
+// worker processes courts one at a time with courtesy delays. Claims are
+// leased so interrupted or transiently failed work can be retried.
 package enrich
 
 import (
@@ -55,20 +55,20 @@ func New(queries *gen.Queries, log *slog.Logger) *Enricher {
 	}
 }
 
-// Request durably (and lazily) marks a viewed court for enrichment. Non-blocking.
-func (e *Enricher) Request(id uuid.UUID) {
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		if err := e.queries.RequestEnrichment(ctx, id); err != nil {
-			e.log.Error("request enrichment", "court", id, "err", err)
-		}
-	}()
+// Request durably (and lazily) marks a viewed court for enrichment. The short
+// database write stays bound to the triggering HTTP request; no goroutine is
+// created per public read.
+func (e *Enricher) Request(ctx context.Context, id uuid.UUID) {
+	if err := e.queries.RequestEnrichment(ctx, id); err != nil {
+		e.log.Error("request enrichment", "court", id, "err", err)
+	}
 }
 
 // DrainOnce claims and enriches the next requested court; reports if it worked.
 func (e *Enricher) DrainOnce(ctx context.Context) bool {
-	e.mu.Lock()
+	if !e.mu.TryLock() {
+		return false
+	}
 	defer e.mu.Unlock()
 	claim, err := e.queries.ClaimNextCourtEnrichment(ctx)
 	if err != nil {
@@ -98,12 +98,18 @@ func (e *Enricher) Run(ctx context.Context) {
 }
 
 func (e *Enricher) enrichClaimed(ctx context.Context, claim gen.ClaimNextCourtEnrichmentRow) {
+	succeeded := true
 	if claim.NeedsAddress {
-		if addr := e.reverseGeocode(ctx, claim.Lat, claim.Lng); addr != "" {
+		addr, err := e.reverseGeocode(ctx, claim.Lat, claim.Lng)
+		if err != nil {
+			e.log.Warn("nominatim reverse", "court", claim.ID, "err", err)
+			succeeded = false
+		} else if addr != "" {
 			if err := e.queries.SetCourtAddressIfNull(ctx, gen.SetCourtAddressIfNullParams{
 				ID: claim.ID, Address: &addr,
 			}); err != nil {
 				e.log.Error("set address", "court", claim.ID, "err", err)
+				succeeded = false
 			}
 		}
 		select {
@@ -113,26 +119,43 @@ func (e *Enricher) enrichClaimed(ctx context.Context, claim gen.ClaimNextCourtEn
 		}
 	}
 
-	photos := e.commonsPhotos(ctx, claim.Lat, claim.Lng)
-	for _, p := range photos {
-		if err := e.queries.InsertExternalPhoto(ctx, gen.InsertExternalPhotoParams{
-			CourtID: claim.ID, Source: "commons", SourceID: p.sourceID,
-			ImageUrl: p.imageURL, PageUrl: p.pageURL, Attribution: p.attribution,
-		}); err != nil {
-			e.log.Error("insert external photo", "court", claim.ID, "err", err)
+	photos, err := e.commonsPhotos(ctx, claim.Lat, claim.Lng)
+	if err != nil {
+		e.log.Warn("commons geosearch", "court", claim.ID, "err", err)
+		succeeded = false
+	} else {
+		for _, p := range photos {
+			if err := e.queries.InsertExternalPhoto(ctx, gen.InsertExternalPhotoParams{
+				CourtID: claim.ID, Source: "commons", SourceID: p.sourceID,
+				ImageUrl: p.imageURL, PageUrl: p.pageURL, Attribution: p.attribution,
+			}); err != nil {
+				e.log.Error("insert external photo", "court", claim.ID, "err", err)
+				succeeded = false
+			}
 		}
 	}
-	e.log.Info("enriched court", "court", claim.ID, "needed_address", claim.NeedsAddress, "photos", len(photos))
 
-	water, toilets, parking := e.nearbyAmenities(ctx, claim.Lat, claim.Lng)
-	if water || toilets || parking {
+	water, toilets, parking, err := e.nearbyAmenities(ctx, claim.Lat, claim.Lng)
+	if err != nil {
+		e.log.Warn("overpass amenities", "court", claim.ID, "err", err)
+		succeeded = false
+	} else if water || toilets || parking {
 		wp, tp, pp := boolPtrIfTrue(water), boolPtrIfTrue(toilets), boolPtrIfTrue(parking)
 		if err := e.queries.SetCourtAmenitiesIfNull(ctx, gen.SetCourtAmenitiesIfNullParams{
 			ID: claim.ID, DrinkingWater: wp, Toilets: tp, Parking: pp,
 		}); err != nil {
 			e.log.Error("set amenities", "court", claim.ID, "err", err)
+			succeeded = false
 		}
 	}
+	if ctx.Err() != nil || !succeeded {
+		return
+	}
+	if err := e.queries.MarkCourtEnrichmentComplete(ctx, claim.ID); err != nil {
+		e.log.Error("complete enrichment", "court", claim.ID, "err", err)
+		return
+	}
+	e.log.Info("enriched court", "court", claim.ID, "needed_address", claim.NeedsAddress, "photos", len(photos))
 
 	select {
 	case <-ctx.Done():
@@ -169,15 +192,15 @@ type nominatimResponse struct {
 	Address map[string]string `json:"address"`
 }
 
-// reverseGeocode returns a short "street, locality" address, or "".
-func (e *Enricher) reverseGeocode(ctx context.Context, lat, lng float64) string {
+// reverseGeocode returns a short "street, locality" address, or "" when the
+// provider successfully reports no useful address.
+func (e *Enricher) reverseGeocode(ctx context.Context, lat, lng float64) (string, error) {
 	u := fmt.Sprintf(
 		"https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=%f&lon=%f&zoom=17&addressdetails=1",
 		lat, lng)
 	var resp nominatimResponse
 	if err := e.getJSON(ctx, u, &resp); err != nil {
-		e.log.Warn("nominatim reverse", "err", err)
-		return ""
+		return "", err
 	}
 	a := resp.Address
 	first := func(keys ...string) string {
@@ -195,11 +218,11 @@ func (e *Enricher) reverseGeocode(ctx context.Context, lat, lng float64) string 
 	locality := first("neighbourhood", "suburb", "city_district", "city", "town", "village", "hamlet")
 	switch {
 	case street != "" && locality != "":
-		return street + ", " + locality
+		return street + ", " + locality, nil
 	case street != "":
-		return street
+		return street, nil
 	default:
-		return locality
+		return locality, nil
 	}
 }
 
@@ -231,7 +254,7 @@ type commonsResponse struct {
 
 var htmlTags = regexp.MustCompile(`<[^>]*>`)
 
-func (e *Enricher) commonsPhotos(ctx context.Context, lat, lng float64) []commonsPhoto {
+func (e *Enricher) commonsPhotos(ctx context.Context, lat, lng float64) ([]commonsPhoto, error) {
 	params := url.Values{
 		"action":              {"query"},
 		"format":              {"json"},
@@ -247,8 +270,7 @@ func (e *Enricher) commonsPhotos(ctx context.Context, lat, lng float64) []common
 	}
 	var resp commonsResponse
 	if err := e.getJSON(ctx, "https://commons.wikimedia.org/w/api.php?"+params.Encode(), &resp); err != nil {
-		e.log.Warn("commons geosearch", "err", err)
-		return nil
+		return nil, err
 	}
 	out := make([]commonsPhoto, 0, maxPhotos)
 	for _, page := range resp.Query.Pages {
@@ -280,7 +302,7 @@ func (e *Enricher) commonsPhotos(ctx context.Context, lat, lng float64) []common
 			attribution: attribution,
 		})
 	}
-	return out
+	return out, nil
 }
 
 type overpassElement struct {
@@ -306,14 +328,14 @@ func parseOverpassAmenities(els []overpassElement) (water, toilets, parking bool
 }
 
 // nearbyAmenities queries Overpass for water/toilets/parking within ~150 m.
-func (e *Enricher) nearbyAmenities(ctx context.Context, lat, lng float64) (water, toilets, parking bool) {
+func (e *Enricher) nearbyAmenities(ctx context.Context, lat, lng float64) (water, toilets, parking bool, err error) {
 	q := fmt.Sprintf(
 		`[out:json][timeout:20];(nwr[amenity=drinking_water](around:150,%f,%f);nwr[amenity=toilets](around:150,%f,%f);nwr[amenity=parking](around:150,%f,%f););out tags;`,
 		lat, lng, lat, lng, lat, lng)
 	var resp overpassResponse
 	if err := e.getJSON(ctx, "https://overpass-api.de/api/interpreter?data="+url.QueryEscape(q), &resp); err != nil {
-		e.log.Warn("overpass amenities", "err", err)
-		return false, false, false
+		return false, false, false, err
 	}
-	return parseOverpassAmenities(resp.Elements)
+	water, toilets, parking = parseOverpassAmenities(resp.Elements)
+	return water, toilets, parking, nil
 }

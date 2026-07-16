@@ -65,8 +65,8 @@ comes from geo-verified check-ins and crowd reports.
 - Feed of followed users' check-ins and upcoming runs
 
 **Account & sign-in**
-- Email/password auth with refresh-token rotation, plus Sign in with Google
-  and Sign in with Apple
+- Verified email/password auth with refresh-token-family rotation, plus Sign
+  in with Google and Sign in with Apple
 - Avatar upload/removal, editable display name, system/light/dark theme
 - Push notification token registration
 - Self-service account deletion — cascades your check-ins, messages,
@@ -134,7 +134,9 @@ flags, and the whole admin/moderation flow. CI runs all of this plus the
 app's typecheck and jest suite on every push.
 
 The API runs its migrations automatically on startup. Config is env-based —
-see `server/internal/config/config.go` (`DATABASE_URL`, `JWT_SECRET`, `PORT`).
+see `server/internal/config/config.go`. Runtime secrets are `DATABASE_URL`,
+`JWT_SECRET`, `UPLOAD_SIGNING_SECRET`, and `INTERNAL_TASK_SECRET`; signing
+secrets must be distinct and at least 32 bytes.
 
 Maps need no API keys: tiles come from [OpenFreeMap](https://openfreemap.org).
 The only app config is `EXPO_PUBLIC_API_URL` — see `app/.env.example`.
@@ -152,9 +154,9 @@ The only app config is `EXPO_PUBLIC_API_URL` — see `app/.env.example`.
 ## Moderation & admins
 
 Anyone signed in can report a court, photo, or crowd report (flag icons in
-the app → `POST /flags`). Admins get a moderation queue (Profile →
-"Moderation queue") to review open flags, reject courts, remove photos, and
-resolve reports.
+the app → `POST /flags`). Admins get a moderation queue (Profile → Profile
+settings → "Moderation queue") to review open flags, reject courts, remove
+photos, and resolve reports.
 
 Admin rights are managed in-app with a security model designed to avoid
 both self-escalation and lock-out:
@@ -188,24 +190,29 @@ npx wrangler login
 cd deploy/api && npm install
 npx wrangler secret put DATABASE_URL   # Neon connection string (pooled)
 npx wrangler secret put JWT_SECRET     # openssl rand -hex 32
+npx wrangler secret put UPLOAD_SIGNING_SECRET  # a different openssl rand -hex 32
 npx wrangler secret put INTERNAL_TASK_SECRET  # auth for the drain cron
+npx wrangler email sending enable pullup.app   # one-time transactional email setup
 ```
 
-`INTERNAL_TASK_SECRET` must also be set as the Go container's
-`INTERNAL_TASK_SECRET` env var — the 15-minute cron trigger POSTs
-`/internal/drain` with it to advance the OSM seeding/enrichment backlog. Leaving
-it unset in either place disables the endpoint (safe default); the in-process
-workers still drain on the warm path.
+The API Worker sends verification links through its `EMAIL` binding from
+`verify@pullup.app`. If another sending domain or canonical web origin is used,
+set the `EMAIL_FROM` and `WEB_ORIGIN` Worker vars before deployment and
+regenerate `deploy/api/worker-configuration.d.ts` with `npm run types`.
+
+`INTERNAL_TASK_SECRET` is passed to the Go container by the API Worker. It
+protects cron, verification-email, and status-aware media cleanup calls; these
+internal routes are not exposed by the public Worker. The 15-minute cron drains
+OSM/enrichment work and physically removes revoked R2 objects.
 
 Then, from the repo root:
 
 ```sh
-make deploy-api                                    # needs Docker locally
-make deploy-web API_URL=https://pull-up-api.<your-subdomain>.workers.dev
+make deploy-web WEB_ORIGIN=https://pullup.app
 ```
 
-Or push to `main` with the `CLOUDFLARE_API_TOKEN` and `EXPO_PUBLIC_API_URL`
-repo secrets set and let GitHub Actions deploy both.
+Or push to `main` with the `CLOUDFLARE_API_TOKEN`, `EXPO_PUBLIC_API_URL`, and
+`WEB_ORIGIN` repo secrets set and let GitHub Actions deploy both.
 
 ## Court data & attribution
 

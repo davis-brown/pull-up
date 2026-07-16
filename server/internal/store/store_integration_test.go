@@ -60,7 +60,7 @@ func testStore(t *testing.T) *store.Store {
 	}
 	// Isolate each run.
 	if _, err := st.Pool.Exec(ctx,
-		"TRUNCATE users, refresh_tokens, courts, check_ins, crowd_reports, court_votes, court_photos, flags, seed_regions, sessions, session_rsvps, court_messages, follows, favorites, blocked_users, follow_requests CASCADE"); err != nil {
+		"TRUNCATE object_deletion_queue, users, refresh_tokens, courts, check_ins, crowd_reports, court_votes, court_photos, flags, seed_regions, sessions, session_rsvps, court_messages, follows, favorites, blocked_users, follow_requests CASCADE"); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 	return st
@@ -178,7 +178,7 @@ func TestCheckInFlow(t *testing.T) {
 	// Check in to A, then to B: only B's must remain active (one per user).
 	dm := float32(1)
 	if _, err := st.Queries.CreateCheckIn(ctx, gen.CreateCheckInParams{
-		CourtID: court.ID, UserID: uid, Source: "manual", Lng: ruckerLng, Lat: ruckerLat, DistanceM: &dm, PartySize: 1, HasBall: false,
+		CourtID: court.ID, UserID: uid, Source: "manual", DistanceM: &dm, PartySize: 1, HasBall: false,
 	}); err != nil {
 		t.Fatalf("check in A: %v", err)
 	}
@@ -186,7 +186,7 @@ func TestCheckInFlow(t *testing.T) {
 		t.Fatalf("close: %v", err)
 	}
 	if _, err := st.Queries.CreateCheckIn(ctx, gen.CreateCheckInParams{
-		CourtID: courtB.ID, UserID: uid, Source: "geofence_auto", Lng: ruckerLng, Lat: ruckerLat + 0.05, DistanceM: &dm, PartySize: 1, HasBall: false,
+		CourtID: courtB.ID, UserID: uid, Source: "geofence_auto", DistanceM: &dm, PartySize: 1, HasBall: false,
 	}); err != nil {
 		t.Fatalf("check in B: %v", err)
 	}
@@ -223,7 +223,7 @@ func TestCheckInExpiryFiltering(t *testing.T) {
 
 	dm := float32(1)
 	row, err := st.Queries.CreateCheckIn(ctx, gen.CreateCheckInParams{
-		CourtID: court.ID, UserID: uid, Source: "manual", Lng: ruckerLng, Lat: ruckerLat, DistanceM: &dm, PartySize: 1, HasBall: false,
+		CourtID: court.ID, UserID: uid, Source: "manual", DistanceM: &dm, PartySize: 1, HasBall: false,
 	})
 	if err != nil {
 		t.Fatalf("check in: %v", err)
@@ -563,7 +563,7 @@ func TestPhase3ReputationWeighting(t *testing.T) {
 	// Check-in reputation guard: first check-in has no prior, second does.
 	d := float32(5)
 	ci1, err := st.Queries.CreateCheckIn(ctx, gen.CreateCheckInParams{
-		CourtID: court.ID, UserID: rookie, Source: "manual", Lng: ruckerLng, Lat: ruckerLat, DistanceM: &d, PartySize: 1, HasBall: false,
+		CourtID: court.ID, UserID: rookie, Source: "manual", DistanceM: &d, PartySize: 1, HasBall: false,
 	})
 	if err != nil {
 		t.Fatalf("check-in: %v", err)
@@ -574,8 +574,11 @@ func TestPhase3ReputationWeighting(t *testing.T) {
 	if err != nil || recent {
 		t.Fatalf("first check-in: recent=%v err=%v, want false", recent, err)
 	}
+	if err := st.Queries.CloseActiveCheckInsForUser(ctx, rookie); err != nil {
+		t.Fatalf("close first check-in: %v", err)
+	}
 	ci2, err := st.Queries.CreateCheckIn(ctx, gen.CreateCheckInParams{
-		CourtID: court.ID, UserID: rookie, Source: "manual", Lng: ruckerLng, Lat: ruckerLat, DistanceM: &d, PartySize: 1, HasBall: false,
+		CourtID: court.ID, UserID: rookie, Source: "manual", DistanceM: &d, PartySize: 1, HasBall: false,
 	})
 	if err != nil {
 		t.Fatalf("second check-in: %v", err)
@@ -651,10 +654,11 @@ func insertCheckInDaysAgo(t *testing.T, st *store.Store, courtID, userID uuid.UU
 	t.Helper()
 	ctx := context.Background()
 	_, err := st.Pool.Exec(ctx, `
-		INSERT INTO check_ins (court_id, user_id, source, created_at, expires_at)
+		INSERT INTO check_ins (court_id, user_id, source, created_at, expires_at, checked_out_at)
 		VALUES (
 			$1, $2, 'manual',
 			(((now() AT TIME ZONE 'UTC')::date - (INTERVAL '1 day' * $3::int) + INTERVAL '12 hours') AT TIME ZONE 'UTC'),
+			(((now() AT TIME ZONE 'UTC')::date - (INTERVAL '1 day' * $3::int) + INTERVAL '14 hours') AT TIME ZONE 'UTC'),
 			(((now() AT TIME ZONE 'UTC')::date - (INTERVAL '1 day' * $3::int) + INTERVAL '14 hours') AT TIME ZONE 'UTC')
 		)`, courtID, userID, daysAgo)
 	if err != nil {
@@ -761,7 +765,7 @@ func TestFeedFriendsHere(t *testing.T) {
 	dm := float32(1)
 	for _, uid := range []uuid.UUID{friend, stranger} {
 		if _, err := st.Queries.CreateCheckIn(ctx, gen.CreateCheckInParams{
-			CourtID: court.ID, UserID: uid, Source: "manual", Lng: ruckerLng, Lat: ruckerLat, DistanceM: &dm, PartySize: 1, HasBall: false,
+			CourtID: court.ID, UserID: uid, Source: "manual", DistanceM: &dm, PartySize: 1, HasBall: false,
 		}); err != nil {
 			t.Fatalf("check in %v: %v", uid, err)
 		}
@@ -980,8 +984,14 @@ func TestEnrichmentQueue(t *testing.T) {
 	if err != nil || claimed.ID != c.ID {
 		t.Fatalf("claim enrichment = %+v, %v; want court %s", claimed, err, c.ID)
 	}
-	// Now enriched → no longer claimable.
+	// The active lease prevents a concurrent duplicate claim.
 	if _, err := st.Queries.ClaimNextCourtEnrichment(ctx); err == nil {
-		t.Error("enriched court should not be re-claimable")
+		t.Error("leased court should not be re-claimable")
+	}
+	if err := st.Queries.MarkCourtEnrichmentComplete(ctx, c.ID); err != nil {
+		t.Fatalf("complete enrichment: %v", err)
+	}
+	if _, err := st.Queries.ClaimNextCourtEnrichment(ctx); err == nil {
+		t.Error("completed court should not be re-claimable")
 	}
 }
