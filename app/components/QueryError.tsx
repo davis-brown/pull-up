@@ -5,7 +5,17 @@ import { useTheme } from "@/lib/theme";
 
 // Friendly failed-query state. RN's fetch rejects with a TypeError when the
 // network is unreachable — surface that as "offline" rather than an error.
-export function QueryError({ error, onRetry }: { error: unknown; onRetry: () => void }) {
+export function QueryError({
+  error,
+  onRetry,
+  title,
+  message,
+}: {
+  error: unknown;
+  onRetry?: () => void;
+  title?: string;
+  message?: string;
+}) {
   const t = useTheme();
   const offline = error instanceof TypeError;
   return (
@@ -18,18 +28,20 @@ export function QueryError({ error, onRetry }: { error: unknown; onRetry: () => 
       <Text
         style={[t.type.heading, styles.text, { color: t.colors.textPrimary, marginTop: t.spacing.md }]}
       >
-        {offline ? "You're offline" : "Something went wrong"}
+        {title ?? (offline ? "You're offline" : "Something went wrong")}
       </Text>
       <Text
         style={[t.type.body, styles.text, { color: t.colors.textSecondary, marginTop: t.spacing.xs }]}
       >
-        {offline
+        {message ?? (offline
           ? "Check your connection and try again."
-          : "That didn't load. Give it another try."}
+          : "That didn't load. Give it another try.")}
       </Text>
-      <View style={[styles.buttonWrap, { marginTop: t.spacing.lg }]}>
-        <Button title="Try again" variant="secondary" onPress={onRetry} />
-      </View>
+      {onRetry ? (
+        <View style={[styles.buttonWrap, { marginTop: t.spacing.lg }]}>
+          <Button title="Try again" variant="secondary" onPress={onRetry} />
+        </View>
+      ) : null}
     </View>
   );
 }

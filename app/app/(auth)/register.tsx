@@ -1,4 +1,4 @@
-import { Link, useLocalSearchParams, type Href } from "expo-router";
+import { Link, useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useState } from "react";
 import { KeyboardAvoidingView, Platform, StyleSheet, Text, View } from "react-native";
 import { Button, ErrorText, Field } from "@/components/ui";
@@ -7,6 +7,7 @@ import { useTheme } from "@/lib/theme";
 
 export default function RegisterScreen() {
   const { signUp } = useAuth();
+  const router = useRouter();
   const t = useTheme();
   const { next } = useLocalSearchParams<{ next?: string }>();
   const [displayName, setDisplayName] = useState("");
@@ -19,7 +20,16 @@ export default function RegisterScreen() {
     setError(null);
     setBusy(true);
     try {
-      await signUp(email.trim(), password, displayName.trim());
+      const normalizedEmail = email.trim().toLowerCase();
+      const result = await signUp(normalizedEmail, password, displayName.trim());
+      router.replace({
+        pathname: "/verify-email",
+        params: {
+          email: normalizedEmail,
+          ...(next ? { next } : {}),
+          sent: result.emailSent ? "1" : "0",
+        },
+      } as Href);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Registration failed");
     } finally {

@@ -1,12 +1,18 @@
 package api_test
 
 import (
+	"context"
+	"encoding/json"
 	"net/http"
+	"strings"
+	"sync"
 	"testing"
+
+	"github.com/davisbrown/pull-up/server/internal/store/gen"
 )
 
 func TestCheckInDistanceGuard(t *testing.T) {
-	ts, _ := newTestServer(t)
+	ts, st := newTestServer(t)
 	u := registerUser(t, ts, "hooper@test.local", "Hooper")
 	court := createTestCourt(t, ts, u.AccessToken, "Guarded Court", ruckerLat, ruckerLng)
 
@@ -33,6 +39,18 @@ func TestCheckInDistanceGuard(t *testing.T) {
 		t.Fatalf("at-court check-in: status %d: %s", resp.StatusCode, readBody(t, resp))
 	}
 	resp.Body.Close()
+	var coordinateColumnExists bool
+	if err := st.Pool.QueryRow(context.Background(), `
+		SELECT EXISTS (
+			SELECT 1 FROM information_schema.columns
+			WHERE table_schema = current_schema()
+			  AND table_name = 'check_ins' AND column_name = 'reported_location'
+		)`).Scan(&coordinateColumnExists); err != nil {
+		t.Fatalf("inspect check-in schema: %v", err)
+	}
+	if coordinateColumnExists {
+		t.Fatal("check_ins still retains the exact reported_location column")
+	}
 
 	resp = doJSON(t, ts, http.MethodGet, "/courts/"+court.ID, "", nil)
 	got := decodeJSON[courtResp](t, resp)
@@ -154,8 +172,8 @@ func TestCheckInPartySize(t *testing.T) {
 		t.Fatalf("bbox result = %+v, want one court with active_count=3", bboxResult.Courts)
 	}
 
-	// The activity endpoint's active_count is the same party-size sum, and
-	// each check-in entry carries its party size.
+	// The public activity endpoint keeps the aggregate but does not disclose
+	// the named live check-in.
 	resp = doJSON(t, ts, http.MethodGet, "/courts/"+court.ID+"/activity", "", nil)
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("activity: status %d", resp.StatusCode)
@@ -170,8 +188,115 @@ func TestCheckInPartySize(t *testing.T) {
 	if activity.ActiveCount != 3 {
 		t.Errorf("activity active_count = %d, want 3 (party-size sum, not row count)", activity.ActiveCount)
 	}
+	if len(activity.CheckIns) != 0 {
+		t.Errorf("anonymous activity leaked named check-ins: %+v", activity.CheckIns)
+	}
+
+	resp = doJSON(t, ts, http.MethodGet, "/courts/"+court.ID+"/activity", u.AccessToken, nil)
+	activity = decodeJSON[struct {
+		ActiveCount int `json:"active_count"`
+		CheckIns    []struct {
+			PartySize int  `json:"party_size"`
+			HasBall   bool `json:"has_ball"`
+		} `json:"check_ins"`
+	}](t, resp)
 	if len(activity.CheckIns) != 1 || activity.CheckIns[0].PartySize != 3 || !activity.CheckIns[0].HasBall {
-		t.Errorf("activity check_ins = %+v, want one entry with party_size=3 has_ball=true", activity.CheckIns)
+		t.Errorf("owner activity check_ins = %+v, want one entry with party_size=3 has_ball=true", activity.CheckIns)
+	}
+}
+
+func TestLiveCheckInNamesRespectPrivacyAndBlocks(t *testing.T) {
+	ts, st := newTestServer(t)
+	checkedIn := registerUser(t, ts, "private-live@test.local", "Private Live")
+	viewer := registerUser(t, ts, "live-viewer@test.local", "Viewer")
+	court := createTestCourt(t, ts, checkedIn.AccessToken, "Private Live Court", ruckerLat, ruckerLng)
+
+	doJSON(t, ts, http.MethodPatch, "/me", checkedIn.AccessToken, map[string]any{"is_private": true}).Body.Close()
+	resp := doJSON(t, ts, http.MethodPost, "/courts/"+court.ID+"/check-ins", checkedIn.AccessToken,
+		map[string]any{"lat": ruckerLat, "lng": ruckerLng})
+	resp.Body.Close()
+
+	readActivity := func(token string) (int, int) {
+		resp := doJSON(t, ts, http.MethodGet, "/courts/"+court.ID+"/activity", token, nil)
+		body := decodeJSON[struct {
+			ActiveCount int              `json:"active_count"`
+			CheckIns    []map[string]any `json:"check_ins"`
+		}](t, resp)
+		return body.ActiveCount, len(body.CheckIns)
+	}
+	if count, names := readActivity(""); count != 1 || names != 0 {
+		t.Fatalf("anonymous activity count=%d names=%d, want 1/0", count, names)
+	}
+	if count, names := readActivity(viewer.AccessToken); count != 1 || names != 0 {
+		t.Fatalf("non-follower activity count=%d names=%d, want 1/0", count, names)
+	}
+	if err := st.Queries.Follow(context.Background(), gen.FollowParams{
+		FollowerID: mustUUID(t, viewer.User.ID), FolloweeID: mustUUID(t, checkedIn.User.ID),
+	}); err != nil {
+		t.Fatalf("follow private user: %v", err)
+	}
+	if count, names := readActivity(viewer.AccessToken); count != 1 || names != 1 {
+		t.Fatalf("accepted follower activity count=%d names=%d, want 1/1", count, names)
+	}
+
+	// Either block direction hides identity even after the account is public;
+	// the aggregate remains public and unchanged.
+	doJSON(t, ts, http.MethodPatch, "/me", checkedIn.AccessToken, map[string]any{"is_private": false}).Body.Close()
+	resp = doJSON(t, ts, http.MethodPut, "/users/"+viewer.User.ID+"/block", checkedIn.AccessToken, nil)
+	resp.Body.Close()
+	if count, names := readActivity(viewer.AccessToken); count != 1 || names != 0 {
+		t.Fatalf("blocked activity count=%d names=%d, want 1/0", count, names)
+	}
+}
+
+func TestConcurrentCheckInReplacementLeavesOneOpen(t *testing.T) {
+	ts, st := newTestServer(t)
+	u := registerUser(t, ts, "checkin-race@test.local", "Check-in Race")
+	courtA := createTestCourt(t, ts, u.AccessToken, "Race A", ruckerLat, ruckerLng)
+	courtB := createTestCourt(t, ts, u.AccessToken, "Race B", ruckerLat+0.05, ruckerLng)
+
+	type target struct {
+		id  string
+		lat float64
+	}
+	start := make(chan struct{})
+	statuses := make(chan int, 2)
+	var wg sync.WaitGroup
+	for _, target := range []target{{courtA.ID, ruckerLat}, {courtB.ID, ruckerLat + 0.05}} {
+		target := target
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			<-start
+			payload, _ := json.Marshal(map[string]any{"lat": target.lat, "lng": ruckerLng})
+			req, _ := http.NewRequest(http.MethodPost, ts.URL+"/api/v1/courts/"+target.id+"/check-ins", strings.NewReader(string(payload)))
+			req.Header.Set("Authorization", "Bearer "+u.AccessToken)
+			req.Header.Set("Content-Type", "application/json")
+			resp, err := ts.Client().Do(req)
+			if err != nil {
+				statuses <- 0
+				return
+			}
+			resp.Body.Close()
+			statuses <- resp.StatusCode
+		}()
+	}
+	close(start)
+	wg.Wait()
+	close(statuses)
+	for status := range statuses {
+		if status != http.StatusCreated {
+			t.Errorf("concurrent check-in status = %d, want 201", status)
+		}
+	}
+	var open int
+	if err := st.Pool.QueryRow(context.Background(),
+		"SELECT count(*) FROM check_ins WHERE user_id = $1 AND checked_out_at IS NULL",
+		mustUUID(t, u.User.ID)).Scan(&open); err != nil {
+		t.Fatalf("count open check-ins: %v", err)
+	}
+	if open != 1 {
+		t.Fatalf("open check-ins after race = %d, want 1", open)
 	}
 }
 

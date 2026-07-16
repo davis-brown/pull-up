@@ -51,7 +51,7 @@ func (t Tile) BBox() osm.BBox {
 // TilesCovering returns the grid tiles overlapping the bbox, or nil when the
 // viewport spans more than maxTilesPerRequest tiles (too zoomed out).
 func TilesCovering(minLng, minLat, maxLng, maxLat float64) []Tile {
-	if minLng > maxLng || minLat > maxLat {
+	if !validBBox(minLng, minLat, maxLng, maxLat) {
 		return nil
 	}
 	x0 := int(math.Floor(minLng / TileDeg))
@@ -75,7 +75,7 @@ func TilesCovering(minLng, minLat, maxLng, maxLat float64) []Tile {
 // whether the viewport is seedable (within maxTilesPerRequest). ok=false for an
 // invalid or too-zoomed-out bbox — mirrors the cap in TilesCovering.
 func TileRange(minLng, minLat, maxLng, maxLat float64) (x0, x1, y0, y1 int, ok bool) {
-	if minLng > maxLng || minLat > maxLat {
+	if !validBBox(minLng, minLat, maxLng, maxLat) {
 		return 0, 0, 0, 0, false
 	}
 	x0 = int(math.Floor(minLng / TileDeg))
@@ -87,6 +87,16 @@ func TileRange(minLng, minLat, maxLng, maxLat float64) (x0, x1, y0, y1 int, ok b
 		return x0, x1, y0, y1, false
 	}
 	return x0, x1, y0, y1, true
+}
+
+func validBBox(minLng, minLat, maxLng, maxLat float64) bool {
+	for _, v := range []float64{minLng, minLat, maxLng, maxLat} {
+		if math.IsNaN(v) || math.IsInf(v, 0) {
+			return false
+		}
+	}
+	return minLng >= -180 && maxLng <= 180 && minLat >= -90 && maxLat <= 90 &&
+		minLng <= maxLng && minLat <= maxLat
 }
 
 type Seeder struct {
@@ -110,24 +120,20 @@ func New(queries *gen.Queries, endpoint string, log *slog.Logger) *Seeder {
 	}
 }
 
-// Request durably enqueues any covering tiles for import. Non-blocking (runs
-// the DB writes in the background) — safe to call on every map query.
-func (s *Seeder) Request(minLng, minLat, maxLng, maxLat float64) {
+// Request durably enqueues any covering tiles for import. The bounded tile cap
+// and caller's request context avoid spawning work that outlives public reads.
+func (s *Seeder) Request(ctx context.Context, minLng, minLat, maxLng, maxLat float64) {
 	tiles := TilesCovering(minLng, minLat, maxLng, maxLat)
 	if len(tiles) == 0 {
 		return
 	}
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		for _, t := range tiles {
-			if err := s.queries.EnqueueSeedTile(ctx, gen.EnqueueSeedTileParams{
-				TileX: int32(t.X), TileY: int32(t.Y),
-			}); err != nil {
-				s.log.Error("enqueue seed tile", "tile", t, "err", err)
-			}
+	for _, t := range tiles {
+		if err := s.queries.EnqueueSeedTile(ctx, gen.EnqueueSeedTileParams{
+			TileX: int32(t.X), TileY: int32(t.Y),
+		}); err != nil {
+			s.log.Error("enqueue seed tile", "tile", t, "err", err)
 		}
-	}()
+	}
 }
 
 // ViewportSeeding reports whether the viewport is seedable and at least one
@@ -152,7 +158,9 @@ func (s *Seeder) ViewportSeeding(ctx context.Context, minLng, minLat, maxLng, ma
 // DrainOnce claims and imports the next tile, then spaces the next Overpass
 // call by courtesyDelay. Reports whether it did any work.
 func (s *Seeder) DrainOnce(ctx context.Context) bool {
-	s.mu.Lock()
+	if !s.mu.TryLock() {
+		return false
+	}
 	defer s.mu.Unlock()
 	row, err := s.queries.ClaimNextSeedTile(ctx)
 	if err != nil {

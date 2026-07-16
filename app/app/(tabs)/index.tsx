@@ -30,6 +30,7 @@ import {
 import { expectedAt, scrubHours } from "@/lib/forecast";
 import { useCourtsInBBox, useForecasts, type BBox } from "@/lib/hooks";
 import { FALLBACK_CENTER, tryGetPosition, type Coords } from "@/lib/location";
+import { parseRouteId, safePathSegment } from "@/lib/routes";
 import { useTheme } from "@/lib/theme";
 
 export default function MapScreen() {
@@ -42,7 +43,8 @@ export default function MapScreen() {
   const isDesktop = Platform.OS === "web" && width >= 1024;
   // Deep link: /court/[id] redirects to /?court=<id> on desktop web, and the
   // panel opens straight to that court's detail.
-  const { court: courtParam } = useLocalSearchParams<{ court?: string }>();
+  const params = useLocalSearchParams();
+  const courtParam = parseRouteId(params.court);
   const [center, setCenter] = useState<Coords | null>(null);
   const [bbox, setBBox] = useState<BBox | null>(null);
   const [showLocationPrimer, setShowLocationPrimer] = useState(false);
@@ -50,7 +52,7 @@ export default function MapScreen() {
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   const [mode, setMode] = useState<"now" | "all">("now");
   const [selectedCourtId, setSelectedCourtId] = useState<string | null>(
-    typeof courtParam === "string" ? courtParam : null,
+    courtParam ?? null,
   );
   const [hoveredCourtId, setHoveredCourtId] = useState<string | null>(null);
   // Today's scrubbable hours, computed once per mount; hours[0] is NOW.
@@ -94,7 +96,7 @@ export default function MapScreen() {
   // /court/[id] redirect while the map is already open). Depending only on the
   // param means tapping "back" (which clears the selection) never re-triggers.
   useEffect(() => {
-    if (isDesktop && typeof courtParam === "string" && courtParam) {
+    if (isDesktop && courtParam) {
       setSelectedCourtId(courtParam);
     }
   }, [courtParam, isDesktop]);
@@ -292,7 +294,7 @@ export default function MapScreen() {
             // again deselects. "All courts" keeps navigate-on-tap.
             setSelectedCourtId((cur) => (cur === id ? null : id));
           } else {
-            router.push(`/court/${id}`);
+            router.push(`/court/${safePathSegment(id)}`);
           }
         }}
         mode={mode}

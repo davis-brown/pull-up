@@ -15,8 +15,12 @@ describe("filtersToQuery", () => {
     const f: CourtFilters = { lit: true, has_hoops: true, surface: "asphalt" };
     expect(filtersToQuery(f)).toBe("&lit=true&has_hoops=true&surface=asphalt");
   });
-  it("drops false booleans (no-op filters)", () => {
-    expect(filtersToQuery({ lit: false })).toBe("");
+  it("preserves explicit false booleans for strict filters", () => {
+    expect(filtersToQuery({ lit: false, indoor: false })).toBe("&indoor=false&lit=false");
+  });
+  it("serializes the Night run preset's outdoor constraint", () => {
+    const nightRun = PRESETS.find((preset) => preset.key === "night_run")!;
+    expect(filtersToQuery(nightRun.filters)).toBe("&indoor=false&lit=true");
   });
   it("serializes min_hoops when set", () => {
     expect(filtersToQuery({ min_hoops: 4 })).toBe("&min_hoops=4");

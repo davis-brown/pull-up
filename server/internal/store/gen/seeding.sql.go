@@ -99,8 +99,13 @@ func (q *Queries) CountSettledTilesInRange(ctx context.Context, arg CountSettled
 }
 
 const enqueueSeedTile = `-- name: EnqueueSeedTile :exec
+WITH capacity_lock AS (
+    SELECT pg_advisory_xact_lock(1886743155)
+)
 INSERT INTO seed_regions (tile_x, tile_y, status)
-VALUES ($1, $2, 'pending')
+SELECT $1, $2, 'pending'
+FROM capacity_lock
+WHERE (SELECT count(*) FROM seed_regions WHERE status IN ('pending', 'importing')) < 1000
 ON CONFLICT (tile_x, tile_y) DO NOTHING
 `
 

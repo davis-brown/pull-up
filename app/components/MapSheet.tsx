@@ -1,8 +1,8 @@
 import { usePathname, useRouter, type Href } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { TimeScrubber } from "@/components/TimeScrubber";
-import { Button } from "@/components/ui";
+import { Button, ErrorText } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
 import { expectedAt, sessionAt, type CourtForecast } from "@/lib/forecast";
 import { useRSVP } from "@/lib/hooks";
@@ -41,6 +41,12 @@ export function MapSheet({
   // Session ids already RSVP'd from this sheet, so the button can settle
   // into a "You're in" state instead of firing duplicate RSVPs.
   const [joinedSessionIds, setJoinedSessionIds] = useState<string[]>([]);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setJoinedSessionIds([]);
+    setError(null);
+  }, [court.id]);
 
   const isNow = scrubHour === hours[0];
   const count = isNow ? court.active_count : expectedAt(forecast, scrubHour);
@@ -61,11 +67,13 @@ export function MapSheet({
       return;
     }
     if (session) {
+      setError(null);
       rsvp.mutate(
         { sessionId: session.session_id, status: "going" },
         {
           onSuccess: () =>
             setJoinedSessionIds((ids) => [...ids, session.session_id]),
+          onError: (e) => setError(e.message),
         },
       );
       return;
@@ -144,6 +152,7 @@ export function MapSheet({
           onPress={imIn}
         />
       </View>
+      <ErrorText message={error} />
     </View>
   );
 }

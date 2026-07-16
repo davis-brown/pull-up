@@ -46,30 +46,46 @@ func (s *Server) handleAdminSetUserAdmin(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if !req.IsAdmin {
-		target, err := s.store.Queries.GetUserByID(r.Context(), targetID)
-		if err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				writeError(w, http.StatusNotFound, "user not found")
-				return
-			}
-			s.internalError(w, "get user", err)
+	tx, err := s.store.Pool.Begin(r.Context())
+	if err != nil {
+		s.internalError(w, "begin admin update", err)
+		return
+	}
+	defer tx.Rollback(r.Context())
+	// Serialize every admin-role mutation with account deletion so two
+	// concurrent operations cannot each observe another admin and remove both.
+	if _, err := tx.Exec(r.Context(), "LOCK TABLE users IN SHARE ROW EXCLUSIVE MODE"); err != nil {
+		s.internalError(w, "lock admin invariant", err)
+		return
+	}
+	q := s.store.Queries.WithTx(tx)
+	actorAdmin, err := q.GetUserAdmin(r.Context(), userID(r))
+	if err != nil || !actorAdmin {
+		writeError(w, http.StatusForbidden, "admin only")
+		return
+	}
+	target, err := q.GetUserByID(r.Context(), targetID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeError(w, http.StatusNotFound, "user not found")
 			return
 		}
-		if target.IsAdmin {
-			count, err := s.store.Queries.CountAdmins(r.Context())
-			if err != nil {
-				s.internalError(w, "count admins", err)
-				return
-			}
-			if count <= 1 {
-				writeError(w, http.StatusBadRequest, "cannot remove the last admin")
-				return
-			}
+		s.internalError(w, "get user", err)
+		return
+	}
+	if !req.IsAdmin && target.IsAdmin {
+		count, err := q.CountAdmins(r.Context())
+		if err != nil {
+			s.internalError(w, "count admins", err)
+			return
+		}
+		if count <= 1 {
+			writeError(w, http.StatusBadRequest, "cannot remove the last admin")
+			return
 		}
 	}
 
-	user, err := s.store.Queries.SetUserAdmin(r.Context(), gen.SetUserAdminParams{
+	user, err := q.SetUserAdmin(r.Context(), gen.SetUserAdminParams{
 		ID: targetID, IsAdmin: req.IsAdmin,
 	})
 	if err != nil {
@@ -85,10 +101,15 @@ func (s *Server) handleAdminSetUserAdmin(w http.ResponseWriter, r *http.Request)
 	if req.IsAdmin {
 		action = "promote"
 	}
-	if err := s.store.Queries.CreateAdminAction(r.Context(), gen.CreateAdminActionParams{
+	if err := q.CreateAdminAction(r.Context(), gen.CreateAdminActionParams{
 		ActorID: userID(r), Action: action, TargetUserID: targetID,
 	}); err != nil {
-		s.log.Error("create admin action", "err", err)
+		s.internalError(w, "create admin action", err)
+		return
+	}
+	if err := tx.Commit(r.Context()); err != nil {
+		s.internalError(w, "commit admin update", err)
+		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"user": user})
 }

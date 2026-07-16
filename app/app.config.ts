@@ -2,10 +2,16 @@ import type { ExpoConfig } from "expo/config";
 
 // Host for universal links (iOS) / app links (Android), from the same origin
 // used to build share links. Falls back to the production domain.
-const webHost = (process.env.EXPO_PUBLIC_WEB_URL ?? "https://pullup.app").replace(
-  /^https?:\/\//,
-  "",
-).replace(/\/+$/, "");
+const configuredWebUrl = process.env.EXPO_PUBLIC_WEB_URL ?? "https://pullup.app";
+let webHost = "pullup.app";
+try {
+  const parsed = new URL(configuredWebUrl);
+  if (parsed.protocol === "https:" || parsed.protocol === "http:") {
+    webHost = parsed.host;
+  }
+} catch {
+  // Keep the production host for invalid build-time configuration.
+}
 
 // Maps: MapLibre + OpenFreeMap tiles — no API keys or tokens required.
 const config: ExpoConfig = {
@@ -38,7 +44,10 @@ const config: ExpoConfig = {
       {
         action: "VIEW",
         autoVerify: true,
-        data: [{ scheme: "https", host: webHost, pathPrefix: "/court" }],
+        data: [
+          { scheme: "https", host: webHost, pathPrefix: "/court" },
+          { scheme: "https", host: webHost, pathPrefix: "/verify-email" },
+        ],
         category: ["BROWSABLE", "DEFAULT"],
       },
     ],

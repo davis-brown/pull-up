@@ -17,6 +17,7 @@ export default function AuthLayout() {
     <Stack screenOptions={navChrome(t)}>
       <Stack.Screen name="login" options={{ title: "Sign in" }} />
       <Stack.Screen name="register" options={{ title: "Create account" }} />
+      <Stack.Screen name="verify-email" options={{ title: "Verify email" }} />
     </Stack>
   );
 }

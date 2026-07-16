@@ -51,9 +51,29 @@ ON CONFLICT (session_id, user_id) DO UPDATE SET status = EXCLUDED.status, update
 SELECT r.user_id, u.display_name, r.created_at
 FROM session_rsvps r
 JOIN users u ON u.id = r.user_id
-WHERE r.session_id = $1 AND r.status = 'going'
+WHERE r.session_id = sqlc.arg(session_id) AND r.status = 'going'
+  AND sqlc.arg(viewer_id)::uuid <> '00000000-0000-0000-0000-000000000000'::uuid
+  AND EXISTS (SELECT 1 FROM users viewer WHERE viewer.id = sqlc.arg(viewer_id))
+  AND (
+      r.user_id = sqlc.arg(viewer_id)
+      OR NOT u.is_private
+      OR EXISTS (
+          SELECT 1 FROM follows f
+          WHERE f.follower_id = sqlc.arg(viewer_id) AND f.followee_id = r.user_id
+      )
+  )
+  AND NOT EXISTS (
+      SELECT 1 FROM blocked_users b
+      WHERE (b.blocker_id = sqlc.arg(viewer_id) AND b.blocked_id = r.user_id)
+         OR (b.blocker_id = r.user_id AND b.blocked_id = sqlc.arg(viewer_id))
+  )
 ORDER BY r.created_at
 LIMIT 50;
+
+-- name: CountSessionAttendees :one
+SELECT count(*)::int AS going_count
+FROM session_rsvps
+WHERE session_id = $1 AND status = 'going';
 
 -- name: CreateCourtMessage :one
 INSERT INTO court_messages (court_id, user_id, body)

@@ -74,6 +74,10 @@ func main() {
 		Addr:              ":" + cfg.Port,
 		Handler:           api.NewServer(cfg, st, log, sd, en).Routes(),
 		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       15 * time.Second,
+		WriteTimeout:      60 * time.Second,
+		IdleTimeout:       60 * time.Second,
+		MaxHeaderBytes:    1 << 20,
 	}
 
 	go func() {
