@@ -51,7 +51,8 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.worker.json",
-    "test": "jest"
+    "test": "jest",
+    "export:web": "expo export --platform web"
   },
   "overrides": {
     "uuid": "^11.1.1"
