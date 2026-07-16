@@ -91,6 +91,7 @@ CREATE TABLE pending_uploads (
 CREATE INDEX pending_uploads_owner_idx ON pending_uploads (owner_id);
 CREATE INDEX pending_uploads_stale_idx ON pending_uploads (created_at);
 
+-- +goose StatementBegin
 CREATE FUNCTION enqueue_owned_object(key_to_delete text) RETURNS void AS $$
 BEGIN
     IF key_to_delete IS NULL OR key_to_delete = '' OR key_to_delete LIKE '/%'
@@ -103,7 +104,9 @@ BEGIN
         SET requested_at = LEAST(object_deletion_queue.requested_at, EXCLUDED.requested_at);
 END;
 $$ LANGUAGE plpgsql;
+-- +goose StatementEnd
 
+-- +goose StatementBegin
 CREATE FUNCTION queue_replaced_avatar() RETURNS trigger AS $$
 BEGIN
     IF OLD.avatar_url IS DISTINCT FROM NEW.avatar_url
@@ -113,7 +116,9 @@ BEGIN
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
+-- +goose StatementEnd
 
+-- +goose StatementBegin
 CREATE FUNCTION queue_deleted_avatar() RETURNS trigger AS $$
 BEGIN
     IF OLD.avatar_url LIKE '/photos/%' THEN
@@ -122,6 +127,7 @@ BEGIN
     RETURN OLD;
 END;
 $$ LANGUAGE plpgsql;
+-- +goose StatementEnd
 
 CREATE TRIGGER users_queue_replaced_avatar
 AFTER UPDATE OF avatar_url ON users
@@ -131,6 +137,7 @@ CREATE TRIGGER users_queue_deleted_avatar
 AFTER DELETE ON users
 FOR EACH ROW EXECUTE FUNCTION queue_deleted_avatar();
 
+-- +goose StatementBegin
 CREATE FUNCTION queue_court_photo_object() RETURNS trigger AS $$
 BEGIN
     IF TG_OP = 'DELETE' THEN
@@ -146,6 +153,7 @@ BEGIN
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
+-- +goose StatementEnd
 
 CREATE TRIGGER court_photos_queue_object
 AFTER UPDATE OR DELETE ON court_photos
@@ -156,6 +164,7 @@ FOR EACH ROW EXECUTE FUNCTION queue_court_photo_object();
 -- Reversing the verification requirement is unsafe while unverified password
 -- accounts exist: the pre-migration code would treat them as fully verified.
 -- Abort the rollback so operators must explicitly handle those accounts first.
+-- +goose StatementBegin
 DO $$
 BEGIN
     IF EXISTS (
@@ -165,6 +174,7 @@ BEGIN
         RAISE EXCEPTION 'Cannot roll back 00014: unverified password users exist. Verify or delete them first.';
     END IF;
 END $$;
+-- +goose StatementEnd
 
 DROP TRIGGER court_photos_queue_object ON court_photos;
 DROP FUNCTION queue_court_photo_object();
