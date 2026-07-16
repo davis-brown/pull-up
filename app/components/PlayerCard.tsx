@@ -9,6 +9,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Avatar } from "@/components/Avatar";
 import { Overline, withAlpha } from "@/components/ui";
 import { BADGES, STYLE_TAGS, playerSubline } from "@/lib/player";
+import { safePathSegment } from "@/lib/routes";
 import { darkTheme, useTheme } from "@/lib/theme";
 import type { MeStats, User } from "@/lib/types";
 
@@ -182,7 +183,7 @@ export function PlayerCard({
           {homeCourts.map((hc) => (
             <Pressable
               key={hc.court_id}
-              onPress={() => router.push(`/court/${hc.court_id}` as Href)}
+              onPress={() => router.push(`/court/${safePathSegment(hc.court_id)}` as Href)}
               style={[
                 styles.courtRow,
                 { borderRadius: 16, backgroundColor: t.colors.surface, borderColor: t.colors.border },

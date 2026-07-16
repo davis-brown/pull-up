@@ -3,9 +3,11 @@ import { useMemo, useState } from "react";
 import { ScrollView, Share, StyleSheet, Text, View } from "react-native";
 import { AuthGate } from "@/components/AuthGate";
 import { sessionTimeLabel } from "@/components/CourtSessions";
+import { QueryError } from "@/components/QueryError";
 import { Button, Chip, ErrorText, Field } from "@/components/ui";
-import { useCreateSession } from "@/lib/hooks";
+import { useCourt, useCreateSession } from "@/lib/hooks";
 import { buildCourtLink, runShareMessage } from "@/lib/links";
+import { parseRouteId, safePathSegment } from "@/lib/routes";
 import { useTheme } from "@/lib/theme";
 
 // Quick-pick scheduling: day + hour chips instead of a date-picker dependency.
@@ -18,10 +20,31 @@ function hourLabel(h: number): string {
 }
 
 export default function PlanSessionScreen() {
-  const { id, prefillHour } = useLocalSearchParams<{ id: string; prefillHour?: string }>();
+  const params = useLocalSearchParams();
+  const id = parseRouteId(params.id);
+  const prefillHour = typeof params.prefillHour === "string" ? params.prefillHour : undefined;
+  if (!id) {
+    return (
+      <QueryError
+        error={new Error("Invalid court id")}
+        title="Invalid court link"
+        message="This court link is not valid."
+      />
+    );
+  }
+  const next = `/court/${safePathSegment(id)}/plan${prefillHour ? `?prefillHour=${encodeURIComponent(prefillHour)}` : ""}`;
+  return (
+    <AuthGate next={next}>
+      <PlanSessionContent id={id} prefillHour={prefillHour} />
+    </AuthGate>
+  );
+}
+
+function PlanSessionContent({ id, prefillHour }: { id: string; prefillHour?: string }) {
   const router = useRouter();
   const t = useTheme();
-  const createSession = useCreateSession(id ?? "");
+  const createSession = useCreateSession(id);
+  const { data: court } = useCourt(id);
   // The map sheet's I'M IN passes the scrubbed hour as ?prefillHour — preset
   // the time picker with it when it's still a valid hour later today.
   const prefill = useMemo(() => {
@@ -75,15 +98,16 @@ export default function PlanSessionScreen() {
       { starts_at: starts.toISOString(), note: note.trim() || undefined },
       {
         onSuccess: (session) => {
+          const url = buildCourtLink(id, session.id);
           void Share.share({
             message: runShareMessage(
-              "this court",
+              court?.name ?? "this court",
               sessionTimeLabel(session.starts_at),
-              buildCourtLink(id ?? "", session.id),
+              url,
             ),
-          })
-            .catch(() => {})
-            .finally(() => router.back());
+            url,
+          }).catch(() => {});
+          router.back();
         },
         onError: (e) => setError(e.message),
       },
@@ -91,11 +115,10 @@ export default function PlanSessionScreen() {
   };
 
   return (
-    <AuthGate>
-      <ScrollView
-        style={{ backgroundColor: t.colors.background }}
-        contentContainerStyle={{ padding: t.spacing.lg }}
-      >
+    <ScrollView
+      style={{ backgroundColor: t.colors.background }}
+      contentContainerStyle={{ padding: t.spacing.lg }}
+    >
         <Text style={[t.type.label, { color: t.colors.textSecondary, marginBottom: t.spacing.sm }]}>
           Which day?
         </Text>
@@ -145,8 +168,7 @@ export default function PlanSessionScreen() {
           <Button title="Plan it" busy={createSession.isPending} onPress={submit} />
           <Button title="Cancel" variant="ghost" onPress={() => router.back()} />
         </View>
-      </ScrollView>
-    </AuthGate>
+    </ScrollView>
   );
 }
 

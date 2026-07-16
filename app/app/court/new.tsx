@@ -14,12 +14,21 @@ import { Button, Card, Chip, ErrorText, Field } from "@/components/ui";
 import { ApiError } from "@/lib/api";
 import { useCreateCourt, type BBox } from "@/lib/hooks";
 import { FALLBACK_CENTER, tryGetPosition, type Coords } from "@/lib/location";
+import { safePathSegment } from "@/lib/routes";
 import { useTheme } from "@/lib/theme";
 import type { NearbyDuplicate, Surface } from "@/lib/types";
 
 const surfaces: Surface[] = ["asphalt", "concrete", "hardwood", "rubber", "other"];
 
 export default function NewCourtScreen() {
+  return (
+    <AuthGate>
+      <NewCourtContent />
+    </AuthGate>
+  );
+}
+
+function NewCourtContent() {
   const router = useRouter();
   const t = useTheme();
   const createCourt = useCreateCourt();
@@ -66,7 +75,7 @@ export default function NewCourtScreen() {
         ignore_duplicates: ignoreDuplicates,
       },
       {
-        onSuccess: (court) => router.replace(`/court/${court.id}`),
+        onSuccess: (court) => router.replace(`/court/${safePathSegment(court.id)}`),
         onError: (e) => {
           if (e instanceof ApiError && e.status === 409) {
             setDuplicates((e.body.possible_duplicates as NearbyDuplicate[]) ?? []);
@@ -79,8 +88,7 @@ export default function NewCourtScreen() {
   };
 
   return (
-    <AuthGate>
-      <View style={[styles.container, { backgroundColor: t.colors.background }]}>
+    <View style={[styles.container, { backgroundColor: t.colors.background }]}>
         <View style={styles.mapWrap}>
           {start ? (
             <>
@@ -145,7 +153,7 @@ export default function NewCourtScreen() {
                 Is it one of these?
               </Text>
               {duplicates.map((d) => (
-                <Pressable key={d.id} onPress={() => router.replace(`/court/${d.id}`)}>
+                <Pressable key={d.id} onPress={() => router.replace(`/court/${safePathSegment(d.id)}`)}>
                   <Text
                     style={[
                       t.type.bodyMedium,
@@ -175,8 +183,7 @@ export default function NewCourtScreen() {
             />
           )}
         </ScrollView>
-      </View>
-    </AuthGate>
+    </View>
   );
 }
 

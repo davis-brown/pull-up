@@ -1,4 +1,9 @@
-import { resolveNextPath, signInHref } from "./routes";
+import {
+  parseRouteId,
+  resolveNextPath,
+  safePathSegment,
+  signInHref,
+} from "./routes";
 
 describe("signInHref", () => {
   it("returns plain /login when there is nowhere to return to", () => {
@@ -15,6 +20,11 @@ describe("signInHref", () => {
   it("encodes the return route", () => {
     expect(signInHref("/court/abc-123")).toBe("/login?next=%2Fcourt%2Fabc-123");
   });
+
+  it("rejects unsafe return routes before putting them in the login URL", () => {
+    expect(signInHref("https://evil.com")).toBe("/login");
+    expect(signInHref("/\\evil.com")).toBe("/login");
+  });
 });
 
 describe("resolveNextPath", () => {
@@ -30,5 +40,34 @@ describe("resolveNextPath", () => {
   it("rejects external and protocol-relative values (open redirect)", () => {
     expect(resolveNextPath("//evil.com")).toBe("/");
     expect(resolveNextPath("https://evil.com")).toBe("/");
+  });
+
+  it("rejects backslashes, controls, malformed escapes, and encoded protocol-relative values", () => {
+    expect(resolveNextPath("/\\evil.com")).toBe("/");
+    expect(resolveNextPath("/%2f%2fevil.com")).toBe("/");
+    expect(resolveNextPath("/%zz")).toBe("/");
+    expect(resolveNextPath("/court/x\nnext")).toBe("/");
+  });
+});
+
+describe("route ids", () => {
+  it("accepts UUID and slug-shaped single segments", () => {
+    expect(parseRouteId("550e8400-e29b-41d4-a716-446655440000")).toBe(
+      "550e8400-e29b-41d4-a716-446655440000",
+    );
+    expect(parseRouteId("user_1")).toBe("user_1");
+  });
+
+  it("rejects arrays, traversal, delimiters, and oversized ids", () => {
+    expect(parseRouteId(["a", "b"])).toBeUndefined();
+    expect(parseRouteId("../admin")).toBeUndefined();
+    expect(parseRouteId("a/b")).toBeUndefined();
+    expect(parseRouteId("a?x=1")).toBeUndefined();
+    expect(parseRouteId("a".repeat(129))).toBeUndefined();
+  });
+
+  it("refuses to construct a path segment from an invalid id", () => {
+    expect(safePathSegment("valid-id")).toBe("valid-id");
+    expect(() => safePathSegment("../admin")).toThrow("Invalid path segment");
   });
 });

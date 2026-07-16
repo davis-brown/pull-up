@@ -32,8 +32,8 @@ func (q *Queries) AddFavorite(ctx context.Context, arg AddFavoriteParams) error 
 
 const createCourtPhoto = `-- name: CreateCourtPhoto :one
 
-INSERT INTO court_photos (court_id, user_id, storage_key)
-VALUES ($1, $2, $3)
+INSERT INTO court_photos (court_id, user_id, storage_key, status)
+VALUES ($1, $2, $3, 'pending')
 RETURNING id, court_id, user_id, storage_key, status, created_at
 `
 
@@ -68,9 +68,10 @@ func (q *Queries) CreateCourtPhoto(ctx context.Context, arg CreateCourtPhotoPara
 }
 
 const createOAuthUser = `-- name: CreateOAuthUser :one
-INSERT INTO users (email, display_name, auth_provider, oauth_subject)
-VALUES ($1, $2, $3, $4)
-RETURNING id, email, display_name, avatar_url, reputation, created_at, is_admin
+INSERT INTO users (email, display_name, auth_provider, oauth_subject, email_verified_at)
+VALUES ($1, $2, $3, $4, now())
+RETURNING id, email, display_name, avatar_url, reputation, created_at, is_admin,
+    is_private, true::bool AS email_verified
 `
 
 type CreateOAuthUserParams struct {
@@ -81,13 +82,15 @@ type CreateOAuthUserParams struct {
 }
 
 type CreateOAuthUserRow struct {
-	ID          uuid.UUID `json:"id"`
-	Email       string    `json:"email"`
-	DisplayName string    `json:"display_name"`
-	AvatarUrl   *string   `json:"avatar_url"`
-	Reputation  int32     `json:"reputation"`
-	CreatedAt   time.Time `json:"created_at"`
-	IsAdmin     bool      `json:"is_admin"`
+	ID            uuid.UUID `json:"id"`
+	Email         string    `json:"email"`
+	DisplayName   string    `json:"display_name"`
+	AvatarUrl     *string   `json:"avatar_url"`
+	Reputation    int32     `json:"reputation"`
+	CreatedAt     time.Time `json:"created_at"`
+	IsAdmin       bool      `json:"is_admin"`
+	IsPrivate     bool      `json:"is_private"`
+	EmailVerified bool      `json:"email_verified"`
 }
 
 func (q *Queries) CreateOAuthUser(ctx context.Context, arg CreateOAuthUserParams) (CreateOAuthUserRow, error) {
@@ -106,17 +109,27 @@ func (q *Queries) CreateOAuthUser(ctx context.Context, arg CreateOAuthUserParams
 		&i.Reputation,
 		&i.CreatedAt,
 		&i.IsAdmin,
+		&i.IsPrivate,
+		&i.EmailVerified,
 	)
 	return i, err
 }
 
-const deletePushToken = `-- name: DeletePushToken :exec
-DELETE FROM push_tokens WHERE token = $1
+const deletePushToken = `-- name: DeletePushToken :execrows
+DELETE FROM push_tokens WHERE token = $1 AND user_id = $2
 `
 
-func (q *Queries) DeletePushToken(ctx context.Context, token string) error {
-	_, err := q.db.Exec(ctx, deletePushToken, token)
-	return err
+type DeletePushTokenParams struct {
+	Token  string    `json:"token"`
+	UserID uuid.UUID `json:"user_id"`
+}
+
+func (q *Queries) DeletePushToken(ctx context.Context, arg DeletePushTokenParams) (int64, error) {
+	result, err := q.db.Exec(ctx, deletePushToken, arg.Token, arg.UserID)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const getUserAdmin = `-- name: GetUserAdmin :one
@@ -134,7 +147,8 @@ func (q *Queries) GetUserAdmin(ctx context.Context, id uuid.UUID) (bool, error) 
 
 const getUserByOAuth = `-- name: GetUserByOAuth :one
 
-SELECT id, email, display_name, avatar_url, reputation, created_at, is_admin, is_private
+SELECT id, email, display_name, avatar_url, reputation, created_at, is_admin,
+    is_private, (email_verified_at IS NOT NULL)::bool AS email_verified
 FROM users
 WHERE auth_provider = $1 AND oauth_subject = $2
 `
@@ -145,14 +159,15 @@ type GetUserByOAuthParams struct {
 }
 
 type GetUserByOAuthRow struct {
-	ID          uuid.UUID `json:"id"`
-	Email       string    `json:"email"`
-	DisplayName string    `json:"display_name"`
-	AvatarUrl   *string   `json:"avatar_url"`
-	Reputation  int32     `json:"reputation"`
-	CreatedAt   time.Time `json:"created_at"`
-	IsAdmin     bool      `json:"is_admin"`
-	IsPrivate   bool      `json:"is_private"`
+	ID            uuid.UUID `json:"id"`
+	Email         string    `json:"email"`
+	DisplayName   string    `json:"display_name"`
+	AvatarUrl     *string   `json:"avatar_url"`
+	Reputation    int32     `json:"reputation"`
+	CreatedAt     time.Time `json:"created_at"`
+	IsAdmin       bool      `json:"is_admin"`
+	IsPrivate     bool      `json:"is_private"`
+	EmailVerified bool      `json:"email_verified"`
 }
 
 // OAuth ---------------------------------------------------------------------
@@ -168,6 +183,7 @@ func (q *Queries) GetUserByOAuth(ctx context.Context, arg GetUserByOAuthParams) 
 		&i.CreatedAt,
 		&i.IsAdmin,
 		&i.IsPrivate,
+		&i.EmailVerified,
 	)
 	return i, err
 }
@@ -504,8 +520,9 @@ func (q *Queries) ResolveFlag(ctx context.Context, arg ResolveFlagParams) error 
 	return err
 }
 
-const setPhotoStatus = `-- name: SetPhotoStatus :exec
-UPDATE court_photos SET status = $2 WHERE id = $1
+const setPhotoStatus = `-- name: SetPhotoStatus :execrows
+UPDATE court_photos SET status = $2
+WHERE id = $1 AND NOT (status = 'removed' AND $2 <> 'removed')
 `
 
 type SetPhotoStatusParams struct {
@@ -513,9 +530,14 @@ type SetPhotoStatusParams struct {
 	Status string    `json:"status"`
 }
 
-func (q *Queries) SetPhotoStatus(ctx context.Context, arg SetPhotoStatusParams) error {
-	_, err := q.db.Exec(ctx, setPhotoStatus, arg.ID, arg.Status)
-	return err
+// Removed objects are physically deleted asynchronously and cannot later be
+// restored to a visible metadata state.
+func (q *Queries) SetPhotoStatus(ctx context.Context, arg SetPhotoStatusParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setPhotoStatus, arg.ID, arg.Status)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const upsertPushToken = `-- name: UpsertPushToken :exec

@@ -120,7 +120,9 @@ func (s *Server) handleFollow(w http.ResponseWriter, r *http.Request) {
 			// ON CONFLICT DO NOTHING (created == 0) and must not re-push.
 			if created > 0 {
 				requester, _ := s.store.Queries.GetUserByID(r.Context(), uid)
-				go s.notifyFollowRequest(targetID, requester.DisplayName)
+				s.runBackground("notify follow request", func() {
+					s.notifyFollowRequest(targetID, requester.DisplayName)
+				})
 			}
 			writeJSON(w, http.StatusOK, map[string]any{"requested": true})
 			return
@@ -226,7 +228,9 @@ func (s *Server) handleAcceptFollowRequest(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	accepter, _ := s.store.Queries.GetUserByID(r.Context(), me)
-	go s.notifyFollowAccepted(requesterID, accepter.DisplayName)
+	s.runBackground("notify follow accepted", func() {
+		s.notifyFollowAccepted(requesterID, accepter.DisplayName)
+	})
 	w.WriteHeader(http.StatusNoContent)
 }
 

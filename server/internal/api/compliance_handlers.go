@@ -23,6 +23,26 @@ func (s *Server) handleDeleteMe(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback(r.Context())
 	q := s.store.Queries.WithTx(tx)
+	if _, err := tx.Exec(r.Context(), "LOCK TABLE users IN SHARE ROW EXCLUSIVE MODE"); err != nil {
+		s.internalError(w, "lock admin invariant", err)
+		return
+	}
+	isAdmin, err := q.GetUserAdmin(r.Context(), uid)
+	if err != nil {
+		s.internalError(w, "get deleting user", err)
+		return
+	}
+	if isAdmin {
+		count, err := q.CountAdmins(r.Context())
+		if err != nil {
+			s.internalError(w, "count admins", err)
+			return
+		}
+		if count <= 1 {
+			writeError(w, http.StatusConflict, "transfer admin access before deleting the last admin")
+			return
+		}
+	}
 	if err := q.DetachUserFromCourts(r.Context(), &uid); err != nil {
 		s.internalError(w, "detach courts", err)
 		return

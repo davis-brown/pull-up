@@ -25,6 +25,13 @@ describe("buildCourtLink", () => {
     );
   });
 
+  it("encodes ids as path and query values", () => {
+    process.env.EXPO_PUBLIC_WEB_URL = "https://pullup.app";
+    expect(buildCourtLink("court/one", "run?one")).toBe(
+      "https://pullup.app/court/court%2Fone?run=run%3Fone",
+    );
+  });
+
   it("strips a trailing slash on the base", () => {
     process.env.EXPO_PUBLIC_WEB_URL = "https://pullup.app/";
     expect(buildCourtLink("abc")).toBe("https://pullup.app/court/abc");
@@ -32,6 +39,13 @@ describe("buildCourtLink", () => {
 
   it("falls back to the default web url when unset", () => {
     delete process.env.EXPO_PUBLIC_WEB_URL;
+    expect(buildCourtLink("abc")).toBe("https://pullup.app/court/abc");
+  });
+
+  it("uses only the configured origin and rejects non-http configuration", () => {
+    process.env.EXPO_PUBLIC_WEB_URL = "https://pullup.app/unexpected/path";
+    expect(buildCourtLink("abc")).toBe("https://pullup.app/court/abc");
+    process.env.EXPO_PUBLIC_WEB_URL = "javascript:alert(1)";
     expect(buildCourtLink("abc")).toBe("https://pullup.app/court/abc");
   });
 });
@@ -57,6 +71,7 @@ describe("parseRunParam", () => {
     expect(parseRunParam("")).toBeNull();
     expect(parseRunParam(undefined)).toBeNull();
     expect(parseRunParam(["a", "b"])).toBeNull();
+    expect(parseRunParam("../admin")).toBeNull();
   });
 });
 

@@ -19,12 +19,20 @@ const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? "";
 const GOOGLE_IOS_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID ?? "";
 const GOOGLE_ANDROID_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID ?? "";
 
+function googleClientIdForPlatform(): string {
+  if (Platform.OS === "ios") return GOOGLE_IOS_CLIENT_ID;
+  if (Platform.OS === "android") return GOOGLE_ANDROID_CLIENT_ID;
+  return GOOGLE_WEB_CLIENT_ID;
+}
+
 function GoogleButton({ onError }: { onError: (msg: string) => void }) {
   const { oauthSignIn } = useAuth();
   const [request, response, promptAsync] = Google.useIdTokenAuthRequest({
-    webClientId: GOOGLE_WEB_CLIENT_ID,
-    iosClientId: GOOGLE_IOS_CLIENT_ID || undefined,
-    androidClientId: GOOGLE_ANDROID_CLIENT_ID || undefined,
+    ...(Platform.OS === "ios"
+      ? { iosClientId: GOOGLE_IOS_CLIENT_ID }
+      : Platform.OS === "android"
+        ? { androidClientId: GOOGLE_ANDROID_CLIENT_ID }
+        : { webClientId: GOOGLE_WEB_CLIENT_ID }),
   });
 
   useEffect(() => {
@@ -97,7 +105,9 @@ function AppleButton({ onError }: { onError: (msg: string) => void }) {
 export function OAuthButtons() {
   const t = useTheme();
   const [error, setError] = useState<string | null>(null);
-  const showGoogle = GOOGLE_WEB_CLIENT_ID !== "";
+  // The hook throws while rendering when its current platform id is absent,
+  // so gate the child that calls it using that platform's id, not the web id.
+  const showGoogle = googleClientIdForPlatform() !== "";
   const showApple = Platform.OS === "ios";
 
   if (!showGoogle && !showApple) return null;

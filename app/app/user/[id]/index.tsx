@@ -1,23 +1,35 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
+import { useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Avatar } from "@/components/Avatar";
 import { QueryError } from "@/components/QueryError";
 import { SignInAction } from "@/components/SignInCta";
-import { Button, Card } from "@/components/ui";
+import { Button, Card, ErrorText } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
 import { useProfile, useSetFollow } from "@/lib/hooks";
+import { parseRouteId, safePathSegment } from "@/lib/routes";
 import { useTheme } from "@/lib/theme";
 
 export default function ProfileScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const params = useLocalSearchParams();
+  const id = parseRouteId(params.id);
   const router = useRouter();
   const t = useTheme();
   const { user } = useAuth();
   const { data: profile, isLoading, error, refetch } = useProfile(id);
   const setFollow = useSetFollow(id ?? "");
+  const [mutationError, setMutationError] = useState<string | null>(null);
 
-  if (error) {
+  if (!id) {
+    return (
+      <View style={[styles.center, { backgroundColor: t.colors.background }]}>
+        <QueryError error={new Error("Invalid user id")} title="Invalid player link" message="This player link is not valid." />
+      </View>
+    );
+  }
+
+  if (error && !profile) {
     return (
       <View style={[styles.center, { backgroundColor: t.colors.background }]}>
         <QueryError error={error} onRetry={() => void refetch()} />
@@ -80,11 +92,11 @@ export default function ProfileScreen() {
           </Card>
 
           <View style={styles.countRow}>
-            <Pressable style={styles.countItem} onPress={() => router.push(`/user/${id}/followers` as Href)}>
+            <Pressable style={styles.countItem} onPress={() => router.push(`/user/${safePathSegment(id)}/followers` as Href)}>
               <Text style={[t.type.heading, { color: t.colors.textPrimary }]}>{profile.follower_count}</Text>
               <Text style={[t.type.caption, { color: t.colors.textSecondary }]}>Followers</Text>
             </Pressable>
-            <Pressable style={styles.countItem} onPress={() => router.push(`/user/${id}/following` as Href)}>
+            <Pressable style={styles.countItem} onPress={() => router.push(`/user/${safePathSegment(id)}/following` as Href)}>
               <Text style={[t.type.heading, { color: t.colors.textPrimary }]}>{profile.following_count}</Text>
               <Text style={[t.type.caption, { color: t.colors.textSecondary }]}>Following</Text>
             </Pressable>
@@ -94,7 +106,7 @@ export default function ProfileScreen() {
 
       <View style={{ marginTop: t.spacing.md }}>
         {isSelf ? (
-          <Button title="Edit profile" variant="secondary" onPress={() => router.push("/(tabs)/profile" as Href)} />
+          <Button title="Edit profile" variant="secondary" onPress={() => router.push("/profile-settings" as Href)} />
         ) : !user ? (
           <SignInAction label="Sign in to follow" />
         ) : (
@@ -102,12 +114,19 @@ export default function ProfileScreen() {
             title={profile.is_following ? "Following" : profile.has_requested ? "Requested" : profile.is_private ? "Request to follow" : "Follow"}
             variant={profile.is_following || profile.has_requested ? "secondary" : "primary"}
             busy={setFollow.isPending}
-            onPress={() => setFollow.mutate(!(profile.is_following || profile.has_requested))}
+            onPress={() => {
+              setMutationError(null);
+              setFollow.mutate(
+                !(profile.is_following || profile.has_requested),
+                { onError: (e) => setMutationError(e.message) },
+              );
+            }}
           />
         )}
+        <ErrorText message={mutationError} />
         {!isSelf && (
           <Pressable
-            onPress={() => router.push(`/flag?entityType=user&entityId=${id}` as Href)}
+            onPress={() => router.push(`/flag?entityType=user&entityId=${safePathSegment(id)}` as Href)}
             style={styles.reportRow}
             hitSlop={8}
           >

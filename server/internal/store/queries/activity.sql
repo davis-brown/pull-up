@@ -5,13 +5,15 @@ WHERE id = sqlc.arg(court_id) AND status <> 'rejected';
 
 -- name: CloseActiveCheckInsForUser :exec
 UPDATE check_ins SET checked_out_at = now()
-WHERE user_id = $1 AND checked_out_at IS NULL AND expires_at > now();
+WHERE user_id = $1 AND checked_out_at IS NULL;
+
+-- name: LockUserForCheckIn :one
+SELECT id FROM users WHERE id = $1 FOR UPDATE;
 
 -- name: CreateCheckIn :one
-INSERT INTO check_ins (court_id, user_id, source, reported_location, distance_m, expires_at, party_size, has_ball)
+INSERT INTO check_ins (court_id, user_id, source, distance_m, expires_at, party_size, has_ball)
 VALUES (
     sqlc.arg(court_id), sqlc.arg(user_id), sqlc.arg(source),
-    ST_SetSRID(ST_MakePoint(sqlc.arg(lng)::float8, sqlc.arg(lat)::float8), 4326)::geography,
     sqlc.arg(distance_m),
     now() + interval '2 hours',
     sqlc.arg(party_size), sqlc.arg(has_ball)
@@ -43,7 +45,23 @@ WHERE court_id = $1 AND checked_out_at IS NULL AND expires_at > now();
 SELECT ci.id, ci.user_id, u.display_name, ci.source, ci.created_at, ci.expires_at, ci.party_size, ci.has_ball
 FROM check_ins ci
 JOIN users u ON u.id = ci.user_id
-WHERE ci.court_id = $1 AND ci.checked_out_at IS NULL AND ci.expires_at > now()
+WHERE ci.court_id = sqlc.arg(court_id)
+  AND ci.checked_out_at IS NULL AND ci.expires_at > now()
+  AND sqlc.arg(viewer_id)::uuid <> '00000000-0000-0000-0000-000000000000'::uuid
+  AND EXISTS (SELECT 1 FROM users viewer WHERE viewer.id = sqlc.arg(viewer_id))
+  AND (
+      ci.user_id = sqlc.arg(viewer_id)
+      OR NOT u.is_private
+      OR EXISTS (
+          SELECT 1 FROM follows f
+          WHERE f.follower_id = sqlc.arg(viewer_id) AND f.followee_id = ci.user_id
+      )
+  )
+  AND NOT EXISTS (
+      SELECT 1 FROM blocked_users b
+      WHERE (b.blocker_id = sqlc.arg(viewer_id) AND b.blocked_id = ci.user_id)
+         OR (b.blocker_id = ci.user_id AND b.blocked_id = sqlc.arg(viewer_id))
+  )
 ORDER BY ci.created_at DESC;
 
 -- name: CreateCrowdReport :one

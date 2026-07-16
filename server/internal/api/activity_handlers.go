@@ -78,19 +78,35 @@ func (s *Server) handleCheckIn(w http.ResponseWriter, r *http.Request) {
 	}
 
 	uid := userID(r)
-	// One active check-in per user: close any existing one first.
-	if err := s.store.Queries.CloseActiveCheckInsForUser(r.Context(), uid); err != nil {
+	tx, err := s.store.Pool.Begin(r.Context())
+	if err != nil {
+		s.internalError(w, "begin check-in", err)
+		return
+	}
+	defer tx.Rollback(r.Context())
+	q := s.store.Queries.WithTx(tx)
+	// Locking the account serializes concurrent replacements. The close and
+	// insert then commit as one operation under the partial unique index.
+	if _, err := q.LockUserForCheckIn(r.Context(), uid); err != nil {
+		s.internalError(w, "lock user for check-in", err)
+		return
+	}
+	if err := q.CloseActiveCheckInsForUser(r.Context(), uid); err != nil {
 		s.internalError(w, "close prior check-ins", err)
 		return
 	}
 	d := float32(distance)
-	checkIn, err := s.store.Queries.CreateCheckIn(r.Context(), gen.CreateCheckInParams{
+	checkIn, err := q.CreateCheckIn(r.Context(), gen.CreateCheckInParams{
 		CourtID: courtID, UserID: uid, Source: req.Source,
-		Lng: req.Lng, Lat: req.Lat, DistanceM: &d,
+		DistanceM: &d,
 		PartySize: int16(partySize), HasBall: req.HasBall,
 	})
 	if err != nil {
 		s.internalError(w, "create check-in", err)
+		return
+	}
+	if err := tx.Commit(r.Context()); err != nil {
+		s.internalError(w, "commit check-in", err)
 		return
 	}
 	// A person verified at the court is the strongest signal it's real.
@@ -112,13 +128,29 @@ func (s *Server) handleCheckIn(w http.ResponseWriter, r *http.Request) {
 		s.awardReputation(r.Context(), uid, repCheckIn)
 	}
 	// If this started a run (0 → 1 active), ping the court's favoriters.
-	go s.notifyRunStarted(courtID, uid)
+	s.runBackground("notify run started", func() { s.notifyRunStarted(courtID, uid) })
 	writeJSON(w, http.StatusCreated, checkIn)
 }
 
 func (s *Server) handleCheckOut(w http.ResponseWriter, r *http.Request) {
-	if err := s.store.Queries.CloseActiveCheckInsForUser(r.Context(), userID(r)); err != nil {
+	tx, err := s.store.Pool.Begin(r.Context())
+	if err != nil {
+		s.internalError(w, "begin check out", err)
+		return
+	}
+	defer tx.Rollback(r.Context())
+	q := s.store.Queries.WithTx(tx)
+	uid := userID(r)
+	if _, err := q.LockUserForCheckIn(r.Context(), uid); err != nil {
+		s.internalError(w, "lock user for check out", err)
+		return
+	}
+	if err := q.CloseActiveCheckInsForUser(r.Context(), uid); err != nil {
 		s.internalError(w, "check out", err)
+		return
+	}
+	if err := tx.Commit(r.Context()); err != nil {
+		s.internalError(w, "commit check out", err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -192,7 +224,14 @@ func (s *Server) handleCourtActivity(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "invalid court id")
 		return
 	}
-	checkIns, err := s.store.Queries.ListActiveCheckIns(r.Context(), courtID)
+	activeCount, err := s.store.Queries.CountActiveCheckIns(r.Context(), courtID)
+	if err != nil {
+		s.internalError(w, "count active check-ins", err)
+		return
+	}
+	checkIns, err := s.store.Queries.ListActiveCheckIns(r.Context(), gen.ListActiveCheckInsParams{
+		CourtID: courtID, ViewerID: s.optionalUserID(r),
+	})
 	if err != nil {
 		s.internalError(w, "list check-ins", err)
 		return
@@ -210,11 +249,6 @@ func (s *Server) handleCourtActivity(w http.ResponseWriter, r *http.Request) {
 	}
 	if reports == nil {
 		reports = []gen.ListRecentReportsRow{}
-	}
-	// Headcount, not row count: every displayed active_count sums party sizes.
-	activeCount := 0
-	for _, ci := range checkIns {
-		activeCount += int(ci.PartySize)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"active_count": activeCount,

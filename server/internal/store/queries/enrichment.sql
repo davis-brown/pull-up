@@ -43,12 +43,13 @@ UPDATE courts SET enrich_requested_at = now()
 WHERE id = $1 AND enrich_requested_at IS NULL AND enriched_at IS NULL;
 
 -- name: ClaimNextCourtEnrichment :one
--- Claim the next requested-but-unenriched court (lazy: only viewed courts have
--- enrich_requested_at set). SKIP LOCKED keeps concurrent workers safe.
-UPDATE courts SET enriched_at = now()
+-- Claim the next requested-but-unenriched court with a retryable lease.
+-- enriched_at is written only by MarkCourtEnrichmentComplete.
+UPDATE courts SET enrich_claimed_at = now(), enrich_attempts = enrich_attempts + 1
 WHERE id = (
     SELECT id FROM courts
     WHERE enrich_requested_at IS NOT NULL AND enriched_at IS NULL
+      AND (enrich_claimed_at IS NULL OR enrich_claimed_at < now() - interval '15 minutes')
     ORDER BY enrich_requested_at
     FOR UPDATE SKIP LOCKED
     LIMIT 1
@@ -57,3 +58,8 @@ RETURNING id,
     ST_Y(location::geometry)::float8 AS lat,
     ST_X(location::geometry)::float8 AS lng,
     (address IS NULL)::bool AS needs_address;
+
+-- name: MarkCourtEnrichmentComplete :exec
+UPDATE courts
+SET enriched_at = now(), enrich_claimed_at = NULL
+WHERE id = $1;

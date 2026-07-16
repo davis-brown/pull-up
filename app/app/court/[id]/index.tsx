@@ -43,6 +43,7 @@ import {
 } from "@/lib/hooks";
 import { buildCourtLink, courtShareMessage, parseRunParam } from "@/lib/links";
 import { registerPushToken } from "@/lib/push-registration";
+import { parseRouteId, safePathSegment } from "@/lib/routes";
 import { useTheme } from "@/lib/theme";
 import type { CourtDetail } from "@/lib/types";
 
@@ -70,20 +71,22 @@ function closeLabel(openingHours: string | null): string | null {
 }
 
 export default function CourtDetailScreen() {
-  const { id, run } = useLocalSearchParams<{ id: string; run?: string }>();
+  const params = useLocalSearchParams();
+  const id = parseRouteId(params.id);
+  const run = params.run;
   const router = useRouter();
   const t = useTheme();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const detour = useSignInDetour();
   const { data: court, isLoading, error: courtError, refetch } = useCourt(id);
-  const { data: activity } = useCourtActivity(id);
+  const { data: activity, error: activityError } = useCourtActivity(id);
   const vote = useVoteCourt(id ?? "");
-  const { data: photoData } = useCourtPhotos(id);
+  const { data: photoData, error: photoQueryError } = useCourtPhotos(id);
   const photos = photoData?.photos;
   const externalPhotos = photoData?.external ?? [];
   const uploadPhoto = useUploadPhoto(id ?? "");
-  const { data: favData } = useIsFavorite(id);
+  const { data: favData, error: favoriteError } = useIsFavorite(id);
   const setFavorite = useSetFavorite(id ?? "");
   const forecasts = useForecasts(id ? [id] : []);
   const [error, setError] = useState<string | null>(null);
@@ -98,9 +101,21 @@ export default function CourtDetailScreen() {
   const isDesktopWeb = Platform.OS === "web" && width >= 1024;
   useEffect(() => {
     if (isDesktopWeb && id) {
-      router.replace(`/?court=${id}`);
+      router.replace(`/?court=${safePathSegment(id)}`);
     }
   }, [isDesktopWeb, id, router]);
+
+  if (!id) {
+    return (
+      <View style={[styles.center, { backgroundColor: t.colors.background }]}>
+        <QueryError
+          error={new Error("Invalid court id")}
+          title="Invalid court link"
+          message="This court link is not valid."
+        />
+      </View>
+    );
+  }
 
   const isFavorite = favData?.favorite ?? false;
 
@@ -232,17 +247,19 @@ export default function CourtDetailScreen() {
               </Text>
               <View style={styles.titleActions}>
                 <Pressable
-                  onPress={() =>
+                  onPress={() => {
+                    const url = buildCourtLink(detail.id);
                     void Share.share({
-                      message: courtShareMessage(detail.name, buildCourtLink(detail.id)),
-                    }).catch(() => {})
-                  }
+                      message: courtShareMessage(detail.name, url),
+                      url,
+                    }).catch(() => {});
+                  }}
                   hitSlop={10}
                 >
                   <Ionicons name="share-outline" size={22} color={t.colors.textMuted} />
                 </Pressable>
                 <Pressable
-                  onPress={() => router.push(`/flag?entityType=court&entityId=${id}`)}
+                    onPress={() => router.push(`/flag?entityType=court&entityId=${safePathSegment(id)}`)}
                   hitSlop={10}
                 >
                   <Ionicons name="flag-outline" size={22} color={t.colors.textMuted} />
@@ -310,7 +327,7 @@ export default function CourtDetailScreen() {
                         style={styles.photo}
                       />
                       <Pressable
-                        onPress={() => router.push(`/flag?entityType=photo&entityId=${p.id}`)}
+                        onPress={() => router.push(`/flag?entityType=photo&entityId=${safePathSegment(p.id)}`)}
                         hitSlop={8}
                         style={[styles.photoFlag, { backgroundColor: t.colors.background + "cc" }]}
                       >
@@ -334,7 +351,7 @@ export default function CourtDetailScreen() {
                     and license.
                   </Text>
                 )}
-                <ErrorText message={photoError} />
+                <ErrorText message={photoError ?? photoQueryError?.message ?? null} />
               </View>
             )}
 
@@ -354,10 +371,12 @@ export default function CourtDetailScreen() {
                     )}
                   </Pressable>
                 </View>
-                <Text style={[t.type.caption, styles.gap, { color: t.colors.textMuted }]}>
-                  No photos yet — add the first one.
-                </Text>
-                <ErrorText message={photoError} />
+                {photoQueryError ? null : (
+                  <Text style={[t.type.caption, styles.gap, { color: t.colors.textMuted }]}>
+                    No photos yet — add the first one.
+                  </Text>
+                )}
+                <ErrorText message={photoError ?? photoQueryError?.message ?? null} />
               </View>
             )}
 
@@ -411,7 +430,7 @@ export default function CourtDetailScreen() {
                 <Button
                   title="Suggest an edit"
                   variant="ghost"
-                  onPress={() => router.push(`/court/${id}/edit` as Href)}
+                  onPress={() => router.push(`/court/${safePathSegment(id)}/edit` as Href)}
                 />
               ) : (
                 <SignInAction label="Sign in to suggest an edit" />
@@ -432,7 +451,9 @@ export default function CourtDetailScreen() {
                       title="It's real"
                       variant="secondary"
                       busy={vote.isPending}
-                      onPress={() => (user ? vote.mutate(1) : detour())}
+                      onPress={() => (user
+                        ? vote.mutate(1, { onError: (e) => setError(e.message) })
+                        : detour())}
                     />
                   </View>
                   <View style={styles.voteButton}>
@@ -440,7 +461,9 @@ export default function CourtDetailScreen() {
                       title="Not a court"
                       variant="danger"
                       busy={vote.isPending}
-                      onPress={() => (user ? vote.mutate(-1) : detour())}
+                      onPress={() => (user
+                        ? vote.mutate(-1, { onError: (e) => setError(e.message) })
+                        : detour())}
                     />
                   </View>
                 </View>
@@ -457,7 +480,7 @@ export default function CourtDetailScreen() {
                   >
                     <Text
                       style={{ fontFamily: t.fonts.bodySemi }}
-                      onPress={() => router.push(`/user/${ci.user_id}` as Href)}
+                      onPress={() => router.push(`/user/${safePathSegment(ci.user_id)}` as Href)}
                     >
                       {ci.display_name}
                     </Text>
@@ -471,13 +494,13 @@ export default function CourtDetailScreen() {
               </View>
             )}
 
-            <ErrorText message={error} />
+            <ErrorText message={error ?? favoriteError?.message ?? activityError?.message ?? null} />
 
             <View style={styles.section}>
               <Button
                 title="Report the crowd"
                 variant="ghost"
-                onPress={() => router.push(`/court/${id}/report`)}
+                onPress={() => router.push(`/court/${safePathSegment(id)}/report`)}
               />
             </View>
 
@@ -508,7 +531,7 @@ export default function CourtDetailScreen() {
                         {r.player_count != null ? `  ·  ~${r.player_count} playing` : ""}
                       </Text>
                       <Pressable
-                        onPress={() => router.push(`/flag?entityType=report&entityId=${r.id}`)}
+                        onPress={() => router.push(`/flag?entityType=report&entityId=${safePathSegment(r.id)}`)}
                         hitSlop={10}
                       >
                         <Ionicons name="flag-outline" size={16} color={t.colors.textMuted} />
@@ -556,7 +579,7 @@ export default function CourtDetailScreen() {
         {/* Sticky live/check-in bar. */}
         <LiveBar
           liveCount={activeCount}
-          onCheckIn={() => router.push(`/check-in?courtId=${id}`)}
+          onCheckIn={() => router.push(`/check-in?courtId=${safePathSegment(id)}`)}
         />
       </View>
 

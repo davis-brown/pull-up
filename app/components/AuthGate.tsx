@@ -6,7 +6,13 @@ import { signInHref } from "@/lib/routes";
 import { useTheme } from "@/lib/theme";
 
 // Wraps route groups that require a signed-in user.
-export function AuthGate({ children }: { children: ReactNode }) {
+export function AuthGate({
+  children,
+  next,
+}: {
+  children: ReactNode;
+  next?: string;
+}) {
   const { user, loading } = useAuth();
   const t = useTheme();
   const pathname = usePathname();
@@ -18,7 +24,7 @@ export function AuthGate({ children }: { children: ReactNode }) {
     );
   }
   if (!user) {
-    return <Redirect href={signInHref(pathname) as Href} />;
+    return <Redirect href={signInHref(next ?? pathname) as Href} />;
   }
   return <>{children}</>;
 }

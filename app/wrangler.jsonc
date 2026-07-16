@@ -1,26 +1,39 @@
 // Cloudflare Worker fronting the Expo web build's static assets.
-// Build first (dist/ is the export output), then deploy:
-//   EXPO_PUBLIC_API_URL=https://pull-up-api.<subdomain>.workers.dev \
-//   EXPO_PUBLIC_WEB_URL=https://<domain> \
-//     npx expo export --platform web
-//   npx wrangler deploy
+// Build first (dist/ is the export output), then deploy with the repository's
+// pinned Wrangler from deploy/api. Browser API traffic stays on this origin and
+// reaches pull-up-api over the service binding below.
 {
-  "$schema": "node_modules/wrangler/config-schema.json",
+  "$schema": "../deploy/api/node_modules/wrangler/config-schema.json",
   "name": "pull-up-web",
   "main": "worker.ts",
-  "compatibility_date": "2026-06-01",
+  // Reviewed against Workers runtime/types on 2026-07-15.
+  "compatibility_date": "2026-07-15",
+  "compatibility_flags": ["nodejs_compat"],
+  "preview_urls": false,
+  "keep_vars": true,
   "assets": {
     "directory": "./dist",
     "binding": "ASSETS",
-    "not_found_handling": "single-page-application"
+    "not_found_handling": "single-page-application",
+    "run_worker_first": true
   },
-  // Non-secret configuration. Fill in per environment before deploy.
-  "vars": {
-    "API_URL": "https://pull-up-api.example.workers.dev",
-    "IOS_APP_ID": "TEAMID.com.pullup.app",
-    "ANDROID_CERT_SHA256": "",
-    "APPLE_APP_STORE_ID": "",
-    "IOS_STORE_URL": "https://apps.apple.com/app/id0000000000",
-    "ANDROID_STORE_URL": "https://play.google.com/store/apps/details?id=com.pullup.app"
+  "services": [
+    {
+      "binding": "API",
+      "service": "pull-up-api"
+    }
+  ],
+  // IOS_APP_ID, ANDROID_CERT_SHA256, and APPLE_APP_STORE_ID are optional
+  // dashboard vars. Invalid or missing values disable their metadata safely.
+  "observability": {
+    "enabled": true,
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1
+    },
+    "traces": {
+      "enabled": true,
+      "head_sampling_rate": 0.05
+    }
   }
 }

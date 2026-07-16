@@ -7,7 +7,14 @@ export const DEFAULT_WEB_URL = "https://pullup.app";
 
 function baseUrl(): string {
   const configured = process.env.EXPO_PUBLIC_WEB_URL;
-  if (configured) return configured.replace(/\/+$/, "");
+  if (configured) {
+    try {
+      const url = new URL(configured);
+      if (url.protocol === "https:" || url.protocol === "http:") return url.origin;
+    } catch {
+      // Fall through to the current/default origin.
+    }
+  }
   if (typeof window !== "undefined" && window.location?.origin) {
     return window.location.origin;
   }
@@ -15,18 +22,24 @@ function baseUrl(): string {
 }
 
 export function buildCourtLink(courtId: string, sessionId?: string): string {
-  const base = `${baseUrl()}/court/${courtId}`;
-  return sessionId ? `${base}?run=${sessionId}` : base;
+  const url = new URL(`/court/${encodeURIComponent(courtId)}`, baseUrl());
+  if (sessionId) url.searchParams.set("run", sessionId);
+  return url.toString();
 }
 
 // Canonical share link for a player's public profile (shared player card).
 export function buildProfileLink(userId: string): string {
-  return `${baseUrl()}/user/${userId}`;
+  return new URL(`/user/${encodeURIComponent(userId)}`, baseUrl()).toString();
 }
 
 // Validates a router `run` query value: a single non-empty string, else null.
 export function parseRunParam(param: string | string[] | undefined): string | null {
-  return typeof param === "string" && param.length > 0 ? param : null;
+  return typeof param === "string" &&
+    param.length > 0 &&
+    param.length <= 128 &&
+    /^[A-Za-z0-9][A-Za-z0-9_-]*$/.test(param)
+    ? param
+    : null;
 }
 
 export function courtShareMessage(name: string, link: string): string {

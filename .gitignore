@@ -11,6 +11,8 @@ web-build/
 
 # Wrangler
 .wrangler/
+.dev.vars
+.dev.vars.*
 
 # EAS / native builds
 app/ios/

@@ -4,6 +4,7 @@ import { Avatar } from "@/components/Avatar";
 import { sessionTimeLabel } from "@/components/CourtSessions";
 import { Card, Overline } from "@/components/ui";
 import { relativeSince } from "@/lib/relative-time";
+import { safePathSegment } from "@/lib/routes";
 import { useTheme } from "@/lib/theme";
 import type { FeedRun, FriendPresence } from "@/lib/types";
 
@@ -43,7 +44,7 @@ export function FeedHeader({
             <Pressable
               key={`${f.id}-${f.court_id}`}
               style={[styles.friendRow, { gap: t.spacing.md }]}
-              onPress={() => router.push(`/court/${f.court_id}` as Href)}
+              onPress={() => router.push(`/court/${safePathSegment(f.court_id)}` as Href)}
             >
               <Avatar avatarUrl={f.avatar_url} displayName={f.display_name} seed={f.id} size={36} />
               <View style={styles.friendText}>
@@ -65,7 +66,7 @@ export function FeedHeader({
           {runs.map((run) => (
             <Pressable
               key={run.id}
-              onPress={() => router.push(`/court/${run.court_id}?run=${run.id}` as Href)}
+              onPress={() => router.push(`/court/${safePathSegment(run.court_id)}?run=${safePathSegment(run.id)}` as Href)}
             >
               <Card>
                 <Text style={[t.type.bodyMedium, { color: t.colors.textPrimary }]}>

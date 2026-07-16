@@ -109,7 +109,9 @@ func (s *Server) handleCreateSession(w http.ResponseWriter, r *http.Request) {
 	}); err != nil {
 		s.log.Error("rsvp creator", "session", session.ID, "err", err)
 	}
-	go s.notifySessionPlanned(courtID, court.Name, uid, session.StartsAt)
+	s.runBackground("notify session planned", func() {
+		s.notifySessionPlanned(courtID, court.Name, uid, session.StartsAt)
+	})
 	writeJSON(w, http.StatusCreated, session)
 }
 
@@ -197,12 +199,12 @@ func (s *Server) handleRSVP(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, "rsvp", err)
 		return
 	}
-	attendees, err := s.store.Queries.ListSessionAttendees(r.Context(), id)
+	goingCount, err := s.store.Queries.CountSessionAttendees(r.Context(), id)
 	if err != nil {
-		s.internalError(w, "list attendees", err)
+		s.internalError(w, "count attendees", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"status": req.Status, "going_count": len(attendees)})
+	writeJSON(w, http.StatusOK, map[string]any{"status": req.Status, "going_count": goingCount})
 }
 
 func (s *Server) handleSessionAttendees(w http.ResponseWriter, r *http.Request) {
@@ -211,7 +213,14 @@ func (s *Server) handleSessionAttendees(w http.ResponseWriter, r *http.Request) 
 		writeError(w, http.StatusBadRequest, "invalid session id")
 		return
 	}
-	attendees, err := s.store.Queries.ListSessionAttendees(r.Context(), id)
+	goingCount, err := s.store.Queries.CountSessionAttendees(r.Context(), id)
+	if err != nil {
+		s.internalError(w, "count attendees", err)
+		return
+	}
+	attendees, err := s.store.Queries.ListSessionAttendees(r.Context(), gen.ListSessionAttendeesParams{
+		SessionID: id, ViewerID: s.optionalUserID(r),
+	})
 	if err != nil {
 		s.internalError(w, "list attendees", err)
 		return
@@ -219,7 +228,7 @@ func (s *Server) handleSessionAttendees(w http.ResponseWriter, r *http.Request) 
 	if attendees == nil {
 		attendees = []gen.ListSessionAttendeesRow{}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"attendees": attendees})
+	writeJSON(w, http.StatusOK, map[string]any{"going_count": goingCount, "attendees": attendees})
 }
 
 // notifySessionPlanned pings favoriters of the court and followers of the

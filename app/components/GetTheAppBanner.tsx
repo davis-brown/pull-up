@@ -2,6 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useState } from "react";
 import { Linking, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { bannerDismissed, dismissBanner } from "@/lib/app-banner";
+import { storeUrlForUserAgent } from "@/lib/app-store";
 import { useTheme } from "@/lib/theme";
 
 // Store URLs are injected into the web build via EXPO_PUBLIC_* so the banner
@@ -16,7 +17,8 @@ export function GetTheAppBanner() {
   const [hidden, setHidden] = useState(Platform.OS !== "web" || bannerDismissed());
   if (hidden) return null;
 
-  const storeUrl = IOS_URL || ANDROID_URL;
+  const userAgent = typeof navigator === "undefined" ? "" : navigator.userAgent;
+  const storeUrl = storeUrlForUserAgent(userAgent, IOS_URL, ANDROID_URL);
 
   return (
     <View

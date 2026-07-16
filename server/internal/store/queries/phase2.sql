@@ -1,8 +1,8 @@
 -- Photos ------------------------------------------------------------------
 
 -- name: CreateCourtPhoto :one
-INSERT INTO court_photos (court_id, user_id, storage_key)
-VALUES ($1, $2, $3)
+INSERT INTO court_photos (court_id, user_id, storage_key, status)
+VALUES ($1, $2, $3, 'pending')
 RETURNING id, court_id, user_id, storage_key, status, created_at;
 
 -- name: ListCourtPhotos :many
@@ -12,8 +12,11 @@ WHERE court_id = $1 AND status = 'visible'
 ORDER BY created_at DESC
 LIMIT 20;
 
--- name: SetPhotoStatus :exec
-UPDATE court_photos SET status = $2 WHERE id = $1;
+-- Removed objects are physically deleted asynchronously and cannot later be
+-- restored to a visible metadata state.
+-- name: SetPhotoStatus :execrows
+UPDATE court_photos SET status = $2
+WHERE id = $1 AND NOT (status = 'removed' AND $2 <> 'removed');
 
 -- Favorites ---------------------------------------------------------------
 
@@ -53,8 +56,8 @@ INSERT INTO push_tokens (token, user_id)
 VALUES ($1, $2)
 ON CONFLICT (token) DO UPDATE SET user_id = EXCLUDED.user_id, updated_at = now();
 
--- name: DeletePushToken :exec
-DELETE FROM push_tokens WHERE token = $1;
+-- name: DeletePushToken :execrows
+DELETE FROM push_tokens WHERE token = $1 AND user_id = $2;
 
 -- name: ListFavoriterPushTokens :many
 -- Tokens of everyone who favorited the court, except the acting user.
@@ -80,14 +83,16 @@ SELECT token FROM push_tokens WHERE user_id = $1;
 -- OAuth ---------------------------------------------------------------------
 
 -- name: GetUserByOAuth :one
-SELECT id, email, display_name, avatar_url, reputation, created_at, is_admin, is_private
+SELECT id, email, display_name, avatar_url, reputation, created_at, is_admin,
+    is_private, (email_verified_at IS NOT NULL)::bool AS email_verified
 FROM users
 WHERE auth_provider = $1 AND oauth_subject = $2;
 
 -- name: CreateOAuthUser :one
-INSERT INTO users (email, display_name, auth_provider, oauth_subject)
-VALUES ($1, $2, $3, $4)
-RETURNING id, email, display_name, avatar_url, reputation, created_at, is_admin;
+INSERT INTO users (email, display_name, auth_provider, oauth_subject, email_verified_at)
+VALUES ($1, $2, $3, $4, now())
+RETURNING id, email, display_name, avatar_url, reputation, created_at, is_admin,
+    is_private, true::bool AS email_verified;
 
 -- Check-in history ------------------------------------------------------------
 

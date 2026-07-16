@@ -31,7 +31,7 @@ func do(t *testing.T, ts *httptest.Server, method, path, ip string) *http.Respon
 
 func TestPerIPLimit(t *testing.T) {
 	r := chi.NewRouter()
-	r.Use(perIPLimit(3, time.Minute))
+	r.Use(perIPLimit(3, time.Minute, true))
 	r.Post("/x", okHandler)
 	ts := httptest.NewServer(r)
 	defer ts.Close()
@@ -56,7 +56,7 @@ func TestPerIPLimit(t *testing.T) {
 
 func TestWriteLimiterSkipsReads(t *testing.T) {
 	r := chi.NewRouter()
-	r.Use(writeLimiter(2, time.Minute))
+	r.Use(writeLimiter(2, time.Minute, true))
 	r.Get("/x", okHandler)
 	r.Post("/x", okHandler)
 	ts := httptest.NewServer(r)
@@ -76,5 +76,20 @@ func TestWriteLimiterSkipsReads(t *testing.T) {
 	}
 	if resp.Header.Get("Retry-After") == "" {
 		t.Error("write-limiter 429 response missing Retry-After header")
+	}
+}
+
+func TestPerIPLimitIgnoresUntrustedForwardingHeader(t *testing.T) {
+	r := chi.NewRouter()
+	r.Use(perIPLimit(1, time.Minute))
+	r.Post("/x", okHandler)
+	ts := httptest.NewServer(r)
+	defer ts.Close()
+
+	if resp := do(t, ts, http.MethodPost, "/x", "203.0.113.10"); resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("first request: status %d", resp.StatusCode)
+	}
+	if resp := do(t, ts, http.MethodPost, "/x", "203.0.113.11"); resp.StatusCode != http.StatusTooManyRequests {
+		t.Fatalf("spoofed CF header bypassed limit: status %d, want 429", resp.StatusCode)
 	}
 }

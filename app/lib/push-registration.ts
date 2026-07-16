@@ -7,11 +7,51 @@ import Constants from "expo-constants";
 import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 import { api } from "./api";
+import { storage } from "./storage";
+
+const PUSH_TOKEN_KEY_PREFIX = "pullup.push_token.";
+
+let activeUserId: string | null = null;
+let registrationGeneration = 0;
+const memoryTokens = new Map<string, string>();
+
+const tokenKey = (userId: string) => `${PUSH_TOKEN_KEY_PREFIX}${userId}`;
+
+export function setPushRegistrationUser(userId: string): void {
+  registrationGeneration += 1;
+  activeUserId = userId;
+}
+
+export async function cancelPushTokenAssociation(
+  userId: string | null,
+): Promise<string | null> {
+  registrationGeneration += 1;
+  activeUserId = null;
+  if (!userId || Platform.OS === "web") return null;
+  let token = memoryTokens.get(userId) ?? null;
+  if (!token) {
+    try {
+      token = await storage.get(tokenKey(userId));
+    } catch {
+      // The in-memory token is still enough when available.
+    }
+  }
+  memoryTokens.delete(userId);
+  try {
+    await storage.remove(tokenKey(userId));
+  } catch {
+    // Server unregistration and the session epoch still prevent reassignment.
+  }
+  return token;
+}
 
 export async function registerPushToken(opts?: {
   requestPermission?: boolean;
 }): Promise<void> {
   if (Platform.OS === "web") return;
+  const userId = activeUserId;
+  const generation = registrationGeneration;
+  if (!userId) return;
   try {
     const projectId: string | undefined =
       Constants.expoConfig?.extra?.eas?.projectId;
@@ -25,6 +65,14 @@ export async function registerPushToken(opts?: {
       if (!req.granted) return;
     }
     const token = await Notifications.getExpoPushTokenAsync({ projectId });
+    if (generation !== registrationGeneration || activeUserId !== userId) return;
+    memoryTokens.set(userId, token.data);
+    await storage.set(tokenKey(userId), token.data);
+    if (generation !== registrationGeneration || activeUserId !== userId) {
+      memoryTokens.delete(userId);
+      await storage.remove(tokenKey(userId));
+      return;
+    }
     await api<void>("/me/push-token", {
       method: "POST",
       body: JSON.stringify({ token: token.data }),

@@ -3,10 +3,12 @@ import { useRouter, type Href } from "expo-router";
 import { useState } from "react";
 import { Pressable, Share, StyleSheet, Text, View } from "react-native";
 import { useSignInDetour } from "@/components/SignInCta";
+import { QueryError } from "@/components/QueryError";
 import { Button, Card, ErrorText, Overline } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
 import { useCancelSession, useCourtSessions, useRSVP } from "@/lib/hooks";
 import { buildCourtLink, runShareMessage } from "@/lib/links";
+import { safePathSegment } from "@/lib/routes";
 import { useTheme } from "@/lib/theme";
 import type { CourtSession } from "@/lib/types";
 
@@ -79,7 +81,7 @@ function SessionRow({
           ) : (
             <Text
               style={{ fontFamily: t.fonts.bodySemi }}
-              onPress={() => router.push(`/user/${session.created_by}` as Href)}
+              onPress={() => router.push(`/user/${safePathSegment(session.created_by)}` as Href)}
             >
               {session.created_by_name}
             </Text>
@@ -97,15 +99,17 @@ function SessionRow({
       </View>
       <View style={styles.rowActions}>
         <Pressable
-          onPress={() =>
+          onPress={() => {
+            const url = buildCourtLink(courtId, session.id);
             void Share.share({
               message: runShareMessage(
                 courtName,
                 sessionTimeLabel(session.starts_at),
-                buildCourtLink(courtId, session.id),
+                url,
               ),
-            }).catch(() => {})
-          }
+              url,
+            }).catch(() => {});
+          }}
           hitSlop={8}
           style={styles.cancelButton}
         >
@@ -167,17 +171,19 @@ export function CourtSessions({
 }) {
   const t = useTheme();
   const router = useRouter();
-  const { data: sessions } = useCourtSessions(courtId);
+  const { data: sessions, error, refetch } = useCourtSessions(courtId);
 
   return (
     <Card>
       <View style={styles.header}>
         <Overline>Upcoming runs</Overline>
-        <Pressable onPress={() => router.push(`/court/${courtId}/plan`)} hitSlop={10}>
+        <Pressable onPress={() => router.push(`/court/${safePathSegment(courtId)}/plan`)} hitSlop={10}>
           <Ionicons name="add-circle-outline" size={22} color={t.colors.accent} />
         </Pressable>
       </View>
-      {(sessions?.length ?? 0) > 0 ? (
+      {error && !sessions ? (
+        <QueryError error={error} onRetry={() => void refetch()} />
+      ) : (sessions?.length ?? 0) > 0 ? (
         (() => {
           const ordered = [...(sessions ?? [])].sort((a, b) =>
             a.id === highlightId ? -1 : b.id === highlightId ? 1 : 0,
@@ -200,7 +206,7 @@ export function CourtSessions({
       <Button
         title="Plan a run"
         variant="ghost"
-        onPress={() => router.push(`/court/${courtId}/plan`)}
+        onPress={() => router.push(`/court/${safePathSegment(courtId)}/plan`)}
       />
     </Card>
   );

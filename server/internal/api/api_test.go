@@ -62,19 +62,21 @@ func newTestServer(t *testing.T) (*httptest.Server, *store.Store) {
 		t.Fatalf("migrate: %v", err)
 	}
 	if _, err := st.Pool.Exec(ctx,
-		"TRUNCATE users, refresh_tokens, courts, check_ins, crowd_reports, court_votes, court_photos, flags, seed_regions, admin_actions CASCADE"); err != nil {
+		"TRUNCATE object_deletion_queue, users, refresh_tokens, courts, check_ins, crowd_reports, court_votes, court_photos, flags, seed_regions, admin_actions CASCADE"); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 
 	cfg := &config.Config{
-		Port:               "0",
-		DatabaseURL:        url,
-		JWTSecret:          []byte("test-secret"),
-		AccessTokenTTL:     15 * time.Minute,
-		RefreshTokenTTL:    30 * 24 * time.Hour,
-		CORSOrigins:        []string{"*"},
-		AutoSeed:           false,
-		InternalTaskSecret: "test-internal-secret",
+		Port:                 "0",
+		DatabaseURL:          url,
+		JWTSecret:            []byte("test-secret"),
+		UploadSigningSecret:  []byte("test-upload-secret"),
+		AccessTokenTTL:       15 * time.Minute,
+		RefreshTokenTTL:      30 * 24 * time.Hour,
+		EmailVerificationTTL: 24 * time.Hour,
+		CORSOrigins:          []string{"http://app.test"},
+		AutoSeed:             false,
+		InternalTaskSecret:   "test-internal-secret",
 	}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	ts := httptest.NewServer(api.NewServer(cfg, st, log, nil, nil).Routes())
@@ -86,22 +88,36 @@ type testUser struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
 	User         struct {
-		ID          string `json:"id"`
-		Email       string `json:"email"`
-		DisplayName string `json:"display_name"`
-		IsAdmin     bool   `json:"is_admin"`
+		ID            string `json:"id"`
+		Email         string `json:"email"`
+		DisplayName   string `json:"display_name"`
+		IsAdmin       bool   `json:"is_admin"`
+		EmailVerified bool   `json:"email_verified"`
 	} `json:"user"`
 }
 
-// registerUser signs up a fresh user over HTTP and returns their tokens.
+// registerUser simulates the trusted email Worker: it injects the internal
+// secret, consumes the origin-only token header, and confirms the email.
 func registerUser(t *testing.T, ts *httptest.Server, email, displayName string) testUser {
 	t.Helper()
-	resp := doJSON(t, ts, http.MethodPost, "/auth/register", "", map[string]string{
+	resp := doJSONHeaders(t, ts, http.MethodPost, "/auth/register", "", map[string]string{
 		"email": email, "password": "password123", "display_name": displayName,
+	}, map[string]string{"X-Internal-Task": "test-internal-secret"})
+	if resp.StatusCode != http.StatusAccepted {
+		defer resp.Body.Close()
+		t.Fatalf("register %s: status %d: %s", email, resp.StatusCode, readBody(t, resp))
+	}
+	verificationToken := resp.Header.Get("X-Pull-Up-Email-Verification-Token")
+	resp.Body.Close()
+	if verificationToken == "" {
+		t.Fatalf("register %s: trusted response missing verification token header", email)
+	}
+	resp = doJSON(t, ts, http.MethodPost, "/auth/email-verification/verify", "", map[string]string{
+		"token": verificationToken,
 	})
 	if resp.StatusCode != http.StatusOK {
 		defer resp.Body.Close()
-		t.Fatalf("register %s: status %d: %s", email, resp.StatusCode, readBody(t, resp))
+		t.Fatalf("verify %s: status %d: %s", email, resp.StatusCode, readBody(t, resp))
 	}
 	return decodeJSON[testUser](t, resp)
 }
@@ -109,6 +125,11 @@ func registerUser(t *testing.T, ts *httptest.Server, email, displayName string) 
 // doJSON issues an HTTP request against the test server's API prefix,
 // optionally authenticated and with a JSON body.
 func doJSON(t *testing.T, ts *httptest.Server, method, path, token string, body any) *http.Response {
+	t.Helper()
+	return doJSONHeaders(t, ts, method, path, token, body, nil)
+}
+
+func doJSONHeaders(t *testing.T, ts *httptest.Server, method, path, token string, body any, headers map[string]string) *http.Response {
 	t.Helper()
 	var reader io.Reader
 	if body != nil {
@@ -125,6 +146,9 @@ func doJSON(t *testing.T, ts *httptest.Server, method, path, token string, body 
 	req.Header.Set("Content-Type", "application/json")
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	for key, value := range headers {
+		req.Header.Set(key, value)
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {

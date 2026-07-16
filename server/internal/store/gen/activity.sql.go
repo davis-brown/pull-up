@@ -14,7 +14,7 @@ import (
 
 const closeActiveCheckInsForUser = `-- name: CloseActiveCheckInsForUser :exec
 UPDATE check_ins SET checked_out_at = now()
-WHERE user_id = $1 AND checked_out_at IS NULL AND expires_at > now()
+WHERE user_id = $1 AND checked_out_at IS NULL
 `
 
 func (q *Queries) CloseActiveCheckInsForUser(ctx context.Context, userID uuid.UUID) error {
@@ -71,13 +71,12 @@ func (q *Queries) CourtCheckInDistance(ctx context.Context, arg CourtCheckInDist
 }
 
 const createCheckIn = `-- name: CreateCheckIn :one
-INSERT INTO check_ins (court_id, user_id, source, reported_location, distance_m, expires_at, party_size, has_ball)
+INSERT INTO check_ins (court_id, user_id, source, distance_m, expires_at, party_size, has_ball)
 VALUES (
     $1, $2, $3,
-    ST_SetSRID(ST_MakePoint($4::float8, $5::float8), 4326)::geography,
-    $6,
+    $4,
     now() + interval '2 hours',
-    $7, $8
+    $5, $6
 )
 RETURNING id, court_id, user_id, source, created_at, expires_at, party_size, has_ball
 `
@@ -86,8 +85,6 @@ type CreateCheckInParams struct {
 	CourtID   uuid.UUID `json:"court_id"`
 	UserID    uuid.UUID `json:"user_id"`
 	Source    string    `json:"source"`
-	Lng       float64   `json:"lng"`
-	Lat       float64   `json:"lat"`
 	DistanceM *float32  `json:"distance_m"`
 	PartySize int16     `json:"party_size"`
 	HasBall   bool      `json:"has_ball"`
@@ -109,8 +106,6 @@ func (q *Queries) CreateCheckIn(ctx context.Context, arg CreateCheckInParams) (C
 		arg.CourtID,
 		arg.UserID,
 		arg.Source,
-		arg.Lng,
-		arg.Lat,
 		arg.DistanceM,
 		arg.PartySize,
 		arg.HasBall,
@@ -200,9 +195,30 @@ const listActiveCheckIns = `-- name: ListActiveCheckIns :many
 SELECT ci.id, ci.user_id, u.display_name, ci.source, ci.created_at, ci.expires_at, ci.party_size, ci.has_ball
 FROM check_ins ci
 JOIN users u ON u.id = ci.user_id
-WHERE ci.court_id = $1 AND ci.checked_out_at IS NULL AND ci.expires_at > now()
+WHERE ci.court_id = $1
+  AND ci.checked_out_at IS NULL AND ci.expires_at > now()
+  AND $2::uuid <> '00000000-0000-0000-0000-000000000000'::uuid
+  AND EXISTS (SELECT 1 FROM users viewer WHERE viewer.id = $2)
+  AND (
+      ci.user_id = $2
+      OR NOT u.is_private
+      OR EXISTS (
+          SELECT 1 FROM follows f
+          WHERE f.follower_id = $2 AND f.followee_id = ci.user_id
+      )
+  )
+  AND NOT EXISTS (
+      SELECT 1 FROM blocked_users b
+      WHERE (b.blocker_id = $2 AND b.blocked_id = ci.user_id)
+         OR (b.blocker_id = ci.user_id AND b.blocked_id = $2)
+  )
 ORDER BY ci.created_at DESC
 `
+
+type ListActiveCheckInsParams struct {
+	CourtID  uuid.UUID `json:"court_id"`
+	ViewerID uuid.UUID `json:"viewer_id"`
+}
 
 type ListActiveCheckInsRow struct {
 	ID          uuid.UUID `json:"id"`
@@ -215,8 +231,8 @@ type ListActiveCheckInsRow struct {
 	HasBall     bool      `json:"has_ball"`
 }
 
-func (q *Queries) ListActiveCheckIns(ctx context.Context, courtID uuid.UUID) ([]ListActiveCheckInsRow, error) {
-	rows, err := q.db.Query(ctx, listActiveCheckIns, courtID)
+func (q *Queries) ListActiveCheckIns(ctx context.Context, arg ListActiveCheckInsParams) ([]ListActiveCheckInsRow, error) {
+	rows, err := q.db.Query(ctx, listActiveCheckIns, arg.CourtID, arg.ViewerID)
 	if err != nil {
 		return nil, err
 	}
@@ -299,4 +315,15 @@ func (q *Queries) ListRecentReports(ctx context.Context, arg ListRecentReportsPa
 		return nil, err
 	}
 	return items, nil
+}
+
+const lockUserForCheckIn = `-- name: LockUserForCheckIn :one
+SELECT id FROM users WHERE id = $1 FOR UPDATE
+`
+
+func (q *Queries) LockUserForCheckIn(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, lockUserForCheckIn, id)
+	var id_2 uuid.UUID
+	err := row.Scan(&id_2)
+	return id_2, err
 }

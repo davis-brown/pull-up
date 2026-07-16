@@ -43,9 +43,9 @@ func (s *Server) handleCreatePhoto(w http.ResponseWriter, r *http.Request) {
 	}
 	exp := time.Now().Add(uploadURLTTL).Unix()
 	writeJSON(w, http.StatusCreated, map[string]any{
-		"photo": photo,
-		"upload_path": fmt.Sprintf("/photos/upload/%s?exp=%d&sig=%s",
-			key, exp, signUpload(s.cfg.JWTSecret, key, exp)),
+		"photo":                photo,
+		"upload_path":          "/photos/upload/" + key,
+		"upload_authorization": uploadAuthorization(s.cfg.UploadSigningSecret, key, exp),
 	})
 }
 
@@ -155,6 +155,25 @@ func (s *Server) handleRegisterPushToken(w http.ResponseWriter, r *http.Request)
 		Token: req.Token, UserID: userID(r),
 	}); err != nil {
 		s.internalError(w, "register push token", err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) handleUnregisterPushToken(w http.ResponseWriter, r *http.Request) {
+	var req pushTokenRequest
+	if !readJSON(w, r, &req) {
+		return
+	}
+	req.Token = strings.TrimSpace(req.Token)
+	if req.Token == "" || len(req.Token) > 200 {
+		writeError(w, http.StatusBadRequest, "token is required")
+		return
+	}
+	if _, err := s.store.Queries.DeletePushToken(r.Context(), gen.DeletePushTokenParams{
+		Token: req.Token, UserID: userID(r),
+	}); err != nil {
+		s.internalError(w, "unregister push token", err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -354,10 +373,15 @@ func (s *Server) handleAdminSetPhotoStatus(w http.ResponseWriter, r *http.Reques
 		writeError(w, http.StatusBadRequest, "status must be visible, flagged, or removed")
 		return
 	}
-	if err := s.store.Queries.SetPhotoStatus(r.Context(), gen.SetPhotoStatusParams{
+	n, err := s.store.Queries.SetPhotoStatus(r.Context(), gen.SetPhotoStatusParams{
 		ID: photoID, Status: req.Status,
-	}); err != nil {
+	})
+	if err != nil {
 		s.internalError(w, "set photo status", err)
+		return
+	}
+	if n == 0 {
+		writeError(w, http.StatusNotFound, "photo not found or already removed")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

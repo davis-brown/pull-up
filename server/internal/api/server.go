@@ -20,32 +20,48 @@ import (
 )
 
 type Server struct {
-	cfg      *config.Config
-	store    *store.Store
-	issuer   *auth.Issuer
-	oauth    *auth.OAuthVerifier
-	log      *slog.Logger
-	seeder   *seeder.Seeder   // nil when auto-seeding is disabled
-	enricher *enrich.Enricher // nil when enrichment is disabled
+	cfg             *config.Config
+	store           *store.Store
+	issuer          *auth.Issuer
+	oauth           *auth.OAuthVerifier
+	log             *slog.Logger
+	seeder          *seeder.Seeder   // nil when auto-seeding is disabled
+	enricher        *enrich.Enricher // nil when enrichment is disabled
+	backgroundSlots chan struct{}
 }
 
 func NewServer(cfg *config.Config, st *store.Store, log *slog.Logger, sd *seeder.Seeder, en *enrich.Enricher) *Server {
 	return &Server{
-		cfg:      cfg,
-		store:    st,
-		issuer:   auth.NewIssuer(cfg.JWTSecret, cfg.AccessTokenTTL),
-		oauth:    auth.NewOAuthVerifier(cfg.GoogleClientIDs, cfg.AppleAudiences),
-		log:      log,
-		seeder:   sd,
-		enricher: en,
+		cfg:             cfg,
+		store:           st,
+		issuer:          auth.NewIssuer(cfg.JWTSecret, cfg.AccessTokenTTL),
+		oauth:           auth.NewOAuthVerifier(cfg.GoogleClientIDs, cfg.AppleAudiences),
+		log:             log,
+		seeder:          sd,
+		enricher:        en,
+		backgroundSlots: make(chan struct{}, 32),
 	}
 }
 
-// requestSeeding kicks off background OSM imports for any never-seeded tiles
-// in the viewport. Non-blocking; no-op when auto-seeding is off.
-func (s *Server) requestSeeding(minLng, minLat, maxLng, maxLat float64) {
+// requestSeeding durably queues background OSM imports for never-seeded tiles
+// in the viewport. No-op when auto-seeding is off.
+func (s *Server) requestSeeding(ctx context.Context, minLng, minLat, maxLng, maxLat float64) {
 	if s.seeder != nil {
-		s.seeder.Request(minLng, minLat, maxLng, maxLat)
+		s.seeder.Request(ctx, minLng, minLat, maxLng, maxLat)
+	}
+}
+
+// runBackground bounds best-effort notification work. Requests are never
+// allowed to create an unbounded number of goroutines under load.
+func (s *Server) runBackground(name string, fn func()) {
+	select {
+	case s.backgroundSlots <- struct{}{}:
+		go func() {
+			defer func() { <-s.backgroundSlots }()
+			fn()
+		}()
+	default:
+		s.log.Warn("background work dropped", "task", name)
 	}
 }
 
@@ -60,18 +76,20 @@ func (s *Server) viewportSeeding(ctx context.Context, minLng, minLat, maxLng, ma
 func (s *Server) Routes() http.Handler {
 	r := chi.NewRouter()
 	r.Use(middleware.RequestID)
-	r.Use(middleware.RealIP)
-	r.Use(middleware.Logger)
+	if s.cfg.TrustCloudflareHeaders {
+		r.Use(middleware.RealIP)
+	}
+	r.Use(s.requestLogger)
 	r.Use(middleware.Recoverer)
 	r.Use(sentryReporter)
 	r.Use(securityHeaders)
-	// Auth is Bearer-token based (no cookies), so a permissive default is
-	// fine; tighten with CORS_ORIGINS=https://app.example.com in production.
+	r.Use(authCachePolicy)
 	r.Use(cors.Handler(cors.Options{
-		AllowedOrigins: s.cfg.CORSOrigins,
-		AllowedMethods: []string{"GET", "POST", "PATCH", "DELETE", "OPTIONS"},
-		AllowedHeaders: []string{"Authorization", "Content-Type"},
-		MaxAge:         600,
+		AllowedOrigins:   s.cfg.CORSOrigins,
+		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
+		AllowedHeaders:   []string{"Authorization", "Content-Type", "X-Pull-Up-Platform"},
+		AllowCredentials: true,
+		MaxAge:           600,
 	}))
 
 	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) {
@@ -81,24 +99,39 @@ func (s *Server) Routes() http.Handler {
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Use(limitBody)
 		r.Group(func(r chi.Router) {
+			r.Use(s.requireWebAuthOrigin)
 			// Brute-force guard: covers register, login, refresh, logout, oauth.
 			if s.cfg.RateLimitAuthPerMin > 0 {
-				r.Use(perIPLimit(s.cfg.RateLimitAuthPerMin, time.Minute))
+				r.Use(perIPLimit(s.cfg.RateLimitAuthPerMin, time.Minute, s.cfg.TrustCloudflareHeaders))
 			}
 			r.Post("/auth/register", s.handleRegister)
 			r.Post("/auth/login", s.handleLogin)
 			r.Post("/auth/refresh", s.handleRefresh)
 			r.Post("/auth/logout", s.handleLogout)
 			r.Post("/auth/oauth", s.handleOAuth)
+			r.Post("/auth/email-verification/request", s.handleRequestEmailVerification)
+			r.Post("/auth/email-verification/verify", s.handleVerifyEmail)
 		})
 
-		// Secret-guarded; self-authenticates via X-Internal-Task, so it
-		// belongs at top level, not inside the public or requireAuth groups.
-		r.Post("/internal/drain", s.handleInternalDrain)
+		// Secret-guarded Worker/scheduler integration endpoints.
+		r.Route("/internal", func(r chi.Router) {
+			r.Use(s.requireInternalSecret)
+			r.Post("/drain", s.handleInternalDrain)
+			r.Post("/media/authorize", s.handleInternalAuthorizeMedia)
+			r.Post("/media/uploaded", s.handleInternalMediaUploaded)
+			r.Post("/media/deletions/claim", s.handleInternalClaimObjectDeletions)
+			r.Post("/media/deletions/ack", s.handleInternalAckObjectDeletions)
+		})
 
-		r.Get("/courts", s.handleListCourts)
 		r.Get("/courts/forecast", s.handleForecast) // must precede /courts/{id} or chi routes "forecast" as an id
-		r.Get("/courts/{id}", s.handleGetCourt)
+		r.Group(func(r chi.Router) {
+			if s.cfg.RateLimitDiscoveryPerMin > 0 {
+				r.Use(perIPLimit(s.cfg.RateLimitDiscoveryPerMin, time.Minute, s.cfg.TrustCloudflareHeaders))
+			}
+			r.Get("/courts", s.handleListCourts)
+			r.Post("/courts/search", s.handleSearchCourts)
+			r.Get("/courts/{id}", s.handleGetCourt)
+		})
 		r.Get("/courts/{id}/activity", s.handleCourtActivity)
 		r.Get("/courts/{id}/photos", s.handleListPhotos)
 		r.Get("/courts/{id}/sessions", s.handleListSessions) // personalizes via optional bearer
@@ -112,7 +145,7 @@ func (s *Server) Routes() http.Handler {
 		r.Group(func(r chi.Router) {
 			r.Use(s.requireAuth)
 			if s.cfg.RateLimitWritePerMin > 0 {
-				r.Use(writeLimiter(s.cfg.RateLimitWritePerMin, time.Minute))
+				r.Use(writeLimiter(s.cfg.RateLimitWritePerMin, time.Minute, s.cfg.TrustCloudflareHeaders))
 			}
 
 			r.Get("/me", s.handleGetMe)
@@ -133,6 +166,7 @@ func (s *Server) Routes() http.Handler {
 			r.Get("/me/stats", s.handleMeStats)
 			r.Get("/me/favorites", s.handleListFavorites)
 			r.Post("/me/push-token", s.handleRegisterPushToken)
+			r.Delete("/me/push-token", s.handleUnregisterPushToken)
 			r.Get("/feed", s.handleGetFeed)
 
 			r.Post("/courts", s.handleCreateCourt)

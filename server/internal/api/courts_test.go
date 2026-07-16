@@ -100,6 +100,24 @@ func TestListCourtsByBBoxAndRadius(t *testing.T) {
 	}
 }
 
+func TestListCourtsRejectsInvalidBoundingBoxes(t *testing.T) {
+	ts, _ := newTestServer(t)
+	for _, bbox := range []string{
+		"10,10,-10,20",
+		"-181,-10,10,20",
+		"-10,-91,10,20",
+		"-10,10,-10,20",
+		"NaN,10,20,30",
+		"-10,10,+Inf,30",
+	} {
+		resp := doJSON(t, ts, http.MethodGet, "/courts?bbox="+bbox, "", nil)
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Errorf("bbox %q: status %d, want 400", bbox, resp.StatusCode)
+		}
+		resp.Body.Close()
+	}
+}
+
 func TestVoteCourtFlow(t *testing.T) {
 	ts, _ := newTestServer(t)
 	submitter := registerUser(t, ts, "submitter@test.local", "Submitter")

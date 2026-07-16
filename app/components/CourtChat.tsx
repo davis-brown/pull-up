@@ -10,10 +10,12 @@ import {
   View,
 } from "react-native";
 import { SignInAction } from "@/components/SignInCta";
+import { QueryError } from "@/components/QueryError";
 import { Card, ErrorText, Overline } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
 import { useCourtMessages, useSendMessage, useSetBlocked } from "@/lib/hooks";
 import { useTheme } from "@/lib/theme";
+import { safePathSegment } from "@/lib/routes";
 
 function messageTimeLabel(iso: string): string {
   const d = new Date(iso);
@@ -26,7 +28,7 @@ export function CourtChat({ courtId }: { courtId: string }) {
   const t = useTheme();
   const router = useRouter();
   const { user } = useAuth();
-  const { data: messages } = useCourtMessages(courtId);
+  const { data: messages, error: queryError, refetch } = useCourtMessages(courtId);
   const send = useSendMessage(courtId);
   const setBlocked = useSetBlocked();
   const [draft, setDraft] = useState("");
@@ -47,14 +49,16 @@ export function CourtChat({ courtId }: { courtId: string }) {
   return (
     <Card>
       <Overline>Court talk</Overline>
-      {(messages?.length ?? 0) > 0 ? (
+      {queryError && !messages ? (
+        <QueryError error={queryError} onRetry={() => void refetch()} />
+      ) : (messages?.length ?? 0) > 0 ? (
         <View style={{ marginTop: t.spacing.sm }}>
           {messages!.map((m) => {
             const mine = m.user_id === user?.id;
             return (
               <View key={m.id} style={styles.message}>
                 <View style={styles.headerRow}>
-                  <Pressable onPress={() => router.push(`/user/${m.user_id}` as Href)} hitSlop={4}>
+                  <Pressable onPress={() => router.push(`/user/${safePathSegment(m.user_id)}` as Href)} hitSlop={4}>
                     <Text
                       style={[
                         t.type.caption,
@@ -86,7 +90,7 @@ export function CourtChat({ courtId }: { courtId: string }) {
                     <Pressable
                       onPress={() => {
                         setActionsFor(null);
-                        router.push(`/flag?entityType=message&entityId=${m.id}`);
+                        router.push(`/flag?entityType=message&entityId=${safePathSegment(m.id)}`);
                       }}
                       hitSlop={6}
                     >

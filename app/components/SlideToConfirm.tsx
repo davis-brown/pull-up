@@ -40,6 +40,8 @@ export function SlideToConfirm({
   const translateX = useRef(new Animated.Value(0)).current;
   const dragStart = useRef(0);
   const firedRef = useRef(false);
+  const onConfirmRef = useRef(onConfirm);
+  onConfirmRef.current = onConfirm;
 
   const maxTranslate = Math.max(trackWidth - THUMB_SIZE - THUMB_INSET * 2, 0);
 
@@ -52,7 +54,7 @@ export function SlideToConfirm({
       easing: Easing.out(Easing.ease),
       useNativeDriver: true,
     }).start();
-    onConfirm();
+    onConfirmRef.current();
   };
 
   const springBack = () => {

@@ -5,12 +5,15 @@ import { useEffect, useState } from "react";
 import { Pressable, StyleSheet, Switch, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Avatar } from "@/components/Avatar";
+import { AuthGate } from "@/components/AuthGate";
+import { QueryError } from "@/components/QueryError";
 import { SlideToConfirm } from "@/components/SlideToConfirm";
 import { ErrorText } from "@/components/ui";
 import { ApiError } from "@/lib/api";
 import { loadLastCheckInPrefs, saveLastCheckInPrefs } from "@/lib/checkin-prefs";
 import { useCheckIn, useCourt, useCourtActivity } from "@/lib/hooks";
 import { getCurrentPosition } from "@/lib/location";
+import { parseRouteId, safePathSegment } from "@/lib/routes";
 import { darkTheme } from "@/lib/theme";
 
 const PLUS_OPTIONS = [0, 1, 2, 3];
@@ -21,14 +24,33 @@ const SUCCESS_DISMISS_MS = 800;
 // resolves theme locally via darkTheme() instead of useTheme() — the
 // global theme preference never flips for this screen.
 export default function CheckInScreen() {
+  const params = useLocalSearchParams();
+  const courtId = parseRouteId(params.courtId);
+  const via = params.via === "gps" ? "gps" : undefined;
+  if (!courtId) {
+    return (
+      <QueryError
+        error={new Error("Invalid court id")}
+        title="Invalid check-in link"
+        message="Open a court and try checking in again."
+      />
+    );
+  }
+  const next = `/check-in?courtId=${safePathSegment(courtId)}${via ? "&via=gps" : ""}`;
+  return (
+    <AuthGate next={next}>
+      <CheckInContent courtId={courtId} via={via} />
+    </AuthGate>
+  );
+}
+
+function CheckInContent({ courtId, via }: { courtId: string; via?: "gps" }) {
   const t = darkTheme();
   const insets = useSafeAreaInsets();
   const router = useRouter();
-  const { courtId, via } = useLocalSearchParams<{ courtId: string; via?: string }>();
-
   const { data: court } = useCourt(courtId);
   const { data: activity } = useCourtActivity(courtId);
-  const checkIn = useCheckIn(courtId ?? "");
+  const checkIn = useCheckIn(courtId);
 
   const [plusCount, setPlusCount] = useState(0);
   const [hasBall, setHasBall] = useState(false);
@@ -55,7 +77,7 @@ export default function CheckInScreen() {
   const overflow = checkIns.length - visibleAvatars.length;
 
   const handleConfirm = () => {
-    if (!courtId || confirming || success) return;
+    if (confirming || success) return;
     setError(null);
     setConfirming(true);
     void (async () => {
@@ -242,11 +264,11 @@ export default function CheckInScreen() {
           key={attempt}
           label="SLIDE TO CHECK IN"
           onConfirm={handleConfirm}
-          disabled={confirming || success || !courtId}
+          disabled={confirming || success}
         />
 
         <Text style={[t.type.caption, styles.footnote, { color: t.colors.textFootnote }]}>
-          auto-checkout when you leave the court
+          check-ins expire after 2 hours, or check out anytime
         </Text>
       </View>
     </View>

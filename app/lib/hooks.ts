@@ -4,10 +4,19 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query";
-import { api, API_URL } from "./api";
+import {
+  api,
+  fetchWithTimeout,
+  photoURLFromAPIBase,
+  resolveApiURL,
+  responseBlobWithTimeout,
+  responseTextWithTimeout,
+} from "./api";
+import * as ImageManipulator from "expo-image-manipulator";
 import { useAuth } from "./auth-context";
 import { filtersToQuery, type CourtFilters } from "./court-filters";
 import { forecastIdSet, type CourtForecast } from "./forecast";
+import { safePathSegment } from "./routes";
 import type {
   AdminAction,
   AdminUser,
@@ -38,8 +47,10 @@ import type {
 } from "./types";
 
 export function photoURL(storageKey: string): string {
-  return `${API_URL}/photos/${storageKey}`;
+  return photoURLFromAPIBase(resolveApiURL("/").replace(/\/+$/, ""), storageKey);
 }
+
+const idSegment = safePathSegment;
 
 export interface BBox {
   minLng: number;
@@ -54,10 +65,17 @@ export function useCourtsInBBox(bbox: BBox | null, filters?: CourtFilters) {
     enabled: bbox != null,
     // Poll every 5s while the region is still importing courts, else every 45s.
     refetchInterval: (q) => (q.state.data?.seeding ? 5_000 : 45_000),
+    refetchIntervalInBackground: false,
     queryFn: async () => {
       const b = bbox!;
       const res = await api<{ courts: CourtSummary[]; seeding?: boolean }>(
-        `/courts?bbox=${b.minLng},${b.minLat},${b.maxLng},${b.maxLat}${filtersToQuery(filters ?? {})}`,
+        "/courts/search",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            query: `bbox=${b.minLng},${b.minLat},${b.maxLng},${b.maxLat}${filtersToQuery(filters ?? {})}`,
+          }),
+        },
       );
       return { courts: res.courts, seeding: !!res.seeding };
     },
@@ -86,7 +104,7 @@ export function useForecasts(
     queryFn: async () => {
       const tzOffsetMinutes = -new Date().getTimezoneOffset();
       const res = await api<{ forecasts: CourtForecast[] }>(
-        `/courts/forecast?ids=${ids.join(",")}&tz_offset_minutes=${tzOffsetMinutes}`,
+        `/courts/forecast?ids=${ids.map(idSegment).join(",")}&tz_offset_minutes=${tzOffsetMinutes}`,
       );
       return res.forecasts;
     },
@@ -102,7 +120,7 @@ export function useCourt(id: string | undefined) {
   return useQuery({
     queryKey: ["courts", id],
     enabled: !!id,
-    queryFn: () => api<CourtDetail>(`/courts/${id}`),
+    queryFn: () => api<CourtDetail>(`/courts/${idSegment(id!)}`),
   });
 }
 
@@ -111,7 +129,8 @@ export function useCourtActivity(id: string | undefined) {
     queryKey: ["courts", id, "activity"],
     enabled: !!id,
     refetchInterval: 20_000,
-    queryFn: () => api<CourtActivity>(`/courts/${id}/activity`),
+    refetchIntervalInBackground: false,
+    queryFn: () => api<CourtActivity>(`/courts/${idSegment(id!)}/activity`),
   });
 }
 
@@ -135,13 +154,14 @@ export function useCheckIn(courtId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: CheckInInput) =>
-      api<CheckIn>(`/courts/${courtId}/check-ins`, {
+      api<CheckIn>(`/courts/${idSegment(courtId)}/check-ins`, {
         method: "POST",
         body: JSON.stringify(input),
       }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["courts"] });
       void qc.invalidateQueries({ queryKey: ["me", "check-in"] });
+      void qc.invalidateQueries({ queryKey: ["feed"] });
     },
   });
 }
@@ -153,6 +173,7 @@ export function useCheckOut() {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["courts"] });
       void qc.invalidateQueries({ queryKey: ["me", "check-in"] });
+      void qc.invalidateQueries({ queryKey: ["feed"] });
     },
   });
 }
@@ -167,7 +188,7 @@ export function useCreateReport(courtId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (report: NewReport) =>
-      api<CrowdReport>(`/courts/${courtId}/reports`, {
+      api<CrowdReport>(`/courts/${idSegment(courtId)}/reports`, {
         method: "POST",
         body: JSON.stringify(report),
       }),
@@ -208,7 +229,7 @@ export function useCourtPhotos(courtId: string | undefined) {
     enabled: !!courtId,
     queryFn: async () => {
       const res = await api<{ photos: CourtPhoto[]; external?: ExternalPhoto[] }>(
-        `/courts/${courtId}/photos`,
+        `/courts/${idSegment(courtId!)}/photos`,
       );
       return { photos: res.photos, external: res.external ?? [] };
     },
@@ -221,18 +242,36 @@ export function useUploadPhoto(courtId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (asset: { uri: string; mimeType?: string }) => {
-      const created = await api<{ photo: CourtPhoto; upload_path: string }>(
-        `/courts/${courtId}/photos`,
+      const created = await api<{
+        photo: CourtPhoto;
+        upload_path: string;
+        upload_authorization: string;
+      }>(
+        `/courts/${idSegment(courtId)}/photos`,
         { method: "POST", body: JSON.stringify({}) },
       );
-      const blob = await (await fetch(asset.uri)).blob();
-      const res = await fetch(`${API_URL}${created.upload_path}`, {
+      const normalized = await ImageManipulator.manipulateAsync(asset.uri, [], {
+        compress: 0.85,
+        format: ImageManipulator.SaveFormat.JPEG,
+      });
+      const blobResponse = await fetchWithTimeout(normalized.uri);
+      const blob = await responseBlobWithTimeout(blobResponse);
+      const res = await fetchWithTimeout(resolveApiURL(created.upload_path), {
         method: "PUT",
-        headers: { "Content-Type": asset.mimeType ?? "image/jpeg" },
+        headers: {
+          Authorization: created.upload_authorization,
+          "Content-Type": "image/jpeg",
+        },
         body: blob,
       });
       if (!res.ok) {
-        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        const text = await responseTextWithTimeout(res).catch(() => "");
+        let body: { error?: string } = {};
+        try {
+          body = JSON.parse(text) as { error?: string };
+        } catch {
+          // Keep the status fallback for empty/non-JSON upload errors.
+        }
         throw new Error(body.error ?? `upload failed (${res.status})`);
       }
       return created.photo;
@@ -248,7 +287,7 @@ export function useIsFavorite(courtId: string | undefined) {
   return useQuery({
     queryKey: ["courts", courtId, "favorite"],
     enabled: !!courtId && !!user,
-    queryFn: () => api<{ favorite: boolean }>(`/courts/${courtId}/favorite`),
+    queryFn: () => api<{ favorite: boolean }>(`/courts/${idSegment(courtId!)}/favorite`),
   });
 }
 
@@ -256,12 +295,13 @@ export function useSetFavorite(courtId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (favorite: boolean) =>
-      api<{ favorite: boolean }>(`/courts/${courtId}/favorite`, {
+      api<{ favorite: boolean }>(`/courts/${idSegment(courtId)}/favorite`, {
         method: favorite ? "PUT" : "DELETE",
       }),
     onSuccess: (data) => {
       qc.setQueryData(["courts", courtId, "favorite"], data);
       void qc.invalidateQueries({ queryKey: ["me", "favorites"] });
+      void qc.invalidateQueries({ queryKey: ["feed"] });
     },
   });
 }
@@ -283,8 +323,9 @@ export function useCourtSessions(courtId: string | undefined) {
     queryKey: ["courts", courtId, "sessions"],
     enabled: !!courtId,
     refetchInterval: 45_000,
+    refetchIntervalInBackground: false,
     queryFn: async () => {
-      const res = await api<{ sessions: CourtSession[] }>(`/courts/${courtId}/sessions`);
+      const res = await api<{ sessions: CourtSession[] }>(`/courts/${idSegment(courtId!)}/sessions`);
       return res.sessions;
     },
   });
@@ -317,12 +358,14 @@ export function useCreateSession(courtId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (session: { starts_at: string; note?: string }) =>
-      api<CourtSession>(`/courts/${courtId}/sessions`, {
+      api<CourtSession>(`/courts/${idSegment(courtId)}/sessions`, {
         method: "POST",
         body: JSON.stringify(session),
       }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["courts", courtId, "sessions"] });
+      void qc.invalidateQueries({ queryKey: ["courts", "forecast"] });
+      void qc.invalidateQueries({ queryKey: ["feed"] });
     },
   });
 }
@@ -331,7 +374,7 @@ export function useRSVP(courtId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (rsvp: { sessionId: string; status: "going" | "out" }) =>
-      api<{ status: string; going_count: number }>(`/sessions/${rsvp.sessionId}/rsvp`, {
+      api<{ status: string; going_count: number }>(`/sessions/${idSegment(rsvp.sessionId)}/rsvp`, {
         method: "PUT",
         body: JSON.stringify({ status: rsvp.status }),
       }),
@@ -339,6 +382,7 @@ export function useRSVP(courtId: string) {
       void qc.invalidateQueries({ queryKey: ["courts", courtId, "sessions"] });
       // Session going-counts feed the turnout forecasts (map sheet scrubber).
       void qc.invalidateQueries({ queryKey: ["courts", "forecast"] });
+      void qc.invalidateQueries({ queryKey: ["feed"] });
     },
   });
 }
@@ -347,9 +391,11 @@ export function useCancelSession(courtId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (sessionId: string) =>
-      api<void>(`/sessions/${sessionId}`, { method: "DELETE" }),
+      api<void>(`/sessions/${idSegment(sessionId)}`, { method: "DELETE" }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["courts", courtId, "sessions"] });
+      void qc.invalidateQueries({ queryKey: ["courts", "forecast"] });
+      void qc.invalidateQueries({ queryKey: ["feed"] });
     },
   });
 }
@@ -360,8 +406,9 @@ export function useCourtMessages(courtId: string | undefined) {
     enabled: !!courtId,
     // Chat is the fastest-moving surface; still fine to poll.
     refetchInterval: 15_000,
+    refetchIntervalInBackground: false,
     queryFn: async () => {
-      const res = await api<{ messages: CourtMessage[] }>(`/courts/${courtId}/messages`);
+      const res = await api<{ messages: CourtMessage[] }>(`/courts/${idSegment(courtId!)}/messages`);
       // Server returns newest first; display oldest → newest.
       return res.messages.slice().reverse();
     },
@@ -372,7 +419,7 @@ export function useResolveFlag() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (flagId: string) =>
-      api<void>(`/admin/flags/${flagId}/resolve`, { method: "POST" }),
+      api<void>(`/admin/flags/${idSegment(flagId)}/resolve`, { method: "POST" }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["admin", "flags"] }),
   });
 }
@@ -381,7 +428,7 @@ export function useAdminSetCourtStatus() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ courtId, status }: { courtId: string; status: CourtStatus }) =>
-      api<void>(`/admin/courts/${courtId}/status`, {
+      api<void>(`/admin/courts/${idSegment(courtId)}/status`, {
         method: "POST",
         body: JSON.stringify({ status }),
       }),
@@ -393,7 +440,7 @@ export function useAdminSetPhotoStatus() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ photoId, status }: { photoId: string; status: PhotoStatus }) =>
-      api<void>(`/admin/photos/${photoId}/status`, {
+      api<void>(`/admin/photos/${idSegment(photoId)}/status`, {
         method: "POST",
         body: JSON.stringify({ status }),
       }),
@@ -419,7 +466,7 @@ export function useSendMessage(courtId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: string) =>
-      api<CourtMessage>(`/courts/${courtId}/messages`, {
+      api<CourtMessage>(`/courts/${idSegment(courtId)}/messages`, {
         method: "POST",
         body: JSON.stringify({ body }),
       }),
@@ -433,7 +480,7 @@ export function useSetUserAdmin() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ userId, isAdmin }: { userId: string; isAdmin: boolean }) =>
-      api<{ user: AdminUser }>(`/admin/users/${userId}/admin`, {
+      api<{ user: AdminUser }>(`/admin/users/${idSegment(userId)}/admin`, {
         method: "POST",
         body: JSON.stringify({ is_admin: isAdmin }),
       }),
@@ -470,11 +517,14 @@ export function useSetBlocked() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ userId, blocked }: { userId: string; blocked: boolean }) =>
-      api<void>(`/users/${userId}/block`, { method: blocked ? "PUT" : "DELETE" }),
+      api<void>(`/users/${idSegment(userId)}/block`, { method: blocked ? "PUT" : "DELETE" }),
     onSuccess: () => {
       // Blocking changes what chat/reports/sessions show — refetch broadly.
       void qc.invalidateQueries({ queryKey: ["me", "blocked"] });
       void qc.invalidateQueries({ queryKey: ["courts"] });
+      void qc.invalidateQueries({ queryKey: ["users"] });
+      void qc.invalidateQueries({ queryKey: ["feed"] });
+      void qc.invalidateQueries({ queryKey: ["me", "follow-requests"] });
     },
   });
 }
@@ -502,7 +552,7 @@ export function useProfile(id: string | undefined) {
   return useQuery({
     queryKey: ["users", id],
     enabled: !!id,
-    queryFn: () => api<Profile>(`/users/${id}`),
+    queryFn: () => api<Profile>(`/users/${idSegment(id!)}`),
   });
 }
 
@@ -510,7 +560,7 @@ export function useFollowers(id: string | undefined) {
   return useQuery({
     queryKey: ["users", id, "followers"],
     enabled: !!id,
-    queryFn: async () => (await api<{ users: FollowUser[] }>(`/users/${id}/followers`)).users,
+    queryFn: async () => (await api<{ users: FollowUser[] }>(`/users/${idSegment(id!)}/followers`)).users,
   });
 }
 
@@ -518,7 +568,7 @@ export function useFollowing(id: string | undefined) {
   return useQuery({
     queryKey: ["users", id, "following"],
     enabled: !!id,
-    queryFn: async () => (await api<{ users: FollowUser[] }>(`/users/${id}/following`)).users,
+    queryFn: async () => (await api<{ users: FollowUser[] }>(`/users/${idSegment(id!)}/following`)).users,
   });
 }
 
@@ -526,11 +576,13 @@ export function useSetFollow(id: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (follow: boolean) =>
-      api<{ following?: boolean; requested?: boolean; follower_count?: number }>(`/users/${id}/follow`, {
+      api<{ following?: boolean; requested?: boolean; follower_count?: number }>(`/users/${idSegment(id)}/follow`, {
         method: follow ? "PUT" : "DELETE",
       }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["users", id] });
+      void qc.invalidateQueries({ queryKey: ["users"] });
+      void qc.invalidateQueries({ queryKey: ["feed"] });
     },
   });
 }
@@ -548,10 +600,12 @@ export function useAcceptFollowRequest() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (requesterId: string) =>
-      api<void>(`/users/${requesterId}/follow-requests/accept`, { method: "POST" }),
+      api<void>(`/users/${idSegment(requesterId)}/follow-requests/accept`, { method: "POST" }),
     onSuccess: (_data, requesterId) => {
       void qc.invalidateQueries({ queryKey: ["me", "follow-requests"] });
       void qc.invalidateQueries({ queryKey: ["users", requesterId] });
+      void qc.invalidateQueries({ queryKey: ["users"] });
+      void qc.invalidateQueries({ queryKey: ["feed"] });
     },
   });
 }
@@ -560,7 +614,7 @@ export function useRejectFollowRequest() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (requesterId: string) =>
-      api<void>(`/users/${requesterId}/follow-requests/reject`, { method: "POST" }),
+      api<void>(`/users/${idSegment(requesterId)}/follow-requests/reject`, { method: "POST" }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["me", "follow-requests"] }),
   });
 }
@@ -569,21 +623,36 @@ export function useUploadAvatar() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (asset: { uri: string; mimeType?: string }) => {
-      const created = await api<{ avatar_url: string; upload_path: string }>("/me/avatar", {
+      const created = await api<{
+        avatar_url: string;
+        upload_path: string;
+        upload_authorization: string;
+      }>("/me/avatar", {
         method: "POST",
         body: JSON.stringify({}),
       });
-      const blob = await (await fetch(asset.uri)).blob();
-      const res = await fetch(`${API_URL}${created.upload_path}`, {
+      const normalized = await ImageManipulator.manipulateAsync(asset.uri, [], {
+        compress: 0.85,
+        format: ImageManipulator.SaveFormat.JPEG,
+      });
+      const blobResponse = await fetchWithTimeout(normalized.uri);
+      const blob = await responseBlobWithTimeout(blobResponse);
+      const res = await fetchWithTimeout(resolveApiURL(created.upload_path), {
         method: "PUT",
-        headers: { "Content-Type": asset.mimeType ?? "image/jpeg" },
+        headers: {
+          Authorization: created.upload_authorization,
+          "Content-Type": "image/jpeg",
+        },
         body: blob,
       });
       if (!res.ok) throw new Error(`avatar upload failed (${res.status})`);
       await api<User>("/me", { method: "PATCH", body: JSON.stringify({ avatar_url: created.avatar_url }) });
       return created.avatar_url;
     },
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ["me"] }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["me"] });
+      void qc.invalidateQueries({ queryKey: ["users"] });
+    },
   });
 }
 
@@ -591,7 +660,10 @@ export function useClearAvatar() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: () => api<void>("/me/avatar", { method: "DELETE" }),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ["me"] }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["me"] });
+      void qc.invalidateQueries({ queryKey: ["users"] });
+    },
   });
 }
 
@@ -601,6 +673,7 @@ export function useFeed() {
     queryKey: ["feed"],
     enabled: !!user,
     refetchInterval: 45_000,
+    refetchIntervalInBackground: false,
     queryFn: () =>
       api<{ friends_here: FriendPresence[]; upcoming_runs: FeedRun[] }>("/feed"),
   });
@@ -610,8 +683,8 @@ export function usePatchCourtAttributes(id: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (attrs: Partial<CourtDetail>) =>
-      api<CourtDetail>(`/courts/${id}/attributes`, { method: "PATCH", body: JSON.stringify(attrs) }),
-    onSuccess: () => void qc.invalidateQueries({ queryKey: ["courts", id] }),
+      api<CourtDetail>(`/courts/${idSegment(id)}/attributes`, { method: "PATCH", body: JSON.stringify(attrs) }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ["courts"] }),
   });
 }
 
@@ -619,12 +692,12 @@ export function useVoteCourt(courtId: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (vote: 1 | -1) =>
-      api<{ net_votes: number; status: string }>(`/courts/${courtId}/vote`, {
+      api<{ net_votes: number; status: string }>(`/courts/${idSegment(courtId)}/vote`, {
         method: "POST",
         body: JSON.stringify({ vote }),
       }),
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["courts", courtId] });
+      void qc.invalidateQueries({ queryKey: ["courts"] });
     },
   });
 }
