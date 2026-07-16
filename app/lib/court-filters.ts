@@ -32,11 +32,12 @@ const BOOL_KEYS = [
   "fenced",
 ] as const;
 
-// Only truthy booleans and a set surface become params; everything else is a no-op.
+// Explicit false values matter for strict filters (notably the Night run
+// preset's indoor=false), so preserve them rather than treating them as unset.
 export function filtersToQuery(f: CourtFilters): string {
   let q = "";
   for (const k of BOOL_KEYS) {
-    if (f[k]) q += `&${k}=true`;
+    if (f[k] !== undefined) q += `&${k}=${String(f[k])}`;
   }
   if (f.surface) q += `&surface=${f.surface}`;
   if (f.min_hoops) q += `&min_hoops=${f.min_hoops}`;

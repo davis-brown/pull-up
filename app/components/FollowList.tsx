@@ -3,7 +3,10 @@ import type { UseQueryResult } from "@tanstack/react-query";
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { Avatar } from "@/components/Avatar";
 import { EmptyState } from "@/components/EmptyState";
+import { QueryError } from "@/components/QueryError";
+import { ApiError } from "@/lib/api";
 import { useTheme } from "@/lib/theme";
+import { safePathSegment } from "@/lib/routes";
 import type { FollowUser } from "@/lib/types";
 
 export function FollowList({
@@ -15,11 +18,24 @@ export function FollowList({
 }) {
   const t = useTheme();
   const router = useRouter();
-  const { data, isLoading } = query;
+  const { data, isLoading, error, refetch } = query;
   if (isLoading) {
     return (
       <View style={[styles.center, { backgroundColor: t.colors.background }]}>
         <ActivityIndicator size="large" color={t.colors.accent} />
+      </View>
+    );
+  }
+  if (error && !data) {
+    const privateList = error instanceof ApiError && error.status === 403;
+    return (
+      <View style={[styles.center, { backgroundColor: t.colors.background }]}>
+        <QueryError
+          error={error}
+          onRetry={privateList ? undefined : () => void refetch()}
+          title={privateList ? "This account is private" : undefined}
+          message={privateList ? "Follow this player to see their connections." : undefined}
+        />
       </View>
     );
   }
@@ -31,7 +47,7 @@ export function FollowList({
       contentContainerStyle={{ padding: t.spacing.md }}
       ListEmptyComponent={<EmptyState icon="people-outline" title={emptyText} />}
       renderItem={({ item }) => (
-        <Pressable style={styles.row} onPress={() => router.push(`/user/${item.id}` as Href)}>
+        <Pressable style={styles.row} onPress={() => router.push(`/user/${safePathSegment(item.id)}` as Href)}>
           <Avatar avatarUrl={item.avatar_url} displayName={item.display_name} seed={item.id} size={40} />
           <Text style={[t.type.bodyMedium, { color: t.colors.textPrimary }]}>{item.display_name}</Text>
         </Pressable>

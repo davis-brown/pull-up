@@ -32,8 +32,13 @@ WHERE tile_x BETWEEN sqlc.arg('min_x') AND sqlc.arg('max_x')
 -- name: EnqueueSeedTile :exec
 -- Durably records that a tile needs importing. A tile that already has any row
 -- (pending/importing/done/failed) is untouched, so a done tile is never reset.
+WITH capacity_lock AS (
+    SELECT pg_advisory_xact_lock(1886743155)
+)
 INSERT INTO seed_regions (tile_x, tile_y, status)
-VALUES ($1, $2, 'pending')
+SELECT $1, $2, 'pending'
+FROM capacity_lock
+WHERE (SELECT count(*) FROM seed_regions WHERE status IN ('pending', 'importing')) < 1000
 ON CONFLICT (tile_x, tile_y) DO NOTHING;
 
 -- name: ClaimNextSeedTile :one

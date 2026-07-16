@@ -1,12 +1,13 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { RunRow } from "@/components/court/RunRow";
 import { useSignInDetour } from "@/components/SignInCta";
-import { Button, Overline } from "@/components/ui";
+import { Button, ErrorText, Overline } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
 import { photoURL, useCourt, useCourtPhotos, useCourtSessions, useRSVP } from "@/lib/hooks";
+import { safePathSegment } from "@/lib/routes";
 import { useTheme } from "@/lib/theme";
 import type { CourtDetail, CourtSummary, SessionSummary } from "@/lib/types";
 
@@ -148,6 +149,9 @@ function DetailLevel({
   const { data: photoData } = useCourtPhotos(selectedId);
   const { data: sessions } = useCourtSessions(selectedId);
   const rsvp = useRSVP(selectedId);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => setError(null), [selectedId]);
 
   const court: CourtDetail | CourtSummary | null = detail ?? summary;
 
@@ -191,7 +195,11 @@ function DetailLevel({
 
   const joinRun = (sessionId: string) => {
     if (!user) return detour();
-    rsvp.mutate({ sessionId, status: "going" });
+    setError(null);
+    rsvp.mutate(
+      { sessionId, status: "going" },
+      { onError: (e) => setError(e.message) },
+    );
   };
 
   return (
@@ -250,7 +258,7 @@ function DetailLevel({
                 {live ? `${liveCount} playing now` : "No one playing now"}
               </Text>
             </View>
-            <Button title="Check in" onPress={() => router.push(`/check-in?courtId=${selectedId}`)} />
+            <Button title="Check in" onPress={() => router.push(`/check-in?courtId=${safePathSegment(selectedId)}`)} />
           </View>
 
           {nextRun && (
@@ -259,6 +267,7 @@ function DetailLevel({
               <RunRow session={nextRun} onJoin={() => joinRun(nextRun.id)} />
             </View>
           )}
+          <ErrorText message={error} />
         </>
       )}
     </ScrollView>

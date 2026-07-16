@@ -12,12 +12,16 @@ import * as Location from "expo-location";
 import * as Notifications from "expo-notifications";
 import * as TaskManager from "expo-task-manager";
 import { Platform } from "react-native";
-import { api } from "./api";
-import { storage } from "./storage";
+import { api, onSessionExpired } from "./api";
+import { parseRouteId, safePathSegment } from "./routes";
+import { backgroundStorage as storage } from "./storage";
 import type { CheckIn, CourtDetail, CourtSummary } from "./types";
 
 const GEOFENCE_TASK = "pullup-court-geofence";
-const MODE_KEY = "pullup.geofence_mode";
+const ACTIVE_USER_KEY = "pullup.geofence_user";
+const LEGACY_MODE_KEY = "pullup.geofence_mode";
+const MODE_KEY_PREFIX = "pullup.geofence_mode.";
+const CONSENT_KEY_PREFIX = "pullup.geofence_consent.";
 const REGION_RADIUS_M = 150;
 const MAX_REGIONS = 15;
 
@@ -25,9 +29,61 @@ export type GeofenceMode = "off" | "prompt" | "auto";
 
 export const geofencingSupported = Platform.OS !== "web";
 
+const modeKey = (userId: string) => `${MODE_KEY_PREFIX}${userId}`;
+const consentKey = (userId: string) => `${CONSENT_KEY_PREFIX}${userId}`;
+
+let geofenceGeneration = 0;
+let userTransition: Promise<void> = Promise.resolve();
+
+async function activeUserId(): Promise<string | null> {
+  return storage.get(ACTIVE_USER_KEY);
+}
+
 export async function getGeofenceMode(): Promise<GeofenceMode> {
-  const stored = await storage.get(MODE_KEY);
+  const userId = await activeUserId();
+  if (!userId || (await storage.get(consentKey(userId))) !== "true") return "off";
+  const stored = await storage.get(modeKey(userId));
   return stored === "prompt" || stored === "auto" ? stored : "off";
+}
+
+async function stopGeofencing(): Promise<void> {
+  if (!geofencingSupported) return;
+  if (await Location.hasStartedGeofencingAsync(GEOFENCE_TASK)) {
+    await Location.stopGeofencingAsync(GEOFENCE_TASK);
+  }
+}
+
+export function setGeofencingUser(userId: string): Promise<void> {
+  const generation = ++geofenceGeneration;
+  userTransition = userTransition
+    .catch(() => {})
+    .then(async () => {
+      await storage.remove(ACTIVE_USER_KEY);
+      await stopGeofencing();
+      if (generation !== geofenceGeneration) return;
+      // The old unscoped value cannot be assigned safely to whichever account
+      // happens to sign in first after the upgrade.
+      await storage.remove(LEGACY_MODE_KEY);
+      await storage.set(ACTIVE_USER_KEY, userId);
+    });
+  return userTransition;
+}
+
+export function deactivateGeofencing(): Promise<void> {
+  const generation = ++geofenceGeneration;
+  userTransition = userTransition
+    .catch(() => {})
+    .then(async () => {
+      await storage.remove(ACTIVE_USER_KEY);
+      await storage.remove(LEGACY_MODE_KEY);
+      try {
+        await stopGeofencing();
+      } catch {
+        // With no active user, a still-delivered OS event is a no-op.
+      }
+      if (generation !== geofenceGeneration) return;
+    });
+  return userTransition;
 }
 
 if (geofencingSupported) {
@@ -46,7 +102,7 @@ if (geofencingSupported) {
       eventType: Location.GeofencingEventType;
       region: Location.LocationRegion;
     };
-    const courtId = region.identifier;
+    const courtId = parseRouteId(region.identifier);
     if (!courtId) return;
     const mode = await getGeofenceMode();
     if (mode === "off") return;
@@ -63,7 +119,8 @@ if (geofencingSupported) {
 }
 
 async function onEnter(courtId: string, mode: GeofenceMode): Promise<void> {
-  const court = await api<CourtDetail>(`/courts/${courtId}`);
+  const segment = safePathSegment(courtId);
+  const court = await api<CourtDetail>(`/courts/${segment}`);
 
   if (mode === "prompt") {
     await Notifications.scheduleNotificationAsync({
@@ -82,7 +139,7 @@ async function onEnter(courtId: string, mode: GeofenceMode): Promise<void> {
   const pos = await Location.getCurrentPositionAsync({
     accuracy: Location.Accuracy.High,
   });
-  await api<CheckIn>(`/courts/${courtId}/check-ins`, {
+  await api<CheckIn>(`/courts/${segment}/check-ins`, {
     method: "POST",
     body: JSON.stringify({
       lat: pos.coords.latitude,
@@ -115,15 +172,27 @@ async function onExit(courtId: string): Promise<void> {
 // means the monitored set must follow the user around.
 export async function refreshGeofences(): Promise<void> {
   if (!geofencingSupported) return;
+  const generation = geofenceGeneration;
+  const userId = await activeUserId();
+  if (!userId) return;
   if ((await getGeofenceMode()) === "off") return;
   const { status } = await Location.getBackgroundPermissionsAsync();
   if (status !== Location.PermissionStatus.GRANTED) return;
 
   const pos =
-    (await Location.getLastKnownPositionAsync()) ??
+    (await Location.getLastKnownPositionAsync({
+      maxAge: 5 * 60 * 1000,
+      requiredAccuracy: 1_000,
+    })) ??
     (await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }));
   const res = await api<{ courts: CourtSummary[] }>(
-    `/courts?lat=${pos.coords.latitude}&lng=${pos.coords.longitude}&radius_m=20000`,
+    "/courts/search",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        query: `lat=${pos.coords.latitude}&lng=${pos.coords.longitude}&radius_m=20000`,
+      }),
+    },
   );
   const regions = res.courts.slice(0, MAX_REGIONS).map((c) => ({
     identifier: c.id,
@@ -133,7 +202,11 @@ export async function refreshGeofences(): Promise<void> {
     notifyOnEnter: true,
     notifyOnExit: true,
   }));
-  if (regions.length === 0) return;
+  if (generation !== geofenceGeneration || (await activeUserId()) !== userId) return;
+  if (regions.length === 0) {
+    await stopGeofencing();
+    return;
+  }
   await Location.startGeofencingAsync(GEOFENCE_TASK, regions);
 }
 
@@ -149,11 +222,19 @@ export async function setGeofenceMode(mode: GeofenceMode): Promise<EnableResult>
     return { ok: false, reason: "Auto check-in needs the mobile app." };
   }
 
+  const generation = geofenceGeneration;
+  const userId = await activeUserId();
+  if (!userId) return { ok: false, reason: "Sign in to enable auto check-in." };
+
   if (mode === "off") {
-    await storage.set(MODE_KEY, mode);
-    if (await Location.hasStartedGeofencingAsync(GEOFENCE_TASK)) {
-      await Location.stopGeofencingAsync(GEOFENCE_TASK);
+    await storage.set(modeKey(userId), mode);
+    if (
+      generation !== geofenceGeneration ||
+      (await activeUserId()) !== userId
+    ) {
+      return { ok: false, reason: "Your account changed. Try again." };
     }
+    await stopGeofencing();
     return { ok: true };
   }
 
@@ -172,8 +253,8 @@ export async function setGeofenceMode(mode: GeofenceMode): Promise<EnableResult>
     };
   }
   const notif = await Notifications.requestPermissionsAsync();
-  if (!notif.granted && mode === "prompt") {
-    return { ok: false, reason: "Notifications are required for check-in prompts." };
+  if (!notif.granted) {
+    return { ok: false, reason: "Notifications are required for auto check-in." };
   }
   if (Platform.OS === "android") {
     await Notifications.setNotificationChannelAsync("default", {
@@ -182,7 +263,20 @@ export async function setGeofenceMode(mode: GeofenceMode): Promise<EnableResult>
     });
   }
 
-  await storage.set(MODE_KEY, mode);
+  if (
+    generation !== geofenceGeneration ||
+    (await activeUserId()) !== userId
+  ) {
+    return { ok: false, reason: "Your account changed. Try again." };
+  }
+  await storage.set(consentKey(userId), "true");
+  await storage.set(modeKey(userId), mode);
   await refreshGeofences();
   return { ok: true };
 }
+
+// Headless geofence launches do not mount AuthProvider. A definitively dead
+// refresh session must still disable OS monitoring and clear the active user.
+onSessionExpired(() => {
+  void deactivateGeofencing().catch(() => {});
+});

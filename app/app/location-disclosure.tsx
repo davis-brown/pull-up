@@ -7,6 +7,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { Button, ErrorText } from "@/components/ui";
+import { AuthGate } from "@/components/AuthGate";
 import { setGeofenceMode, type GeofenceMode } from "@/lib/geofencing";
 import { useTheme } from "@/lib/theme";
 
@@ -31,22 +32,34 @@ const points: Array<{ icon: string; text: string }> = [
 
 export default function LocationDisclosureScreen() {
   const { mode } = useLocalSearchParams<{ mode: GeofenceMode }>();
+  const target: GeofenceMode = mode === "auto" ? "auto" : "prompt";
+  return (
+    <AuthGate next={`/location-disclosure?mode=${target}`}>
+      <LocationDisclosureContent target={target} />
+    </AuthGate>
+  );
+}
+
+function LocationDisclosureContent({ target }: { target: GeofenceMode }) {
   const router = useRouter();
   const t = useTheme();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const target: GeofenceMode = mode === "auto" ? "auto" : "prompt";
-
   const accept = async () => {
     setBusy(true);
     setError(null);
-    const result = await setGeofenceMode(target);
-    setBusy(false);
-    if (result.ok) {
-      router.back();
-    } else {
-      setError(result.reason ?? "Could not enable auto check-in.");
+    try {
+      const result = await setGeofenceMode(target);
+      if (result.ok) {
+        router.back();
+      } else {
+        setError(result.reason ?? "Could not enable auto check-in.");
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Could not enable auto check-in.");
+    } finally {
+      setBusy(false);
     }
   };
 

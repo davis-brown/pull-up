@@ -44,7 +44,7 @@ export default function TermsScreen() {
       </Section>
 
       <Section title="Accounts">
-        {"You're responsible for your account and keeping your credentials safe. You can delete your account anytime in Profile → Delete account. We may terminate accounts that violate these terms."}
+        {"You're responsible for your account and keeping your credentials safe. You can delete your account anytime in Profile → Profile settings → Delete account. We may terminate accounts that violate these terms."}
       </Section>
 
       <Section title="Attribution">

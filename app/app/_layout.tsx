@@ -21,11 +21,45 @@ import { onboardingSeen } from "@/lib/first-run";
 import { navChrome, ThemePreferenceProvider, useTheme } from "@/lib/theme";
 
 const sentryDSN = process.env.EXPO_PUBLIC_SENTRY_DSN;
+const telemetryId = /\b[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b/gi;
+
+function sanitizeTelemetryUrl(value: string): string {
+  try {
+    const parsed = new URL(value, "https://telemetry.invalid");
+    const path = parsed.pathname.replace(telemetryId, ":id");
+    return parsed.origin === "https://telemetry.invalid" ? path : `${parsed.origin}${path}`;
+  } catch {
+    return value.split(/[?#]/, 1)[0]!.replace(telemetryId, ":id");
+  }
+}
+
 if (sentryDSN) {
   Sentry.init({
     dsn: sentryDSN,
     // Crash + error reporting only; no session replay, no PII.
     sendDefaultPii: false,
+    beforeBreadcrumb(breadcrumb) {
+      const url = breadcrumb.data?.url;
+      if (typeof url !== "string") return breadcrumb;
+      return {
+        ...breadcrumb,
+        data: { ...breadcrumb.data, url: sanitizeTelemetryUrl(url) },
+      };
+    },
+    beforeSend(event) {
+      event.user = undefined;
+      if (event.request) {
+        event.request = {
+          ...event.request,
+          url: event.request.url ? sanitizeTelemetryUrl(event.request.url) : undefined,
+          query_string: undefined,
+          cookies: undefined,
+          headers: undefined,
+          data: undefined,
+        };
+      }
+      return event;
+    },
   });
 }
 
@@ -133,6 +167,7 @@ function ThemedApp() {
         <Stack.Screen name="user/[id]/followers" options={{ title: "Followers" }} />
         <Stack.Screen name="user/[id]/following" options={{ title: "Following" }} />
         <Stack.Screen name="follow-requests" options={{ title: "Follow requests" }} />
+        <Stack.Screen name="profile-settings" options={{ title: "Profile settings" }} />
         <Stack.Screen name="flag" options={{ title: "Report", presentation: "modal" }} />
         <Stack.Screen name="admin/index" options={{ title: "Moderation" }} />
         <Stack.Screen

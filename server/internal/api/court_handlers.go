@@ -115,6 +115,34 @@ func optSurface(q url.Values) *string {
 	}
 }
 
+type courtSearchRequest struct {
+	Query string `json:"query"`
+}
+
+// POST keeps precise location and viewport coordinates out of URLs, edge
+// access logs, browser history, and telemetry while reusing the validated
+// list implementation below.
+func (s *Server) handleSearchCourts(w http.ResponseWriter, r *http.Request) {
+	var req courtSearchRequest
+	if !readJSON(w, r, &req) {
+		return
+	}
+	if req.Query == "" || len(req.Query) > 2_048 || strings.ContainsAny(req.Query, "#?") {
+		writeError(w, http.StatusBadRequest, "invalid court search")
+		return
+	}
+	values, err := url.ParseQuery(req.Query)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid court search")
+		return
+	}
+	clone := r.Clone(r.Context())
+	clonedURL := *r.URL
+	clonedURL.RawQuery = values.Encode()
+	clone.URL = &clonedURL
+	s.handleListCourts(w, clone)
+}
+
 func (s *Server) handleListCourts(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	if bbox := q.Get("bbox"); bbox != "" {
@@ -162,8 +190,10 @@ func (s *Server) handleListCourts(w http.ResponseWriter, r *http.Request) {
 	// Approximate the search circle as a bbox for the auto-seeder.
 	dLat := radius / 111_320
 	dLng := radius / (111_320 * math.Max(0.1, math.Cos(lat*math.Pi/180)))
-	s.requestSeeding(lng-dLng, lat-dLat, lng+dLng, lat+dLat)
-	seeding := s.viewportSeeding(r.Context(), lng-dLng, lat-dLat, lng+dLng, lat+dLat)
+	minLng, maxLng := math.Max(-180, lng-dLng), math.Min(180, lng+dLng)
+	minLat, maxLat := math.Max(-90, lat-dLat), math.Min(90, lat+dLat)
+	s.requestSeeding(r.Context(), minLng, minLat, maxLng, maxLat)
+	seeding := s.viewportSeeding(r.Context(), minLng, minLat, maxLng, maxLat)
 	out := make([]courtSummary, 0, len(rows))
 	for _, c := range rows {
 		d := c.DistanceM
@@ -195,6 +225,11 @@ func (s *Server) listCourtsInBBox(w http.ResponseWriter, r *http.Request, bbox s
 		}
 		vals[i] = v
 	}
+	if !validLatLng(vals[1], vals[0]) || !validLatLng(vals[3], vals[2]) ||
+		vals[0] >= vals[2] || vals[1] >= vals[3] {
+		writeError(w, http.StatusBadRequest, "bbox coordinates must be finite, in range, and ordered")
+		return
+	}
 	q := r.URL.Query()
 	rows, err := s.store.Queries.CourtsInBBox(r.Context(), gen.CourtsInBBoxParams{
 		MinLng: vals[0], MinLat: vals[1], MaxLng: vals[2], MaxLat: vals[3],
@@ -215,7 +250,7 @@ func (s *Server) listCourtsInBBox(w http.ResponseWriter, r *http.Request, bbox s
 		s.internalError(w, "courts in bbox", err)
 		return
 	}
-	s.requestSeeding(vals[0], vals[1], vals[2], vals[3])
+	s.requestSeeding(r.Context(), vals[0], vals[1], vals[2], vals[3])
 	seeding := s.viewportSeeding(r.Context(), vals[0], vals[1], vals[2], vals[3])
 	out := make([]courtSummary, 0, len(rows))
 	for _, c := range rows {
@@ -248,7 +283,7 @@ func (s *Server) handleGetCourt(w http.ResponseWriter, r *http.Request) {
 	}
 	// First detail view kicks off one-time enrichment (address + photos).
 	if s.enricher != nil && court.EnrichedAt == nil {
-		s.enricher.Request(court.ID)
+		s.enricher.Request(r.Context(), court.ID)
 	}
 	writeJSON(w, http.StatusOK, court)
 }
@@ -581,5 +616,7 @@ func int16PtrEq(a, b *int16) bool {
 }
 
 func validLatLng(lat, lng float64) bool {
-	return lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180
+	return !math.IsNaN(lat) && !math.IsInf(lat, 0) &&
+		!math.IsNaN(lng) && !math.IsInf(lng, 0) &&
+		lat >= -90 && lat <= 90 && lng >= -180 && lng <= 180
 }

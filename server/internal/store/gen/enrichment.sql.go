@@ -46,10 +46,11 @@ func (q *Queries) ClaimCourtEnrichment(ctx context.Context, id uuid.UUID) (Claim
 }
 
 const claimNextCourtEnrichment = `-- name: ClaimNextCourtEnrichment :one
-UPDATE courts SET enriched_at = now()
+UPDATE courts SET enrich_claimed_at = now(), enrich_attempts = enrich_attempts + 1
 WHERE id = (
     SELECT id FROM courts
     WHERE enrich_requested_at IS NOT NULL AND enriched_at IS NULL
+      AND (enrich_claimed_at IS NULL OR enrich_claimed_at < now() - interval '15 minutes')
     ORDER BY enrich_requested_at
     FOR UPDATE SKIP LOCKED
     LIMIT 1
@@ -67,8 +68,8 @@ type ClaimNextCourtEnrichmentRow struct {
 	NeedsAddress bool      `json:"needs_address"`
 }
 
-// Claim the next requested-but-unenriched court (lazy: only viewed courts have
-// enrich_requested_at set). SKIP LOCKED keeps concurrent workers safe.
+// Claim the next requested-but-unenriched court with a retryable lease.
+// enriched_at is written only by MarkCourtEnrichmentComplete.
 func (q *Queries) ClaimNextCourtEnrichment(ctx context.Context) (ClaimNextCourtEnrichmentRow, error) {
 	row := q.db.QueryRow(ctx, claimNextCourtEnrichment)
 	var i ClaimNextCourtEnrichmentRow
@@ -152,6 +153,17 @@ func (q *Queries) ListExternalPhotos(ctx context.Context, courtID uuid.UUID) ([]
 		return nil, err
 	}
 	return items, nil
+}
+
+const markCourtEnrichmentComplete = `-- name: MarkCourtEnrichmentComplete :exec
+UPDATE courts
+SET enriched_at = now(), enrich_claimed_at = NULL
+WHERE id = $1
+`
+
+func (q *Queries) MarkCourtEnrichmentComplete(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, markCourtEnrichmentComplete, id)
+	return err
 }
 
 const requestEnrichment = `-- name: RequestEnrichment :exec

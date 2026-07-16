@@ -3,7 +3,9 @@ import { useState } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { AuthGate } from "@/components/AuthGate";
 import { Button, Chip, ErrorText, Field } from "@/components/ui";
+import { QueryError } from "@/components/QueryError";
 import { useCreateReport } from "@/lib/hooks";
+import { parseRouteId } from "@/lib/routes";
 import { useTheme } from "@/lib/theme";
 import type { RunQuality } from "@/lib/types";
 
@@ -15,10 +17,28 @@ const qualities: Array<{ value: RunQuality; label: string }> = [
 ];
 
 export default function ReportScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const params = useLocalSearchParams();
+  const id = parseRouteId(params.id);
+  if (!id) {
+    return (
+      <QueryError
+        error={new Error("Invalid court id")}
+        title="Invalid court link"
+        message="This court link is not valid."
+      />
+    );
+  }
+  return (
+    <AuthGate>
+      <ReportContent id={id} />
+    </AuthGate>
+  );
+}
+
+function ReportContent({ id }: { id: string }) {
   const router = useRouter();
   const t = useTheme();
-  const createReport = useCreateReport(id ?? "");
+  const createReport = useCreateReport(id);
   const [quality, setQuality] = useState<RunQuality | null>(null);
   const [count, setCount] = useState("");
   const [note, setNote] = useState("");
@@ -49,11 +69,10 @@ export default function ReportScreen() {
   };
 
   return (
-    <AuthGate>
-      <ScrollView
-        style={{ backgroundColor: t.colors.background }}
-        contentContainerStyle={{ padding: t.spacing.lg }}
-      >
+    <ScrollView
+      style={{ backgroundColor: t.colors.background }}
+      contentContainerStyle={{ padding: t.spacing.lg }}
+    >
         <Text
           style={[t.type.label, { color: t.colors.textSecondary, marginBottom: t.spacing.sm }]}
         >
@@ -85,8 +104,7 @@ export default function ReportScreen() {
         />
         <ErrorText message={error} />
         <Button title="Post report" onPress={submit} busy={createReport.isPending} />
-      </ScrollView>
-    </AuthGate>
+    </ScrollView>
   );
 }
 

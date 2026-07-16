@@ -18,10 +18,8 @@ export function Avatar({
 }) {
   const t = useTheme();
   const radius = size / 2;
-  if (avatarUrl) {
-    const uri = avatarUrl.startsWith("/photos/")
-      ? photoURL(avatarUrl.slice("/photos/".length))
-      : avatarUrl;
+  if (avatarUrl?.startsWith("/photos/")) {
+    const uri = photoURL(avatarUrl.slice("/photos/".length));
     return (
       <Image
         source={{ uri }}

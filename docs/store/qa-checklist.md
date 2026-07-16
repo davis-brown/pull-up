@@ -38,8 +38,8 @@ build before every submission.
 - [ ] Sentry: `Sentry.captureMessage("qa smoke")` temporarily added (or a
       forced crash in a dev build) appears in the Sentry project; remove
       the test call afterwards
-- [ ] Legal pages reachable: Profile → Privacy Policy / Terms; same pages
-      load on the web app URLs used in the store listings
+- [ ] Legal pages reachable: Profile → Profile settings → Privacy Policy /
+      Terms; same pages load on the web app URLs used in the store listings
 
 ## Store artifacts
 
@@ -85,9 +85,10 @@ Requires production builds and the association files live on the real domain
       follow disappears both ways and the Follow button is gone
 - [ ] Plan a run; a follower who is NOT a court favoriter receives exactly one
       "run planned" push (no duplicate for someone who is both)
-- [ ] Set an avatar from Profile → Edit; it appears on your profile, in chat,
-      and in follower lists; remove it → falls back to initials
-- [ ] Edit display name from Profile; it updates across surfaces
+- [ ] Set an avatar from Profile → Profile settings; it appears on your profile,
+      in chat, and in follower lists; remove it → falls back to initials
+- [ ] Edit display name from Profile → Profile settings; it updates across
+      surfaces
 - [ ] Report a profile (flag entity "user"); an admin can clear the avatar
 - [ ] Guest (signed out) can view a profile and its lists; Follow shows a
       "Sign in to follow" CTA
@@ -113,13 +114,13 @@ Requires production builds and the association files live on the real domain
 
 ## Private accounts & follow requests (phase 8)
 
-- [ ] Toggle "Private account" on in Profile → Edit; GET /me and your profile
-      reflect it; toggle off restores public behavior
+- [ ] Toggle "Private account" on in Profile → Profile settings; GET /me and
+      your profile reflect it; toggle off restores public behavior
 - [ ] From a second account, following a private user shows "Requested" (not
       "Following"); the private user's follower count does not change
-- [ ] The private user sees the request under Profile → "Follow requests (N)";
-      Confirm makes the requester an accepted follower and the count increments;
-      Delete removes the request with no follow
+- [ ] The private user sees the request under Profile → Profile settings →
+      "Follow requests (N)"; Confirm makes the requester an accepted follower
+      and the count increments; Delete removes the request with no follow
 - [ ] A private account's profile hides check-ins / courts-added / streak from a
       non-follower and shows "This account is private"; an accepted follower and
       the owner see full stats

@@ -21,20 +21,44 @@ func (q *Queries) ClearUserAvatar(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
-const createRefreshToken = `-- name: CreateRefreshToken :one
-INSERT INTO refresh_tokens (user_id, token_hash, expires_at)
+const createEmailVerificationToken = `-- name: CreateEmailVerificationToken :exec
+
+INSERT INTO email_verification_tokens (user_id, token_hash, expires_at)
 VALUES ($1, $2, $3)
-RETURNING id
 `
 
-type CreateRefreshTokenParams struct {
+type CreateEmailVerificationTokenParams struct {
 	UserID    uuid.UUID `json:"user_id"`
 	TokenHash string    `json:"token_hash"`
 	ExpiresAt time.Time `json:"expires_at"`
 }
 
+// Email verification -------------------------------------------------------
+func (q *Queries) CreateEmailVerificationToken(ctx context.Context, arg CreateEmailVerificationTokenParams) error {
+	_, err := q.db.Exec(ctx, createEmailVerificationToken, arg.UserID, arg.TokenHash, arg.ExpiresAt)
+	return err
+}
+
+const createRefreshToken = `-- name: CreateRefreshToken :one
+INSERT INTO refresh_tokens (user_id, family_id, token_hash, expires_at)
+VALUES ($1, $2, $3, $4)
+RETURNING id
+`
+
+type CreateRefreshTokenParams struct {
+	UserID    uuid.UUID `json:"user_id"`
+	FamilyID  uuid.UUID `json:"family_id"`
+	TokenHash string    `json:"token_hash"`
+	ExpiresAt time.Time `json:"expires_at"`
+}
+
 func (q *Queries) CreateRefreshToken(ctx context.Context, arg CreateRefreshTokenParams) (uuid.UUID, error) {
-	row := q.db.QueryRow(ctx, createRefreshToken, arg.UserID, arg.TokenHash, arg.ExpiresAt)
+	row := q.db.QueryRow(ctx, createRefreshToken,
+		arg.UserID,
+		arg.FamilyID,
+		arg.TokenHash,
+		arg.ExpiresAt,
+	)
 	var id uuid.UUID
 	err := row.Scan(&id)
 	return id, err
@@ -43,7 +67,9 @@ func (q *Queries) CreateRefreshToken(ctx context.Context, arg CreateRefreshToken
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (email, password_hash, display_name)
 VALUES ($1, $2, $3)
-RETURNING id, email, display_name, avatar_url, reputation, created_at, is_admin
+RETURNING id, email, display_name, avatar_url, reputation, created_at, is_admin,
+    is_private, jersey_number, position, height_cm, style_tags,
+    (email_verified_at IS NOT NULL)::bool AS email_verified
 `
 
 type CreateUserParams struct {
@@ -53,13 +79,19 @@ type CreateUserParams struct {
 }
 
 type CreateUserRow struct {
-	ID          uuid.UUID `json:"id"`
-	Email       string    `json:"email"`
-	DisplayName string    `json:"display_name"`
-	AvatarUrl   *string   `json:"avatar_url"`
-	Reputation  int32     `json:"reputation"`
-	CreatedAt   time.Time `json:"created_at"`
-	IsAdmin     bool      `json:"is_admin"`
+	ID            uuid.UUID `json:"id"`
+	Email         string    `json:"email"`
+	DisplayName   string    `json:"display_name"`
+	AvatarUrl     *string   `json:"avatar_url"`
+	Reputation    int32     `json:"reputation"`
+	CreatedAt     time.Time `json:"created_at"`
+	IsAdmin       bool      `json:"is_admin"`
+	IsPrivate     bool      `json:"is_private"`
+	JerseyNumber  *int16    `json:"jersey_number"`
+	Position      *string   `json:"position"`
+	HeightCm      *int16    `json:"height_cm"`
+	StyleTags     []string  `json:"style_tags"`
+	EmailVerified bool      `json:"email_verified"`
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error) {
@@ -73,22 +105,39 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CreateU
 		&i.Reputation,
 		&i.CreatedAt,
 		&i.IsAdmin,
+		&i.IsPrivate,
+		&i.JerseyNumber,
+		&i.Position,
+		&i.HeightCm,
+		&i.StyleTags,
+		&i.EmailVerified,
 	)
 	return i, err
 }
 
 const getRefreshTokenByHash = `-- name: GetRefreshTokenByHash :one
-SELECT id, user_id, token_hash, expires_at, revoked_at, created_at
+SELECT id, user_id, family_id, token_hash, expires_at, revoked_at, created_at
 FROM refresh_tokens
 WHERE token_hash = $1
 `
 
-func (q *Queries) GetRefreshTokenByHash(ctx context.Context, tokenHash string) (RefreshToken, error) {
+type GetRefreshTokenByHashRow struct {
+	ID        uuid.UUID  `json:"id"`
+	UserID    uuid.UUID  `json:"user_id"`
+	FamilyID  uuid.UUID  `json:"family_id"`
+	TokenHash string     `json:"token_hash"`
+	ExpiresAt time.Time  `json:"expires_at"`
+	RevokedAt *time.Time `json:"revoked_at"`
+	CreatedAt time.Time  `json:"created_at"`
+}
+
+func (q *Queries) GetRefreshTokenByHash(ctx context.Context, tokenHash string) (GetRefreshTokenByHashRow, error) {
 	row := q.db.QueryRow(ctx, getRefreshTokenByHash, tokenHash)
-	var i RefreshToken
+	var i GetRefreshTokenByHashRow
 	err := row.Scan(
 		&i.ID,
 		&i.UserID,
+		&i.FamilyID,
 		&i.TokenHash,
 		&i.ExpiresAt,
 		&i.RevokedAt,
@@ -97,26 +146,75 @@ func (q *Queries) GetRefreshTokenByHash(ctx context.Context, tokenHash string) (
 	return i, err
 }
 
+const getRefreshTokenByHashForUpdate = `-- name: GetRefreshTokenByHashForUpdate :one
+SELECT id, user_id, family_id, token_hash, expires_at, revoked_at, created_at
+FROM refresh_tokens
+WHERE token_hash = $1
+FOR UPDATE
+`
+
+type GetRefreshTokenByHashForUpdateRow struct {
+	ID        uuid.UUID  `json:"id"`
+	UserID    uuid.UUID  `json:"user_id"`
+	FamilyID  uuid.UUID  `json:"family_id"`
+	TokenHash string     `json:"token_hash"`
+	ExpiresAt time.Time  `json:"expires_at"`
+	RevokedAt *time.Time `json:"revoked_at"`
+	CreatedAt time.Time  `json:"created_at"`
+}
+
+func (q *Queries) GetRefreshTokenByHashForUpdate(ctx context.Context, tokenHash string) (GetRefreshTokenByHashForUpdateRow, error) {
+	row := q.db.QueryRow(ctx, getRefreshTokenByHashForUpdate, tokenHash)
+	var i GetRefreshTokenByHashForUpdateRow
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.FamilyID,
+		&i.TokenHash,
+		&i.ExpiresAt,
+		&i.RevokedAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getUnverifiedPasswordUserByEmailForUpdate = `-- name: GetUnverifiedPasswordUserByEmailForUpdate :one
+SELECT id
+FROM users
+WHERE email = $1 AND auth_provider = 'password' AND email_verified_at IS NULL
+FOR UPDATE
+`
+
+func (q *Queries) GetUnverifiedPasswordUserByEmailForUpdate(ctx context.Context, email string) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, getUnverifiedPasswordUserByEmailForUpdate, email)
+	var id uuid.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, email, password_hash, display_name, avatar_url, reputation, created_at, is_admin, is_private, jersey_number, position, height_cm, style_tags
+SELECT id, email, password_hash, display_name, avatar_url, reputation, created_at,
+    is_admin, is_private, jersey_number, position, height_cm, style_tags,
+    (email_verified_at IS NOT NULL)::bool AS email_verified
 FROM users
 WHERE email = $1
 `
 
 type GetUserByEmailRow struct {
-	ID           uuid.UUID `json:"id"`
-	Email        string    `json:"email"`
-	PasswordHash *string   `json:"password_hash"`
-	DisplayName  string    `json:"display_name"`
-	AvatarUrl    *string   `json:"avatar_url"`
-	Reputation   int32     `json:"reputation"`
-	CreatedAt    time.Time `json:"created_at"`
-	IsAdmin      bool      `json:"is_admin"`
-	IsPrivate    bool      `json:"is_private"`
-	JerseyNumber *int16    `json:"jersey_number"`
-	Position     *string   `json:"position"`
-	HeightCm     *int16    `json:"height_cm"`
-	StyleTags    []string  `json:"style_tags"`
+	ID            uuid.UUID `json:"id"`
+	Email         string    `json:"email"`
+	PasswordHash  *string   `json:"password_hash"`
+	DisplayName   string    `json:"display_name"`
+	AvatarUrl     *string   `json:"avatar_url"`
+	Reputation    int32     `json:"reputation"`
+	CreatedAt     time.Time `json:"created_at"`
+	IsAdmin       bool      `json:"is_admin"`
+	IsPrivate     bool      `json:"is_private"`
+	JerseyNumber  *int16    `json:"jersey_number"`
+	Position      *string   `json:"position"`
+	HeightCm      *int16    `json:"height_cm"`
+	StyleTags     []string  `json:"style_tags"`
+	EmailVerified bool      `json:"email_verified"`
 }
 
 func (q *Queries) GetUserByEmail(ctx context.Context, email string) (GetUserByEmailRow, error) {
@@ -136,29 +234,33 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (GetUserByEm
 		&i.Position,
 		&i.HeightCm,
 		&i.StyleTags,
+		&i.EmailVerified,
 	)
 	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, email, display_name, avatar_url, reputation, created_at, is_admin, is_private, jersey_number, position, height_cm, style_tags
+SELECT id, email, display_name, avatar_url, reputation, created_at, is_admin,
+    is_private, jersey_number, position, height_cm, style_tags,
+    (email_verified_at IS NOT NULL)::bool AS email_verified
 FROM users
 WHERE id = $1
 `
 
 type GetUserByIDRow struct {
-	ID           uuid.UUID `json:"id"`
-	Email        string    `json:"email"`
-	DisplayName  string    `json:"display_name"`
-	AvatarUrl    *string   `json:"avatar_url"`
-	Reputation   int32     `json:"reputation"`
-	CreatedAt    time.Time `json:"created_at"`
-	IsAdmin      bool      `json:"is_admin"`
-	IsPrivate    bool      `json:"is_private"`
-	JerseyNumber *int16    `json:"jersey_number"`
-	Position     *string   `json:"position"`
-	HeightCm     *int16    `json:"height_cm"`
-	StyleTags    []string  `json:"style_tags"`
+	ID            uuid.UUID `json:"id"`
+	Email         string    `json:"email"`
+	DisplayName   string    `json:"display_name"`
+	AvatarUrl     *string   `json:"avatar_url"`
+	Reputation    int32     `json:"reputation"`
+	CreatedAt     time.Time `json:"created_at"`
+	IsAdmin       bool      `json:"is_admin"`
+	IsPrivate     bool      `json:"is_private"`
+	JerseyNumber  *int16    `json:"jersey_number"`
+	Position      *string   `json:"position"`
+	HeightCm      *int16    `json:"height_cm"`
+	StyleTags     []string  `json:"style_tags"`
+	EmailVerified bool      `json:"email_verified"`
 }
 
 func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (GetUserByIDRow, error) {
@@ -177,17 +279,19 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (GetUserByIDRow
 		&i.Position,
 		&i.HeightCm,
 		&i.StyleTags,
+		&i.EmailVerified,
 	)
 	return i, err
 }
 
-const revokeAllUserRefreshTokens = `-- name: RevokeAllUserRefreshTokens :exec
-UPDATE refresh_tokens SET revoked_at = now()
-WHERE user_id = $1 AND revoked_at IS NULL
+const invalidateEmailVerificationTokens = `-- name: InvalidateEmailVerificationTokens :exec
+UPDATE email_verification_tokens
+SET consumed_at = now()
+WHERE user_id = $1 AND consumed_at IS NULL
 `
 
-func (q *Queries) RevokeAllUserRefreshTokens(ctx context.Context, userID uuid.UUID) error {
-	_, err := q.db.Exec(ctx, revokeAllUserRefreshTokens, userID)
+func (q *Queries) InvalidateEmailVerificationTokens(ctx context.Context, userID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, invalidateEmailVerificationTokens, userID)
 	return err
 }
 
@@ -201,52 +305,77 @@ func (q *Queries) RevokeRefreshToken(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
+const revokeRefreshTokenFamily = `-- name: RevokeRefreshTokenFamily :exec
+UPDATE refresh_tokens SET revoked_at = now()
+WHERE family_id = $1 AND revoked_at IS NULL
+`
+
+func (q *Queries) RevokeRefreshTokenFamily(ctx context.Context, familyID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, revokeRefreshTokenFamily, familyID)
+	return err
+}
+
 const updateUser = `-- name: UpdateUser :one
 UPDATE users SET
     display_name   = coalesce($1, display_name),
-    avatar_url     = coalesce($2, avatar_url),
-    is_private     = coalesce($3, is_private),
-    jersey_number  = coalesce($4, jersey_number),
-    position       = coalesce($5, position),
-    height_cm      = coalesce($6, height_cm),
-    style_tags     = coalesce($7::text[], style_tags)
-WHERE id = $8
-RETURNING id, email, display_name, avatar_url, reputation, created_at, is_admin, is_private, jersey_number, position, height_cm, style_tags
+    avatar_url     = CASE WHEN $2::bool
+                          THEN $3::text ELSE avatar_url END,
+    is_private     = coalesce($4, is_private),
+    jersey_number  = CASE WHEN $5::bool
+                          THEN $6::smallint ELSE jersey_number END,
+    position       = CASE WHEN $7::bool
+                          THEN $8::text ELSE position END,
+    height_cm      = CASE WHEN $9::bool
+                          THEN $10::smallint ELSE height_cm END,
+    style_tags     = coalesce($11::text[], style_tags)
+WHERE id = $12
+RETURNING id, email, display_name, avatar_url, reputation, created_at, is_admin,
+    is_private, jersey_number, position, height_cm, style_tags,
+    (email_verified_at IS NOT NULL)::bool AS email_verified
 `
 
 type UpdateUserParams struct {
-	DisplayName  *string   `json:"display_name"`
-	AvatarUrl    *string   `json:"avatar_url"`
-	IsPrivate    *bool     `json:"is_private"`
-	JerseyNumber *int16    `json:"jersey_number"`
-	Position     *string   `json:"position"`
-	HeightCm     *int16    `json:"height_cm"`
-	StyleTags    []string  `json:"style_tags"`
-	ID           uuid.UUID `json:"id"`
+	DisplayName     *string   `json:"display_name"`
+	AvatarUrlSet    bool      `json:"avatar_url_set"`
+	AvatarUrl       *string   `json:"avatar_url"`
+	IsPrivate       *bool     `json:"is_private"`
+	JerseyNumberSet bool      `json:"jersey_number_set"`
+	JerseyNumber    *int16    `json:"jersey_number"`
+	PositionSet     bool      `json:"position_set"`
+	Position        *string   `json:"position"`
+	HeightCmSet     bool      `json:"height_cm_set"`
+	HeightCm        *int16    `json:"height_cm"`
+	StyleTags       []string  `json:"style_tags"`
+	ID              uuid.UUID `json:"id"`
 }
 
 type UpdateUserRow struct {
-	ID           uuid.UUID `json:"id"`
-	Email        string    `json:"email"`
-	DisplayName  string    `json:"display_name"`
-	AvatarUrl    *string   `json:"avatar_url"`
-	Reputation   int32     `json:"reputation"`
-	CreatedAt    time.Time `json:"created_at"`
-	IsAdmin      bool      `json:"is_admin"`
-	IsPrivate    bool      `json:"is_private"`
-	JerseyNumber *int16    `json:"jersey_number"`
-	Position     *string   `json:"position"`
-	HeightCm     *int16    `json:"height_cm"`
-	StyleTags    []string  `json:"style_tags"`
+	ID            uuid.UUID `json:"id"`
+	Email         string    `json:"email"`
+	DisplayName   string    `json:"display_name"`
+	AvatarUrl     *string   `json:"avatar_url"`
+	Reputation    int32     `json:"reputation"`
+	CreatedAt     time.Time `json:"created_at"`
+	IsAdmin       bool      `json:"is_admin"`
+	IsPrivate     bool      `json:"is_private"`
+	JerseyNumber  *int16    `json:"jersey_number"`
+	Position      *string   `json:"position"`
+	HeightCm      *int16    `json:"height_cm"`
+	StyleTags     []string  `json:"style_tags"`
+	EmailVerified bool      `json:"email_verified"`
 }
 
 func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (UpdateUserRow, error) {
 	row := q.db.QueryRow(ctx, updateUser,
 		arg.DisplayName,
+		arg.AvatarUrlSet,
 		arg.AvatarUrl,
 		arg.IsPrivate,
+		arg.JerseyNumberSet,
 		arg.JerseyNumber,
+		arg.PositionSet,
 		arg.Position,
+		arg.HeightCmSet,
 		arg.HeightCm,
 		arg.StyleTags,
 		arg.ID,
@@ -265,6 +394,69 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (UpdateU
 		&i.Position,
 		&i.HeightCm,
 		&i.StyleTags,
+		&i.EmailVerified,
+	)
+	return i, err
+}
+
+const verifyEmailWithToken = `-- name: VerifyEmailWithToken :one
+WITH consumed AS (
+    UPDATE email_verification_tokens
+    SET consumed_at = now()
+    WHERE token_hash = $1
+      AND consumed_at IS NULL
+      AND expires_at > now()
+    RETURNING user_id
+), verified AS (
+    UPDATE users u
+    SET email_verified_at = now()
+    FROM consumed c
+    WHERE u.id = c.user_id
+      AND u.auth_provider = 'password'
+      AND u.email_verified_at IS NULL
+    RETURNING u.id, u.email, u.display_name, u.avatar_url, u.reputation,
+        u.created_at, u.is_admin, u.is_private, u.jersey_number, u.position,
+        u.height_cm, u.style_tags
+)
+SELECT id, email, display_name, avatar_url, reputation, created_at, is_admin,
+    is_private, jersey_number, position, height_cm, style_tags,
+    true::bool AS email_verified
+FROM verified
+`
+
+type VerifyEmailWithTokenRow struct {
+	ID            uuid.UUID `json:"id"`
+	Email         string    `json:"email"`
+	DisplayName   string    `json:"display_name"`
+	AvatarUrl     *string   `json:"avatar_url"`
+	Reputation    int32     `json:"reputation"`
+	CreatedAt     time.Time `json:"created_at"`
+	IsAdmin       bool      `json:"is_admin"`
+	IsPrivate     bool      `json:"is_private"`
+	JerseyNumber  *int16    `json:"jersey_number"`
+	Position      *string   `json:"position"`
+	HeightCm      *int16    `json:"height_cm"`
+	StyleTags     []string  `json:"style_tags"`
+	EmailVerified bool      `json:"email_verified"`
+}
+
+func (q *Queries) VerifyEmailWithToken(ctx context.Context, tokenHash string) (VerifyEmailWithTokenRow, error) {
+	row := q.db.QueryRow(ctx, verifyEmailWithToken, tokenHash)
+	var i VerifyEmailWithTokenRow
+	err := row.Scan(
+		&i.ID,
+		&i.Email,
+		&i.DisplayName,
+		&i.AvatarUrl,
+		&i.Reputation,
+		&i.CreatedAt,
+		&i.IsAdmin,
+		&i.IsPrivate,
+		&i.JerseyNumber,
+		&i.Position,
+		&i.HeightCm,
+		&i.StyleTags,
+		&i.EmailVerified,
 	)
 	return i, err
 }
