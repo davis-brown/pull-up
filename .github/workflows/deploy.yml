@@ -84,7 +84,7 @@ jobs:
           test -n "$WEB_ORIGIN"
           case "$WEB_ORIGIN" in https://*) ;; *) exit 1 ;; esac
           test "$(node -e 'process.stdout.write(new URL(process.env.WEB_ORIGIN).origin)')" = "${WEB_ORIGIN%/}"
-          EXPO_PUBLIC_API_URL="${WEB_ORIGIN%/}" EXPO_PUBLIC_WEB_URL="${WEB_ORIGIN%/}" npm --prefix app exec -- expo export --platform web
+          EXPO_PUBLIC_API_URL="${WEB_ORIGIN%/}" EXPO_PUBLIC_WEB_URL="${WEB_ORIGIN%/}" npm --prefix app run export:web
       - name: Deploy web Worker
         run: deploy/api/node_modules/.bin/wrangler deploy --cwd app
         env:
