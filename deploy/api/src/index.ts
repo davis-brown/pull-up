@@ -17,6 +17,9 @@ interface OptionalBindings {
   SENTRY_DSN?: string;
   EMAIL_FROM?: string;
   WEB_ORIGIN?: string;
+  // Set per-deploy via `wrangler deploy --var DEPLOY_COMMIT:<sha>` so the
+  // container can report which commit it is running.
+  DEPLOY_COMMIT?: string;
 }
 
 type RuntimeEnv = Env & OptionalBindings;
@@ -61,6 +64,7 @@ export class ApiContainer extends Container<RuntimeEnv> {
       SENTRY_DSN: env.SENTRY_DSN ?? "",
       TRUST_CF_CONNECTING_IP: "true",
       PORT: "8080",
+      COMMIT: env.DEPLOY_COMMIT ?? "",
     };
   }
 }
