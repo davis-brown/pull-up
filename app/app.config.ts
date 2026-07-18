@@ -2,8 +2,8 @@ import type { ExpoConfig } from "expo/config";
 
 // Host for universal links (iOS) / app links (Android), from the same origin
 // used to build share links. Falls back to the production domain.
-const configuredWebUrl = process.env.EXPO_PUBLIC_WEB_URL ?? "https://pullup.app";
-let webHost = "pullup.app";
+const configuredWebUrl = process.env.EXPO_PUBLIC_WEB_URL ?? "https://pull-up.davisbrown.dev";
+let webHost = "pull-up.davisbrown.dev";
 try {
   const parsed = new URL(configuredWebUrl);
   if (parsed.protocol === "https:" || parsed.protocol === "http:") {
