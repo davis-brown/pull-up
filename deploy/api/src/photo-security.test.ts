@@ -5,6 +5,7 @@ import {
   isAllowedPhotoKey,
   isJpegContentType,
   readUploadCredentials,
+  timingSafeEqualStrings,
   verifyUploadSignature,
 } from "./photo-security";
 
@@ -88,5 +89,20 @@ describe("upload authorization", () => {
         nowMs,
       ),
     ).resolves.toBe(false);
+  });
+});
+
+describe("timingSafeEqualStrings", () => {
+  it("matches only identical strings", () => {
+    expect(timingSafeEqualStrings("secret-value", "secret-value")).toBe(true);
+    expect(timingSafeEqualStrings("secret-value", "secret-valuX")).toBe(false);
+    expect(timingSafeEqualStrings("secret-value", "secret")).toBe(false);
+    expect(timingSafeEqualStrings("", "")).toBe(true);
+    expect(timingSafeEqualStrings("", "x")).toBe(false);
+  });
+
+  it("compares multi-byte strings by content", () => {
+    expect(timingSafeEqualStrings("héllo", "héllo")).toBe(true);
+    expect(timingSafeEqualStrings("héllo", "hello")).toBe(false);
   });
 });
