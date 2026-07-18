@@ -235,8 +235,9 @@ func (s *Server) handleRefresh(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, "store rotated refresh token", err)
 		return
 	}
-	// Record the replacement on the consumed token so we can identify benign
-	// replays and audit reuse chains.
+	// Record which token replaced this one as a forensic audit trail of the
+	// rotation chain. Benign-vs-malicious replay detection itself is handled by
+	// the revoked_at grace window above, not by this column.
 	if row.RevokedAt == nil {
 		replacementHash := &refreshHash
 		if err := q.SetRefreshTokenReplacement(r.Context(), gen.SetRefreshTokenReplacementParams{

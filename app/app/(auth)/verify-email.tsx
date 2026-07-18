@@ -25,9 +25,8 @@ function useVerificationToken(): string | undefined {
 }
 
 export default function VerifyEmailScreen() {
-  const { email, sent } = useLocalSearchParams<{
+  const { email } = useLocalSearchParams<{
     email?: string;
-    sent?: string;
   }>();
   const token = useVerificationToken();
   const { verifyEmail, requestEmailVerification } = useAuth();
@@ -36,9 +35,7 @@ export default function VerifyEmailScreen() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState(
-    sent === "0"
-      ? "Your account was created, but the email could not be sent. Try again below."
-      : "Open the verification link in your email to finish creating your account.",
+    "Open the verification link in your email to finish creating your account.",
   );
 
   const confirm = async () => {
