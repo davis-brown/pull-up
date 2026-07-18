@@ -67,13 +67,14 @@ jobs:
             }
             fs.writeFileSync(process.argv[1], JSON.stringify(out));
           ' "$secrets_file"
-          npx wrangler deploy --secrets-file "$secrets_file"
+          npx wrangler deploy --secrets-file "$secrets_file" --var "DEPLOY_COMMIT:${DEPLOY_COMMIT}"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           UPLOAD_SIGNING_SECRET: ${{ secrets.UPLOAD_SIGNING_SECRET }}
           INTERNAL_TASK_SECRET: ${{ secrets.INTERNAL_TASK_SECRET }}
+          DEPLOY_COMMIT: ${{ github.event.workflow_run.head_sha }}
       - name: Wait for container version to match deployed commit
         env:
           API_ORIGIN: ${{ secrets.EXPO_PUBLIC_API_URL }}
