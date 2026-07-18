@@ -575,7 +575,10 @@ async function performRefresh(epoch: number): Promise<RefreshResult> {
 
 function refreshSession(epoch: number): Promise<RefreshResult> {
   if (!refreshState || refreshState.epoch !== epoch) {
-    const promise = performRefresh(epoch).finally(() => {
+    // A successful refresh rotates the HttpOnly refresh cookie via Set-Cookie,
+    // so it must share the cookie mutex with login/logout to avoid a background
+    // refresh racing an explicit auth transition. On native this is a no-op.
+    const promise = runCookieMutating(() => performRefresh(epoch)).finally(() => {
       if (refreshState?.epoch === epoch) refreshState = null;
     });
     refreshState = { epoch, promise };

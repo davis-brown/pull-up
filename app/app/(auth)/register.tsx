@@ -27,7 +27,6 @@ export default function RegisterScreen() {
         params: {
           email: normalizedEmail,
           ...(next ? { next } : {}),
-          sent: "1",
         },
       } as Href);
     } catch (e) {
