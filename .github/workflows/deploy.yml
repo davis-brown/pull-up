@@ -43,7 +43,31 @@ jobs:
       - name: Verify generated API Worker bindings
         run: npm --prefix deploy/api run types:check
       - name: Deploy API Worker and container
-        run: npm --prefix deploy/api run deploy
+        working-directory: deploy/api
+        # wrangler.jsonc marks these as required secrets, and `wrangler deploy`
+        # inherits their values from the live Worker rather than reading the
+        # environment. Provision them from the GitHub secrets via --secrets-file
+        # so a rotated value (or a newly added secret) actually reaches the
+        # Worker instead of failing the deploy on a missing inherited secret.
+        run: |
+          umask 077
+          secrets_file="$(mktemp "${RUNNER_TEMP:-/tmp}/wrangler-secrets.XXXXXX.json")"
+          trap 'rm -f "$secrets_file"' EXIT
+          node -e '
+            const fs = require("fs");
+            const names = ["DATABASE_URL", "JWT_SECRET", "UPLOAD_SIGNING_SECRET", "INTERNAL_TASK_SECRET"];
+            const out = {};
+            for (const name of names) {
+              const value = process.env[name];
+              if (!value) {
+                console.error(`missing required secret: ${name}`);
+                process.exit(1);
+              }
+              out[name] = value;
+            }
+            fs.writeFileSync(process.argv[1], JSON.stringify(out));
+          ' "$secrets_file"
+          npx wrangler deploy --secrets-file "$secrets_file"
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
