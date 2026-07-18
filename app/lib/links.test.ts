@@ -39,14 +39,14 @@ describe("buildCourtLink", () => {
 
   it("falls back to the default web url when unset", () => {
     delete process.env.EXPO_PUBLIC_WEB_URL;
-    expect(buildCourtLink("abc")).toBe("https://pullup.app/court/abc");
+    expect(buildCourtLink("abc")).toBe("https://pull-up.davisbrown.dev/court/abc");
   });
 
   it("uses only the configured origin and rejects non-http configuration", () => {
     process.env.EXPO_PUBLIC_WEB_URL = "https://pullup.app/unexpected/path";
     expect(buildCourtLink("abc")).toBe("https://pullup.app/court/abc");
     process.env.EXPO_PUBLIC_WEB_URL = "javascript:alert(1)";
-    expect(buildCourtLink("abc")).toBe("https://pullup.app/court/abc");
+    expect(buildCourtLink("abc")).toBe("https://pull-up.davisbrown.dev/court/abc");
   });
 });
 

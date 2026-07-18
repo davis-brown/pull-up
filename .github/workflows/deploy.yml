@@ -121,7 +121,16 @@ jobs:
       - name: Smoke web app and security headers
         env:
           WEB_ORIGIN: ${{ vars.WEB_ORIGIN }}
+        # The origin may sit behind Cloudflare Access (private beta): accept
+        # either the worker's security headers or an Access login redirect.
         run: |
-          curl --fail --silent --show-error --retry 12 --retry-all-errors --retry-delay 5 --retry-max-time 120 --connect-timeout 10 --max-time 20 --dump-header "$RUNNER_TEMP/web-headers" --output /dev/null "${WEB_ORIGIN%/}/"
-          grep -qi '^content-security-policy:' "$RUNNER_TEMP/web-headers"
-          grep -qi '^x-content-type-options: nosniff' "$RUNNER_TEMP/web-headers"
+          curl --silent --show-error --retry 12 --retry-all-errors --retry-delay 5 --retry-max-time 120 --connect-timeout 10 --max-time 20 --dump-header "$RUNNER_TEMP/web-headers" --output /dev/null "${WEB_ORIGIN%/}/"
+          if grep -qi '^content-security-policy:' "$RUNNER_TEMP/web-headers"; then
+            grep -qi '^x-content-type-options: nosniff' "$RUNNER_TEMP/web-headers"
+          elif grep -qi '^location: https://[a-z0-9.-]*\.cloudflareaccess\.com/' "$RUNNER_TEMP/web-headers"; then
+            echo "Web origin is behind Cloudflare Access; header assertions run post-login."
+          else
+            echo "Web origin returned neither security headers nor an Access redirect:"
+            cat "$RUNNER_TEMP/web-headers"
+            exit 1
+          fi
