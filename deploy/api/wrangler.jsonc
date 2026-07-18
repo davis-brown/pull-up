@@ -11,7 +11,7 @@
   "preview_urls": false,
   "keep_vars": true,
   "vars": {
-    "EMAIL_FROM": "verify@pullup.app",
+    "EMAIL_FROM": "verify@pull-up.davisbrown.dev",
     "WEB_ORIGIN": "https://pull-up.davisbrown.dev"
   },
   "secrets": {
