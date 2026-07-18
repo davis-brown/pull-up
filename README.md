@@ -192,11 +192,11 @@ npx wrangler secret put DATABASE_URL   # Neon connection string (pooled)
 npx wrangler secret put JWT_SECRET     # openssl rand -hex 32
 npx wrangler secret put UPLOAD_SIGNING_SECRET  # a different openssl rand -hex 32
 npx wrangler secret put INTERNAL_TASK_SECRET  # auth for the drain cron
-npx wrangler email sending enable pullup.app   # one-time transactional email setup
+npx wrangler email sending enable pull-up.davisbrown.dev   # one-time transactional email setup
 ```
 
 The API Worker sends verification links through its `EMAIL` binding from
-`verify@pullup.app`. If another sending domain or canonical web origin is used,
+`verify@pull-up.davisbrown.dev`. If another sending domain or canonical web origin is used,
 set the `EMAIL_FROM` and `WEB_ORIGIN` Worker vars before deployment and
 regenerate `deploy/api/worker-configuration.d.ts` with `npm run types`.
 
@@ -208,11 +208,11 @@ OSM/enrichment work and physically removes revoked R2 objects.
 Then, from the repo root:
 
 ```sh
-make deploy-web WEB_ORIGIN=https://pullup.app
+make deploy-web WEB_ORIGIN=https://pull-up.davisbrown.dev
 ```
 
 Or push to `main` with the `CLOUDFLARE_API_TOKEN`, `EXPO_PUBLIC_API_URL`, and
-`WEB_ORIGIN` repo secrets set and let GitHub Actions deploy both.
+`WEB_ORIGIN` repo configuration set (WEB_ORIGIN is a repo variable) and let GitHub Actions deploy both.
 
 ## Court data & attribution
 
