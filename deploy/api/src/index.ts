@@ -6,6 +6,7 @@ import {
   isAllowedPhotoKey,
   isJpegContentType,
   readUploadCredentials,
+  timingSafeEqualStrings,
   verifyUploadSignature,
 } from "./photo-security";
 
@@ -691,14 +692,25 @@ export default {
     if (url.pathname.startsWith(PHOTO_PREFIX)) {
       return handlePhotos(request, env, url);
     }
-    if (url.pathname.startsWith(INTERNAL_PREFIX)) {
+    // The deploy pipeline confirms container rollout by polling the version
+    // endpoint with the internal-task secret; every other internal route is
+    // reachable only from this Worker's own container calls.
+    const providedTaskSecret = request.headers.get("X-Internal-Task");
+    const isVersionCheck =
+      url.pathname === `${INTERNAL_PREFIX}/version` &&
+      request.method === "GET" &&
+      providedTaskSecret !== null &&
+      Boolean(env.INTERNAL_TASK_SECRET) &&
+      timingSafeEqualStrings(providedTaskSecret, env.INTERNAL_TASK_SECRET);
+    if (url.pathname.startsWith(INTERNAL_PREFIX) && !isVersionCheck) {
       return jsonResponse({ error: "not found" }, 404);
     }
 
     try {
       const isEmailRequest = request.method === "POST" && EMAIL_PATHS.has(url.pathname);
+      const injectSecret = isEmailRequest || isVersionCheck;
       const response = await getContainer(env.API_CONTAINER).fetch(
-        containerProxyRequest(request, isEmailRequest ? env.INTERNAL_TASK_SECRET : undefined),
+        containerProxyRequest(request, injectSecret ? env.INTERNAL_TASK_SECRET : undefined),
       );
       const result = isEmailRequest
         ? await deliverVerificationEmail(response, env)
