@@ -27,8 +27,15 @@ var (
 func main() {
 	log := slog.New(slog.NewTextHandler(os.Stderr, nil))
 
-	os.Setenv("VERSION", version)
-	os.Setenv("COMMIT", commit)
+	// Expose the ldflags-stamped identity to config.Load, but never clobber
+	// values already provided by the environment: the container image is built
+	// without build args, so the deploy pipeline injects COMMIT at runtime.
+	if os.Getenv("VERSION") == "" {
+		os.Setenv("VERSION", version)
+	}
+	if os.Getenv("COMMIT") == "" {
+		os.Setenv("COMMIT", commit)
+	}
 
 	cfg, err := config.Load()
 	if err != nil {
