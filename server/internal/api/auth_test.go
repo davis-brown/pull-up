@@ -296,6 +296,72 @@ func TestExpiredRotatedTokenCannotRevokeCurrentFamily(t *testing.T) {
 	resp.Body.Close()
 }
 
+// TestRefreshReplayWithinGraceKeepsFamily covers the grace-window branch: a
+// revoked token replayed within refreshReplayGrace (5s) is rejected but must NOT
+// revoke the family, so the legitimate concurrent request's rotated token still
+// works. Reusing the just-rotated original immediately keeps revoked_at within
+// the window.
+func TestRefreshReplayWithinGraceKeepsFamily(t *testing.T) {
+	ts, _ := newTestServer(t)
+	u := registerUser(t, ts, "grace-keep@test.local", "Grace Keep")
+
+	resp := doJSON(t, ts, http.MethodPost, "/auth/refresh", "", map[string]string{"refresh_token": u.RefreshToken})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("rotate: status %d", resp.StatusCode)
+	}
+	current := decodeJSON[testUser](t, resp)
+
+	// Replay the consumed token immediately: revoked_at is fresh (< 5s), so this
+	// is treated as a benign concurrent replay — rejected without family revocation.
+	resp = doJSON(t, ts, http.MethodPost, "/auth/refresh", "", map[string]string{"refresh_token": u.RefreshToken})
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("in-grace replay: status %d, want 401", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	// The current rotated token from the same family must still be usable.
+	resp = doJSON(t, ts, http.MethodPost, "/auth/refresh", "", map[string]string{"refresh_token": current.RefreshToken})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("in-grace replay revoked current family token: status %d, want 200", resp.StatusCode)
+	}
+	resp.Body.Close()
+}
+
+// TestRefreshReplayBeyondGraceRevokesFamily covers the theft branch: a revoked
+// token replayed more than refreshReplayGrace (5s) after rotation is treated as
+// reuse and revokes the entire family, including the current rotated token.
+func TestRefreshReplayBeyondGraceRevokesFamily(t *testing.T) {
+	ts, st := newTestServer(t)
+	u := registerUser(t, ts, "grace-revoke@test.local", "Grace Revoke")
+
+	resp := doJSON(t, ts, http.MethodPost, "/auth/refresh", "", map[string]string{"refresh_token": u.RefreshToken})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("rotate: status %d", resp.StatusCode)
+	}
+	current := decodeJSON[testUser](t, resp)
+
+	// Age the consumed token's revocation past the grace window so the next replay
+	// is treated as theft rather than a concurrent race.
+	if _, err := st.Pool.Exec(context.Background(), `
+		UPDATE refresh_tokens SET revoked_at = now() - interval '10 seconds' WHERE token_hash = $1`,
+		auth.HashRefreshToken(u.RefreshToken)); err != nil {
+		t.Fatalf("age revocation: %v", err)
+	}
+
+	resp = doJSON(t, ts, http.MethodPost, "/auth/refresh", "", map[string]string{"refresh_token": u.RefreshToken})
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("beyond-grace replay: status %d, want 401", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	// The whole family is now revoked, so the current rotated token is dead too.
+	resp = doJSON(t, ts, http.MethodPost, "/auth/refresh", "", map[string]string{"refresh_token": current.RefreshToken})
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("beyond-grace replay did not revoke current family token: status %d, want 401", resp.StatusCode)
+	}
+	resp.Body.Close()
+}
+
 func TestConcurrentRefreshOnlyOneRotationSucceeds(t *testing.T) {
 	ts, _ := newTestServer(t)
 	u := registerUser(t, ts, "refresh-race@test.local", "Refresh Race")

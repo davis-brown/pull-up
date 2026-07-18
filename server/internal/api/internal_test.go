@@ -142,6 +142,48 @@ func TestInternalMediaAuthorizationAndDeletionQueue(t *testing.T) {
 	ack(keys)
 }
 
+// TestAvatarFinalizeBeforePatchStillClaims reproduces the real Worker-mediated
+// upload order: the client creates a pending avatar upload, the Worker calls
+// /internal/media/uploaded when the R2 PUT lands, and only THEN does the client
+// PATCH /me with the avatar_url. Regression test for the finalize step deleting
+// the pending_uploads row prematurely, which made every avatar PATCH fail with
+// 400 "avatar_url must reference a pending upload".
+func TestAvatarFinalizeBeforePatchStillClaims(t *testing.T) {
+	ts, _ := newTestServer(t)
+	u := registerUser(t, ts, "avatar-finalize@test.local", "Avatar Finalize")
+
+	resp := doJSON(t, ts, http.MethodPost, "/me/avatar", u.AccessToken, nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("create avatar upload: status %d: %s", resp.StatusCode, readBody(t, resp))
+	}
+	body := decodeJSON[struct {
+		AvatarURL string `json:"avatar_url"`
+	}](t, resp)
+	key := strings.TrimPrefix(body.AvatarURL, "/photos/")
+
+	// The Worker finalizes the object as soon as the upload PUT succeeds, before
+	// the client's PATCH /me arrives.
+	resp = doJSONHeaders(t, ts, http.MethodPost, "/internal/media/uploaded", "",
+		map[string]string{"key": key}, map[string]string{"X-Internal-Task": "test-internal-secret"})
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("finalize avatar: status %d: %s", resp.StatusCode, readBody(t, resp))
+	}
+	resp.Body.Close()
+
+	// The pending row must still exist so PATCH can claim it.
+	resp = doJSON(t, ts, http.MethodPatch, "/me", u.AccessToken, map[string]any{"avatar_url": body.AvatarURL})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("patch avatar after finalize: status %d: %s", resp.StatusCode, readBody(t, resp))
+	}
+	resp.Body.Close()
+	resp = doJSON(t, ts, http.MethodGet, "/users/"+u.User.ID, "", nil)
+	if p := decodeJSON[struct {
+		AvatarURL *string `json:"avatar_url"`
+	}](t, resp); p.AvatarURL == nil || *p.AvatarURL != body.AvatarURL {
+		t.Errorf("avatar not set after finalize+patch")
+	}
+}
+
 func TestInternalDrainSucceedsWithSecret(t *testing.T) {
 	ts, _ := newTestServer(t)
 	req, err := http.NewRequest(http.MethodPost, ts.URL+"/api/v1/internal/drain", nil)
