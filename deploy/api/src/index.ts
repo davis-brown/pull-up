@@ -28,6 +28,11 @@ const MAX_INTERNAL_JSON_BYTES = 256 * 1024;
 const MAX_DELETION_BATCH = 100;
 const PHOTO_READ_WINDOW_MS = 60_000;
 const PHOTO_READ_MAX_PER_WINDOW = 100;
+// A scanner probes many distinct keys and gets a 404 for almost all of them,
+// whereas a legitimate viewer requests keys that exist. Bounding not-found
+// responses per client is therefore the signal that actually limits blind
+// enumeration, without ever throttling real gallery browsing.
+const PHOTO_MISS_MAX_PER_WINDOW = 40;
 const EMAIL_TOKEN_HEADER = "X-Pull-Up-Email-Verification-Token";
 const EMAIL_EXPIRY_HEADER = "X-Pull-Up-Email-Verification-Expires";
 const EMAIL_TO_HEADER = "X-Pull-Up-Email-Verification-To";
@@ -61,20 +66,44 @@ export class ApiContainer extends Container<RuntimeEnv> {
 
 class UploadBodyError extends Error {}
 
-// Simple in-memory sliding-window rate limiter for anonymous photo reads.
-// Keys are per-PoP and per-object; the limit is intentionally lenient for
-// legitimate gallery browsing but blocks blind scanning.
+// Simple in-memory fixed-window counters for anonymous photo reads. State is
+// per-PoP/per-isolate, so these are best-effort cost/abuse guards layered on top
+// of the real protection (122 bits of unguessable key entropy plus a backend
+// authorization check), not a hard security boundary.
 const readRateLimit = new Map<string, { count: number; resetAt: number }>();
+const missRateLimit = new Map<string, { count: number; resetAt: number }>();
 
-function trackPhotoRead(key: string): { allowed: boolean; count: number } {
+function bumpWindow(
+  store: Map<string, { count: number; resetAt: number }>,
+  key: string,
+  max: number,
+): { allowed: boolean; count: number } {
   const now = Date.now();
-  const entry = readRateLimit.get(key);
+  const entry = store.get(key);
   if (!entry || now >= entry.resetAt) {
-    readRateLimit.set(key, { count: 1, resetAt: now + PHOTO_READ_WINDOW_MS });
+    store.set(key, { count: 1, resetAt: now + PHOTO_READ_WINDOW_MS });
     return { allowed: true, count: 1 };
   }
   entry.count += 1;
-  return { allowed: entry.count <= PHOTO_READ_MAX_PER_WINDOW, count: entry.count };
+  return { allowed: entry.count <= max, count: entry.count };
+}
+
+// Flood guard for repeated reads of a single known object.
+function trackPhotoRead(key: string): { allowed: boolean; count: number } {
+  return bumpWindow(readRateLimit, key, PHOTO_READ_MAX_PER_WINDOW);
+}
+
+// Scanning guard: record a not-found response from a client (enumeration signal).
+function trackPhotoMiss(client: string): void {
+  bumpWindow(missRateLimit, client, PHOTO_MISS_MAX_PER_WINDOW);
+}
+
+// Read-only check of whether a client has already exceeded its not-found budget.
+// Does not itself count against the window, so valid reads never trip it.
+function overPhotoMissBudget(client: string): boolean {
+  const entry = missRateLimit.get(client);
+  if (!entry || Date.now() >= entry.resetAt) return false;
+  return entry.count > PHOTO_MISS_MAX_PER_WINDOW;
 }
 
 function jsonResponse(body: unknown, status: number, headers?: HeadersInit): Response {
@@ -478,9 +507,15 @@ async function handlePhotoRead(
   key: string,
 ): Promise<Response> {
   // Rate-limit anonymous reads at the edge before any backend work.
-  const rateLimitKey = `${request.cf?.colo ?? "unknown"}:${key}`;
-  const readLimit = trackPhotoRead(rateLimitKey);
+  const colo = request.cf?.colo ?? "unknown";
+  const client = `${colo}:${request.headers.get("CF-Connecting-IP") ?? "unknown"}`;
+  const readLimit = trackPhotoRead(`${colo}:${key}`);
   if (!readLimit.allowed) {
+    return photoError(request, env, 429, "too many photo reads");
+  }
+  // A client already over the not-found budget is enumerating keys; stop it
+  // before spending an R2 lookup on yet another guess.
+  if (overPhotoMissBudget(client)) {
     return photoError(request, env, 429, "too many photo reads");
   }
 
@@ -489,6 +524,8 @@ async function handlePhotoRead(
   const headOnly = request.method === "HEAD";
   const object = headOnly ? await env.PHOTOS.head(key) : await env.PHOTOS.get(key);
   if (!object) {
+    // Count this miss so sustained enumeration trips the guard above.
+    trackPhotoMiss(client);
     return photoError(request, env, 404, "not found");
   }
 

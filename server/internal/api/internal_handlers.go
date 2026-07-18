@@ -135,13 +135,12 @@ func (s *Server) handleInternalMediaUploaded(w http.ResponseWriter, r *http.Requ
 			return
 		}
 	}
-	// Remove the pending-upload record so the key can be referenced durably.
-	// Avatars are finalized via UpdateUser, which already claims the pending row;
-	// this handles court photos that were created as pending.
-	if _, err := q.DeletePendingUploads(r.Context(), []string{req.Key}); err != nil {
-		s.internalError(w, "remove pending upload", err)
-		return
-	}
+	// Do not remove the pending-upload record here. Avatars are finalized later
+	// by PATCH /me, which claims the pending row via ClaimPendingUpload; deleting
+	// it now (this call fires during the upload PUT, before the client's PATCH)
+	// would make that claim fail and break every avatar upload. Court photos never
+	// create a pending_uploads row, so there is nothing to remove for them either.
+	// Abandoned pending uploads are reaped by drainStalePendingUploads.
 	// Schedule cleanup of any future object that becomes orphaned at this key.
 	if err := q.ScheduleUploadedObjectCleanup(r.Context(), req.Key); err != nil {
 		s.internalError(w, "schedule abandoned upload cleanup", err)
