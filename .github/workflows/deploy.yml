@@ -113,6 +113,9 @@ jobs:
           # link) until the Play/App Store listings exist.
           EXPO_PUBLIC_ANDROID_STORE_URL: ${{ vars.ANDROID_STORE_URL }}
           EXPO_PUBLIC_IOS_STORE_URL: ${{ vars.IOS_STORE_URL }}
+          # Crash reporting (same DSN as the native builds in app/eas.json;
+          # DSNs are client-side values, safe in the repo).
+          EXPO_PUBLIC_SENTRY_DSN: "https://38788832af3499c169cc616fada49a7b@o4511762347786240.ingest.us.sentry.io/4511762353684480"
         run: |
           test -n "$WEB_ORIGIN"
           case "$WEB_ORIGIN" in https://*) ;; *) exit 1 ;; esac
