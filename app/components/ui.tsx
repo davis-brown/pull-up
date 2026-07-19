@@ -31,9 +31,10 @@ export function withAlpha(hex: string, alpha: number): string {
 
 type ButtonVariant = "primary" | "secondary" | "danger" | "ghost";
 
-// Width the sheen band travels across; generous enough for full-bleed
-// buttons on tablets while staying cheap (transform-only animation).
+// Distance the border highlight travels per sweep; generous enough for
+// full-bleed buttons on tablets while staying cheap (transform-only).
 const SHEEN_TRAVEL = 640;
+const RING_WIDTH = 2;
 
 export function Button({
   title,
@@ -52,11 +53,33 @@ export function Button({
   compact?: boolean;
 }) {
   const t = useTheme();
-  // Machined-metal press feedback: the button settles slightly (scale) while
-  // a sheen band sweeps across the face, like light moving over brushed metal.
+  // Machined-metal border: primary/secondary sit inside a titanium gradient
+  // ring. While hovered (web/pointer) a light band sweeps around the ring in
+  // a loop; on touch, pressing fires one sweep. Press also settles the
+  // button slightly via scale.
   const scale = useRef(new Animated.Value(1)).current;
   const sheenX = useRef(new Animated.Value(-SHEEN_TRAVEL / 2)).current;
+  const sweepLoop = useRef<Animated.CompositeAnimation | null>(null);
 
+  const singleSweep = () =>
+    Animated.timing(sheenX, {
+      toValue: SHEEN_TRAVEL / 2,
+      duration: 700,
+      useNativeDriver: true,
+    });
+  const hoverIn = () => {
+    sheenX.setValue(-SHEEN_TRAVEL / 2);
+    sweepLoop.current = Animated.loop(
+      Animated.sequence([singleSweep(), Animated.delay(250)]),
+      { resetBeforeIteration: true },
+    );
+    sweepLoop.current.start();
+  };
+  const hoverOut = () => {
+    sweepLoop.current?.stop();
+    sweepLoop.current = null;
+    sheenX.setValue(-SHEEN_TRAVEL / 2);
+  };
   const pressIn = () => {
     Animated.spring(scale, {
       toValue: 0.97,
@@ -64,24 +87,26 @@ export function Button({
       bounciness: 0,
       useNativeDriver: true,
     }).start();
-    sheenX.setValue(-SHEEN_TRAVEL / 2);
-    Animated.timing(sheenX, {
-      toValue: SHEEN_TRAVEL / 2,
-      duration: 450,
-      useNativeDriver: true,
-    }).start();
+    // Touch devices have no hover; give them one sweep per press.
+    if (!sweepLoop.current) {
+      sheenX.setValue(-SHEEN_TRAVEL / 2);
+      singleSweep().start();
+    }
   };
   const pressOut = () => {
     Animated.spring(scale, { toValue: 1, speed: 30, bounciness: 6, useNativeDriver: true }).start();
   };
 
-  // primary and secondary render as metal (accent alloy / bare titanium);
-  // danger and ghost stay flat so destructive and quiet actions read as such.
-  const metalStops: Partial<Record<ButtonVariant, [string, string]>> = {
-    primary: [t.colors.accentMetalTop, t.colors.accentMetalBottom],
-    secondary: [t.colors.metalTop, t.colors.metalBottom],
+  // primary and secondary wear the metal ring; danger and ghost stay flat so
+  // destructive and quiet actions read as such.
+  const ringed = variant === "primary" || variant === "secondary";
+  const face: Record<ButtonVariant, string> = {
+    primary: t.colors.accent,
+    secondary: t.colors.surface,
+    danger: "transparent",
+    ghost: "transparent",
   };
-  const pressedBackground: Record<ButtonVariant, string> = {
+  const pressedFace: Record<ButtonVariant, string> = {
     primary: t.colors.accentPressed,
     secondary: t.colors.surfaceMuted,
     danger: t.colors.warningSurface,
@@ -93,48 +118,68 @@ export function Button({
     danger: t.colors.danger,
     ghost: t.colors.textSecondary,
   };
-  const borderColor: Record<ButtonVariant, string> = {
-    primary: t.colors.accentPressed,
-    secondary: t.colors.chipBorder,
-    danger: t.colors.danger,
-    ghost: "transparent",
-  };
-  const stops = metalStops[variant];
+  const content = busy ? (
+    <ActivityIndicator color={label[variant]} />
+  ) : (
+    <Text style={[t.type.button, { color: label[variant] }]}>{title}</Text>
+  );
+
+  if (!ringed) {
+    return (
+      <Animated.View style={{ transform: [{ scale }] }}>
+        <Pressable
+          onPress={onPress}
+          disabled={disabled || busy}
+          onPressIn={pressIn}
+          onPressOut={pressOut}
+          style={({ pressed }) => [
+            styles.button,
+            compact ? styles.buttonCompact : null,
+            {
+              backgroundColor: pressed ? pressedFace[variant] : "transparent",
+              borderColor: variant === "danger" ? t.colors.danger : "transparent",
+              borderRadius: 14,
+              opacity: disabled || busy ? 0.45 : 1,
+            },
+          ]}
+        >
+          {content}
+        </Pressable>
+      </Animated.View>
+    );
+  }
+
   return (
     <Animated.View style={{ transform: [{ scale }] }}>
       <Pressable
         onPress={onPress}
         disabled={disabled || busy}
+        onHoverIn={hoverIn}
+        onHoverOut={hoverOut}
         onPressIn={pressIn}
         onPressOut={pressOut}
-        style={({ pressed }) => [
-          styles.button,
-          compact ? styles.buttonCompact : null,
+        style={[
+          styles.ring,
           variant === "primary" ? t.shadows.cta : null,
-          {
-            backgroundColor: pressed && !stops ? pressedBackground[variant] : "transparent",
-            borderColor: borderColor[variant],
-            borderRadius: 14,
-            opacity: disabled || busy ? 0.45 : 1,
-            overflow: "hidden",
-          },
+          { borderRadius: 14, opacity: disabled || busy ? 0.45 : 1 },
         ]}
       >
-        {stops ? (
+        {({ pressed }) => (
           <>
+            {/* The ring: a metal gradient visible only through the padding
+                gap around the face, plus the animated highlight band. */}
             <LinearGradient
-              colors={stops}
+              colors={[t.colors.metalTop, t.colors.metalBottom]}
               start={{ x: 0.5, y: 0 }}
               end={{ x: 0.5, y: 1 }}
               style={StyleSheet.absoluteFill}
             />
-            {/* Milled top edge: a hairline highlight where light would catch. */}
-            <View
-              style={[styles.metalEdge, { backgroundColor: t.colors.metalEdge }]}
-            />
             <Animated.View
               pointerEvents="none"
-              style={[styles.sheen, { transform: [{ translateX: sheenX }, { rotate: "18deg" }] }]}
+              style={[
+                styles.ringSheen,
+                { transform: [{ translateX: sheenX }, { rotate: "18deg" }] },
+              ]}
             >
               <LinearGradient
                 colors={["transparent", t.colors.sheen, "transparent"]}
@@ -143,12 +188,19 @@ export function Button({
                 style={StyleSheet.absoluteFill}
               />
             </Animated.View>
+            <View
+              style={[
+                styles.face,
+                compact ? styles.faceCompact : null,
+                {
+                  borderRadius: 14 - RING_WIDTH,
+                  backgroundColor: pressed ? pressedFace[variant] : face[variant],
+                },
+              ]}
+            >
+              {content}
+            </View>
           </>
-        ) : null}
-        {busy ? (
-          <ActivityIndicator color={label[variant]} />
-        ) : (
-          <Text style={[t.type.button, { color: label[variant] }]}>{title}</Text>
         )}
       </Pressable>
     </Animated.View>
@@ -340,20 +392,29 @@ const styles = StyleSheet.create({
     marginVertical: 0,
     minHeight: 40,
   },
-  metalEdge: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    height: StyleSheet.hairlineWidth * 2,
+  ring: {
+    padding: RING_WIDTH,
+    marginVertical: 6,
+    overflow: "hidden",
   },
-  sheen: {
+  ringSheen: {
     position: "absolute",
     top: -20,
     bottom: -20,
     width: 90,
     left: "50%",
     marginLeft: -45,
+  },
+  face: {
+    paddingVertical: 13 - RING_WIDTH,
+    paddingHorizontal: 20,
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 48 - RING_WIDTH * 2,
+  },
+  faceCompact: {
+    paddingVertical: 8 - RING_WIDTH,
+    minHeight: 40 - RING_WIDTH * 2,
   },
   input: {
     borderWidth: 1,
