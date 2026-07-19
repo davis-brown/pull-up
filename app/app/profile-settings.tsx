@@ -527,6 +527,14 @@ function ProfileSettingsContent() {
         </Card>
       )}
 
+      <Button
+        title="Send feedback"
+        variant="secondary"
+        onPress={() =>
+          router.push(`/flag?entityType=feedback&entityId=${user?.id ?? ""}` as Href)
+        }
+      />
+
       <Card>
         <View style={styles.legalRow}>
           <Pressable onPress={() => router.push("/privacy")} hitSlop={8}>

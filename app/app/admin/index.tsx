@@ -25,6 +25,7 @@ const entityLabels: Record<Flag["entity_type"], string> = {
   message: "Message",
   session: "Planned run",
   user: "Player",
+  feedback: "App feedback",
 };
 
 function SectionLabel({ children }: { children: string }) {
