@@ -53,6 +53,17 @@ func TestCreateFlagValidation(t *testing.T) {
 		t.Fatalf("valid flag: status %d: %s", resp.StatusCode, readBody(t, resp))
 	}
 	resp.Body.Close()
+
+	// App feedback needs no meaningful target: the server records it against
+	// the reporting user regardless of the entity_id sent.
+	resp = doJSON(t, ts, http.MethodPost, "/flags", u.AccessToken, map[string]any{
+		"entity_type": "feedback", "entity_id": u.User.ID, "reason": "Map jumps when I check in",
+	})
+	if resp.StatusCode != http.StatusCreated {
+		defer resp.Body.Close()
+		t.Fatalf("feedback flag: status %d: %s", resp.StatusCode, readBody(t, resp))
+	}
+	resp.Body.Close()
 }
 
 func TestAdminRoutesForbiddenForRegularUsers(t *testing.T) {

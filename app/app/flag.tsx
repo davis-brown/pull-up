@@ -16,6 +16,7 @@ const entityLabels: Record<FlagEntityType, string> = {
   message: "message",
   session: "planned run",
   user: "player",
+  feedback: "feedback",
 };
 
 function parseEntityType(value: unknown): FlagEntityType | undefined {
@@ -74,24 +75,35 @@ function FlagContent({
     );
   };
 
+  const isFeedback = entityType === "feedback";
   return (
     <ScrollView
       style={{ backgroundColor: t.colors.background }}
       contentContainerStyle={{ padding: t.spacing.lg }}
     >
         <Text style={[t.type.body, { color: t.colors.textSecondary }]}>
-          Report this {entityLabels[entityType] ?? "item"} to moderators. What's the issue?
+          {isFeedback
+            ? "Found a bug or have an idea? This goes straight to the developer."
+            : `Report this ${entityLabels[entityType] ?? "item"} to moderators. What's the issue?`}
         </Text>
         <Field
-          label="Reason"
+          label={isFeedback ? "Your feedback" : "Reason"}
           value={reason}
           onChangeText={setReason}
-          placeholder="e.g. Wrong location, offensive photo, spam"
+          placeholder={
+            isFeedback
+              ? "e.g. The map jumps when I check in / It'd be great if…"
+              : "e.g. Wrong location, offensive photo, spam"
+          }
           multiline
           numberOfLines={4}
         />
         <ErrorText message={error} />
-        <Button title="Submit report" busy={createFlag.isPending} onPress={submit} />
+        <Button
+          title={isFeedback ? "Send feedback" : "Submit report"}
+          busy={createFlag.isPending}
+          onPress={submit}
+        />
     </ScrollView>
   );
 }

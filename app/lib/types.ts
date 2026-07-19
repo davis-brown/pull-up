@@ -217,7 +217,14 @@ export interface NearbyDuplicate {
   distance_m: number;
 }
 
-export type FlagEntityType = "court" | "photo" | "report" | "message" | "session" | "user";
+export type FlagEntityType =
+  | "court"
+  | "photo"
+  | "report"
+  | "message"
+  | "session"
+  | "user"
+  | "feedback";
 
 export interface BlockedUser {
   blocked_id: string;
