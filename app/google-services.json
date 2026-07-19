@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "481916457280",
+    "project_id": "pull-up-bb392",
+    "storage_bucket": "pull-up-bb392.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:481916457280:android:b09e2b2d9befe354ca6aa5",
+        "android_client_info": {
+          "package_name": "com.pullup.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDOJo8Ojv87RzITEoTYG-muR9kJvr_Wlyw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
