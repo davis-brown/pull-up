@@ -16,7 +16,7 @@ commands.
       `com.pullup.app`, download `google-services.json` into `app/`
       (`app.config.ts` picks it up automatically when present).
 - [ ] **Reviewer inbox** — Cloudflare Email Routing forwarding
-      `reviewer@pull-up.davisbrown.dev` to a personal inbox (see
+      `reviewer@davisbrown.dev` to a personal inbox (see
       `review-notes.md`).
 - [ ] **App Store Connect / Play Console records** — once the iOS record
       exists, set the Worker dashboard vars `IOS_APP_ID`
