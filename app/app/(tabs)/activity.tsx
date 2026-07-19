@@ -15,7 +15,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { FeedHeader } from "@/components/FeedHeader";
 import { FilterSheet } from "@/components/FilterSheet";
 import { QueryError } from "@/components/QueryError";
-import { Card } from "@/components/ui";
+import { Card, FullScreenLoader } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { filtersToQuery, type CourtFilters } from "@/lib/court-filters";
@@ -72,11 +72,7 @@ export default function ActivityScreen() {
   });
 
   if (!pos || isLoading) {
-    return (
-      <View style={[styles.center, { backgroundColor: t.colors.background }]}>
-        <ActivityIndicator size="large" color={t.colors.accent} />
-      </View>
-    );
+    return <FullScreenLoader />;
   }
 
   if (error && !data) {
