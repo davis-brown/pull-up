@@ -2,12 +2,15 @@ import { StyleSheet, Text, View } from "react-native";
 import { Overline } from "@/components/ui";
 import { busiestWindow, type CourtForecast } from "@/lib/forecast";
 import { useTheme } from "@/lib/theme";
+import { yourWindowHours } from "@/lib/your-window";
 
 // Hours displayed in the mini bar chart (8 AM through 10 PM inclusive).
 const START_HOUR = 8;
 const END_HOUR = 22;
 const MAX_BAR_HEIGHT = 44;
 const BAR_WIDTH = 14;
+const WINDOW_MARK_HEIGHT = 3;
+const WINDOW_MARK_GAP = 3;
 
 function to12(hour: number): number {
   const h = ((hour % 24) + 24) % 24;
@@ -30,18 +33,37 @@ function windowLabel(win: { start: number; end: number }): string {
 }
 
 // Right-aligned mini bar chart of a court's historical hourly turnout, paired
-// with its busiest-window label. Renders nothing without history — a court
-// with no baseline has nothing meaningful to plot. Reused by Task 14.
-export function PopularTimes({ forecast }: { forecast: CourtForecast | undefined }) {
+// with its busiest-window label. Hours inside the player's own availability
+// windows (the "your window" lens) get an accent tick under the bar. Without
+// history there is nothing meaningful to plot, so the section says so
+// honestly — popular times fill in as check-ins accumulate.
+export function PopularTimes({
+  forecast,
+  availability = [],
+}: {
+  forecast: CourtForecast | undefined;
+  availability?: string[];
+}) {
   const t = useTheme();
-  if (!forecast?.has_history) return null;
+  if (!forecast?.has_history) {
+    return (
+      <View>
+        <Overline>Popular Times</Overline>
+        <Text style={[t.type.caption, styles.caption, { color: t.colors.textMuted }]}>
+          No turnout history yet — popular times fill in as players check in.
+        </Text>
+      </View>
+    );
+  }
 
   const hours = forecast.hours;
   const peak = Math.max(...hours, 0);
   const win = busiestWindow(hours);
+  const mine = yourWindowHours(availability, new Date());
 
   const bars: number[] = [];
   for (let h = START_HOUR; h <= END_HOUR; h++) bars.push(h);
+  const anyMine = bars.some((h) => mine.has(h));
 
   return (
     <View style={styles.row}>
@@ -51,6 +73,14 @@ export function PopularTimes({ forecast }: { forecast: CourtForecast | undefined
           <Text style={[t.type.caption, styles.caption, { color: t.colors.textSecondary }]}>
             busiest {windowLabel(win)}
           </Text>
+        ) : null}
+        {anyMine ? (
+          <View style={[styles.legend, { marginTop: t.spacing.sm }]}>
+            <View style={[styles.legendMark, { backgroundColor: t.colors.accent }]} />
+            <Text style={[t.type.caption, { color: t.colors.textSecondary }]}>
+              Your window
+            </Text>
+          </View>
         ) : null}
       </View>
       <View style={styles.chart}>
@@ -65,15 +95,22 @@ export function PopularTimes({ forecast }: { forecast: CourtForecast | undefined
               ? t.colors.accentSoft
               : t.colors.surfaceMuted;
           return (
-            <View
-              key={h}
-              style={{
-                width: BAR_WIDTH,
-                height,
-                borderRadius: 3,
-                backgroundColor: color,
-              }}
-            />
+            <View key={h} style={styles.barCol}>
+              <View
+                style={{
+                  width: BAR_WIDTH,
+                  height,
+                  borderRadius: 3,
+                  backgroundColor: color,
+                }}
+              />
+              <View
+                style={[
+                  styles.windowMark,
+                  { backgroundColor: mine.has(h) ? t.colors.accent : "transparent" },
+                ]}
+              />
+            </View>
           );
         })}
       </View>
@@ -95,10 +132,29 @@ const styles = StyleSheet.create({
   caption: {
     marginTop: 4,
   },
+  legend: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  legendMark: {
+    width: 10,
+    height: WINDOW_MARK_HEIGHT,
+    borderRadius: WINDOW_MARK_HEIGHT / 2,
+  },
   chart: {
     flexDirection: "row",
     alignItems: "flex-end",
     gap: 3,
-    height: MAX_BAR_HEIGHT,
+    height: MAX_BAR_HEIGHT + WINDOW_MARK_GAP + WINDOW_MARK_HEIGHT,
+  },
+  barCol: {
+    alignItems: "center",
+    gap: WINDOW_MARK_GAP,
+  },
+  windowMark: {
+    width: BAR_WIDTH,
+    height: WINDOW_MARK_HEIGHT,
+    borderRadius: WINDOW_MARK_HEIGHT / 2,
   },
 });
