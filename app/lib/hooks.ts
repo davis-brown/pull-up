@@ -25,6 +25,7 @@ import type {
   CheckInHistoryItem,
   CourtActivity,
   CourtDetail,
+  CourtFact,
   CourtMessage,
   CourtPhoto,
   CourtSession,
@@ -341,6 +342,34 @@ export function useCreateFlag() {
   return useMutation({
     mutationFn: (flag: NewFlag) =>
       api<void>("/flags", { method: "POST", body: JSON.stringify(flag) }),
+  });
+}
+
+export function useCourtFacts(courtId: string) {
+  return useQuery({
+    queryKey: ["courts", courtId, "facts"],
+    queryFn: async () => {
+      const res = await api<{ facts: CourtFact[] }>(`/courts/${safePathSegment(courtId)}/facts`);
+      return res.facts;
+    },
+  });
+}
+
+export function useConfirmCourtFact(courtId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { fact: string; value: string }) => {
+      const res = await api<{ facts: CourtFact[] }>(
+        `/courts/${safePathSegment(courtId)}/facts`,
+        { method: "POST", body: JSON.stringify(input) },
+      );
+      return res.facts;
+    },
+    onSuccess: (facts) => {
+      queryClient.setQueryData(["courts", courtId, "facts"], facts);
+      // The stored court value may have moved with the majority.
+      void queryClient.invalidateQueries({ queryKey: ["courts", courtId] });
+    },
   });
 }
 

@@ -15,3 +15,11 @@ describe("relativeSince", () => {
     expect(relativeSince("2026-07-10T18:40:00Z", now)).toBe("just now");
   });
 });
+
+describe("relativeSince longer spans", () => {
+  const now = new Date("2026-07-10T18:30:00Z").getTime();
+  it("uses days under a week and weeks beyond", () => {
+    expect(relativeSince("2026-07-08T18:30:00Z", now)).toBe("2d ago");
+    expect(relativeSince("2026-06-19T18:30:00Z", now)).toBe("3w ago");
+  });
+});
