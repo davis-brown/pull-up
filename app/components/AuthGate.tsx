@@ -1,9 +1,8 @@
 import { Redirect, usePathname, type Href } from "expo-router";
 import type { ReactNode } from "react";
-import { ActivityIndicator, StyleSheet, View } from "react-native";
+import { FullScreenLoader } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
 import { signInHref } from "@/lib/routes";
-import { useTheme } from "@/lib/theme";
 
 // Wraps route groups that require a signed-in user.
 export function AuthGate({
@@ -14,21 +13,12 @@ export function AuthGate({
   next?: string;
 }) {
   const { user, loading } = useAuth();
-  const t = useTheme();
   const pathname = usePathname();
   if (loading) {
-    return (
-      <View style={[styles.center, { backgroundColor: t.colors.background }]}>
-        <ActivityIndicator size="large" color={t.colors.accent} />
-      </View>
-    );
+    return <FullScreenLoader />;
   }
   if (!user) {
     return <Redirect href={signInHref(next ?? pathname) as Href} />;
   }
   return <>{children}</>;
 }
-
-const styles = StyleSheet.create({
-  center: { flex: 1, alignItems: "center", justifyContent: "center" },
-});
