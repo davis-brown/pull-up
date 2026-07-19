@@ -5,13 +5,11 @@
 Create a fresh reviewer account before each submission and verify its email
 BEFORE submitting, so reviewers never need inbox access:
 
-- email: `reviewer@pull-up.davisbrown.dev`  password: `<generate per submission>`
+- email: `reviewer@davisbrown.dev`  password: `<generate per submission>`
 
 The address must route somewhere we can read the verification link —
 Cloudflare Email Routing on the `davisbrown.dev` zone, forwarding
-`reviewer@pull-up.davisbrown.dev` to a personal inbox (Email *sending* on
-this domain is already enabled; routing/receiving is a separate one-time
-dashboard setup).
+`reviewer@davisbrown.dev` to a personal inbox (a one-time dashboard setup).
 
 Or reviewers can register in-app in ~10 seconds. Browsing the map, courts,
 activity, runs, and chat requires no account at all (guest mode).
