@@ -13,6 +13,8 @@ export interface User {
   position: Position | null;
   height_cm: number | null;
   style_tags: string[];
+  skill_level: string | null;
+  availability: string[];
 }
 
 // /me/stats (Task 6): the player card's stats, badges, and home courts.

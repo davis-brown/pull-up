@@ -243,4 +243,6 @@ type User struct {
 	HeightCm        *int16     `json:"height_cm"`
 	StyleTags       []string   `json:"style_tags"`
 	EmailVerifiedAt *time.Time `json:"email_verified_at"`
+	SkillLevel      *string    `json:"skill_level"`
+	Availability    []string   `json:"availability"`
 }
