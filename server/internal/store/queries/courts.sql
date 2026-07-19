@@ -6,6 +6,7 @@ SELECT
     c.address, c.hoop_count, c.indoor, c.surface, c.lighting, c.is_public,
     c.drinking_water, c.toilets, c.parking, c.fenced,
     c.covered, c.fee, c.access,
+    c.rim_type, c.net_type,
     c.source, c.status,
     ac.active_count,
     lr.player_count AS latest_player_count,
@@ -50,6 +51,7 @@ SELECT
     c.address, c.hoop_count, c.indoor, c.surface, c.lighting, c.is_public,
     c.drinking_water, c.toilets, c.parking, c.fenced,
     c.covered, c.fee, c.access,
+    c.rim_type, c.net_type,
     c.source, c.status,
     ST_Distance(c.location, ST_SetSRID(ST_MakePoint(sqlc.arg(lng)::float8, sqlc.arg(lat)::float8), 4326)::geography)::float8 AS distance_m,
     ac.active_count,
@@ -93,7 +95,8 @@ SELECT
     ST_X(c.location::geometry)::float8 AS lng,
     c.address, c.hoop_count, c.indoor, c.surface, c.lighting, c.is_public,
     c.drinking_water, c.toilets, c.parking, c.fenced,
-    c.access, c.fee, c.covered, c.opening_hours, c.website, c.description,
+    c.access, c.fee, c.covered, c.rim_type, c.net_type,
+    c.opening_hours, c.website, c.description,
     c.source, c.osm_type, c.osm_id, c.status, c.submitted_by, c.created_at,
     c.enriched_at,
     ac.active_count,
@@ -207,6 +210,8 @@ UPDATE courts SET
     toilets        = coalesce(sqlc.narg('toilets'), toilets),
     parking        = coalesce(sqlc.narg('parking'), parking),
     fenced         = coalesce(sqlc.narg('fenced'), fenced),
+    rim_type       = coalesce(sqlc.narg('rim_type'), rim_type),
+    net_type       = coalesce(sqlc.narg('net_type'), net_type),
     updated_at     = now()
 WHERE id = sqlc.arg('id')
 RETURNING id;
