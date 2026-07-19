@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { KeyboardAvoidingView, Platform, StyleSheet, Text } from "react-native";
 import { Button, ErrorText, Field } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
+import { getErrorMessage } from "@/lib/errors";
 import { useTheme } from "@/lib/theme";
 
 function useVerificationToken(): string | undefined {
@@ -45,7 +46,7 @@ export default function VerifyEmailScreen() {
     try {
       await verifyEmail(token);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not verify this email.");
+      setError(getErrorMessage(e, "Could not verify this email."));
     } finally {
       setBusy(false);
     }
@@ -60,7 +61,7 @@ export default function VerifyEmailScreen() {
       await requestEmailVerification(normalized);
       setMessage("If that account is awaiting verification, a new link is on its way.");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not request a new link.");
+      setError(getErrorMessage(e, "Could not request a new link."));
     } finally {
       setBusy(false);
     }

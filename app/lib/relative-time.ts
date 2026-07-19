@@ -10,3 +10,9 @@ export function relativeSince(iso: string, now: number = Date.now()): string {
   if (days < 7) return `${days}d ago`;
   return `${Math.floor(days / 7)}w ago`;
 }
+
+// Locale-formatted clock time, e.g. "2:45 PM" — used for check-in expiry and
+// session start times.
+export function formatClockTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}

@@ -239,6 +239,15 @@ export function Field(props: TextInputProps & { label: string }) {
   );
 }
 
+export function FullScreenLoader() {
+  const t = useTheme();
+  return (
+    <View style={[styles.fullScreenLoader, { backgroundColor: t.colors.background }]}>
+      <ActivityIndicator size="large" color={t.colors.accent} />
+    </View>
+  );
+}
+
 export function ErrorText({ message }: { message: string | null }) {
   const t = useTheme();
   if (!message) return null;
@@ -377,6 +386,7 @@ export function SegmentedToggle({
 }
 
 const styles = StyleSheet.create({
+  fullScreenLoader: { flex: 1, alignItems: "center", justifyContent: "center" },
   button: {
     borderWidth: 1.5,
     paddingVertical: 13,

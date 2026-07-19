@@ -3,6 +3,7 @@ import {
   useMutation,
   useQuery,
   useQueryClient,
+  type QueryClient,
 } from "@tanstack/react-query";
 import {
   api,
@@ -144,6 +145,22 @@ export function useCurrentCheckIn() {
   });
 }
 
+// Shared by check-in and check-out: both change which court the user is
+// currently at, which court lists, the feed, and their own check-in state.
+function invalidateCheckInState(qc: QueryClient) {
+  void qc.invalidateQueries({ queryKey: ["courts"] });
+  void qc.invalidateQueries({ queryKey: ["me", "check-in"] });
+  void qc.invalidateQueries({ queryKey: ["feed"] });
+}
+
+// Shared by session create/RSVP/cancel: all change a court's session list,
+// its turnout forecast, and the feed's upcoming runs.
+function invalidateCourtSessions(qc: QueryClient, courtId: string) {
+  void qc.invalidateQueries({ queryKey: ["courts", courtId, "sessions"] });
+  void qc.invalidateQueries({ queryKey: ["courts", "forecast"] });
+  void qc.invalidateQueries({ queryKey: ["feed"] });
+}
+
 export interface CheckInInput {
   party_size: number;
   has_ball: boolean;
@@ -159,11 +176,7 @@ export function useCheckIn(courtId: string) {
         method: "POST",
         body: JSON.stringify(input),
       }),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["courts"] });
-      void qc.invalidateQueries({ queryKey: ["me", "check-in"] });
-      void qc.invalidateQueries({ queryKey: ["feed"] });
-    },
+    onSuccess: () => invalidateCheckInState(qc),
   });
 }
 
@@ -171,11 +184,7 @@ export function useCheckOut() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: () => api<void>("/check-ins/current", { method: "DELETE" }),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["courts"] });
-      void qc.invalidateQueries({ queryKey: ["me", "check-in"] });
-      void qc.invalidateQueries({ queryKey: ["feed"] });
-    },
+    onSuccess: () => invalidateCheckInState(qc),
   });
 }
 
@@ -391,11 +400,7 @@ export function useCreateSession(courtId: string) {
         method: "POST",
         body: JSON.stringify(session),
       }),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["courts", courtId, "sessions"] });
-      void qc.invalidateQueries({ queryKey: ["courts", "forecast"] });
-      void qc.invalidateQueries({ queryKey: ["feed"] });
-    },
+    onSuccess: () => invalidateCourtSessions(qc, courtId),
   });
 }
 
@@ -407,12 +412,7 @@ export function useRSVP(courtId: string) {
         method: "PUT",
         body: JSON.stringify({ status: rsvp.status }),
       }),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["courts", courtId, "sessions"] });
-      // Session going-counts feed the turnout forecasts (map sheet scrubber).
-      void qc.invalidateQueries({ queryKey: ["courts", "forecast"] });
-      void qc.invalidateQueries({ queryKey: ["feed"] });
-    },
+    onSuccess: () => invalidateCourtSessions(qc, courtId),
   });
 }
 
@@ -421,11 +421,7 @@ export function useCancelSession(courtId: string) {
   return useMutation({
     mutationFn: (sessionId: string) =>
       api<void>(`/sessions/${idSegment(sessionId)}`, { method: "DELETE" }),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ["courts", courtId, "sessions"] });
-      void qc.invalidateQueries({ queryKey: ["courts", "forecast"] });
-      void qc.invalidateQueries({ queryKey: ["feed"] });
-    },
+    onSuccess: () => invalidateCourtSessions(qc, courtId),
   });
 }
 

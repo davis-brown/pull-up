@@ -3,6 +3,7 @@ import { useState } from "react";
 import { KeyboardAvoidingView, Platform, StyleSheet, Text, View } from "react-native";
 import { Button, ErrorText, Field } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
+import { getErrorMessage } from "@/lib/errors";
 import { useTheme } from "@/lib/theme";
 
 export default function RegisterScreen() {
@@ -30,7 +31,7 @@ export default function RegisterScreen() {
         },
       } as Href);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Registration failed");
+      setError(getErrorMessage(e, "Registration failed"));
     } finally {
       setBusy(false);
     }
