@@ -387,7 +387,7 @@ export default function CourtDetailScreen() {
             )}
 
             <View style={[styles.divided, { borderTopColor: t.colors.border }]}>
-              <PopularTimes forecast={forecast} />
+              <PopularTimes forecast={forecast} availability={user?.availability ?? []} />
             </View>
 
             {/* Directions row between dividers. */}
