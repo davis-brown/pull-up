@@ -8,6 +8,7 @@ import { expectedAt, sessionAt, type CourtForecast } from "@/lib/forecast";
 import { useRSVP } from "@/lib/hooks";
 import { signInHref } from "@/lib/routes";
 import { useTheme } from "@/lib/theme";
+import { yourWindowSummary } from "@/lib/your-window";
 import type { CourtSummary } from "@/lib/types";
 
 function hourLabel(hour: number): string {
@@ -56,6 +57,12 @@ export function MapSheet({
   const statusLine = isNow
     ? `${count} playing now`
     : `~${count} expected at ${hourLabel(scrubHour)}${session ? " · run scheduled" : ""}`;
+
+  // The "your window" lens: one honest line when the player's availability
+  // overlaps this court's historical curve — omitted entirely when forecast
+  // history is thin, their windows don't apply today, or their windows are
+  // historically dead here.
+  const windowLine = yourWindowSummary(forecast, user?.availability ?? [], new Date());
 
   const imIn = () => {
     if (isNow) {
@@ -143,6 +150,11 @@ export function MapSheet({
           <Text style={[t.type.caption, { color: t.colors.textSecondary }]} numberOfLines={1}>
             {statusLine}
           </Text>
+          {windowLine ? (
+            <Text style={[t.type.caption, { color: t.colors.accent }]} numberOfLines={1}>
+              {windowLine}
+            </Text>
+          ) : null}
         </View>
         <Button
           title={joined ? "You're in" : "I'm in"}
