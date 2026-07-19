@@ -11,6 +11,7 @@ import { SlideToConfirm } from "@/components/SlideToConfirm";
 import { ErrorText } from "@/components/ui";
 import { ApiError } from "@/lib/api";
 import { loadLastCheckInPrefs, saveLastCheckInPrefs } from "@/lib/checkin-prefs";
+import { getErrorMessage } from "@/lib/errors";
 import { useCheckIn, useCourt, useCourtActivity } from "@/lib/hooks";
 import { getCurrentPosition } from "@/lib/location";
 import { parseRouteId, safePathSegment } from "@/lib/routes";
@@ -87,7 +88,7 @@ function CheckInContent({ courtId, via }: { courtId: string; via?: "gps" }) {
       } catch (e) {
         setConfirming(false);
         setAttempt((n) => n + 1);
-        setError(e instanceof Error ? e.message : "Could not get your location");
+        setError(getErrorMessage(e, "Could not get your location"));
         return;
       }
       const partySize = plusCount + 1;

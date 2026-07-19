@@ -8,6 +8,7 @@ import { useState } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { Button, ErrorText } from "@/components/ui";
 import { AuthGate } from "@/components/AuthGate";
+import { getErrorMessage } from "@/lib/errors";
 import { setGeofenceMode, type GeofenceMode } from "@/lib/geofencing";
 import { useTheme } from "@/lib/theme";
 
@@ -57,7 +58,7 @@ function LocationDisclosureContent({ target }: { target: GeofenceMode }) {
         setError(result.reason ?? "Could not enable auto check-in.");
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not enable auto check-in.");
+      setError(getErrorMessage(e, "Could not enable auto check-in."));
     } finally {
       setBusy(false);
     }
