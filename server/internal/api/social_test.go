@@ -247,6 +247,54 @@ type playerCard struct {
 	Position     *string  `json:"position"`
 	HeightCm     *int     `json:"height_cm"`
 	StyleTags    []string `json:"style_tags"`
+	SkillLevel   *string  `json:"skill_level"`
+	Availability []string `json:"availability"`
+}
+
+func TestPatchMeProfileFields(t *testing.T) {
+	ts, _ := newTestServer(t)
+	u := registerUser(t, ts, "profilefields@test.local", "Profile Fields")
+
+	// Valid update sets both fields and echoes them back.
+	resp := doJSON(t, ts, http.MethodPatch, "/me", u.AccessToken, map[string]any{
+		"skill_level":  "advanced",
+		"availability": []string{"weekday_evening", "weekend_morning"},
+	})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("valid patch: status %d: %s", resp.StatusCode, readBody(t, resp))
+	}
+	card := decodeJSON[playerCard](t, resp)
+	if card.SkillLevel == nil || *card.SkillLevel != "advanced" {
+		t.Errorf("skill_level = %v, want advanced", card.SkillLevel)
+	}
+	if len(card.Availability) != 2 || card.Availability[0] != "weekday_evening" {
+		t.Errorf("availability = %v, want [weekday_evening weekend_morning]", card.Availability)
+	}
+
+	// A partial update touching another field doesn't clobber them, and
+	// explicit null clears the single-value field.
+	doJSON(t, ts, http.MethodPatch, "/me", u.AccessToken, map[string]any{"jersey_number": 8}).Body.Close()
+	resp = doJSON(t, ts, http.MethodPatch, "/me", u.AccessToken, map[string]any{"skill_level": nil})
+	card = decodeJSON[playerCard](t, resp)
+	if card.SkillLevel != nil {
+		t.Errorf("skill_level after null = %v, want nil", card.SkillLevel)
+	}
+	if len(card.Availability) != 2 {
+		t.Errorf("availability clobbered: %v", card.Availability)
+	}
+
+	// Invalid values are rejected.
+	for _, body := range []map[string]any{
+		{"skill_level": "goat"},
+		{"availability": []string{"midnight"}},
+		{"availability": []string{"weekday_lunch", "weekday_lunch"}},
+	} {
+		resp = doJSON(t, ts, http.MethodPatch, "/me", u.AccessToken, body)
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Errorf("patch %v: status %d, want 400", body, resp.StatusCode)
+		}
+		resp.Body.Close()
+	}
 }
 
 func TestPatchMePlayerCard(t *testing.T) {
