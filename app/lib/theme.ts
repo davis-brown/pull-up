@@ -5,8 +5,9 @@
 // useTheme(), which resolves the light or dark palette from the OS setting
 // automatically.
 //
-// Palette rationale: warm paper/ink neutrals (not blue-grays) with a
-// burnt-orange brand accent; green is reserved exclusively for live activity.
+// Palette rationale: cool titanium/graphite neutrals with an electric-blue
+// brand accent and machined-metal surfaces (gradient + edge-highlight tokens
+// below); green is reserved exclusively for live activity.
 import {
   createContext,
   createElement,
@@ -43,56 +44,78 @@ export interface ThemeColors {
   warningBorder: string;
   danger: string;
   overlay: string;
+  // Machined-metal finish. Neutral surfaces use metalTop→metalBottom
+  // gradients with a metalEdge top highlight (the "milled edge"); the
+  // accent CTA uses accentMetalTop→accentMetalBottom. sheen is the
+  // translucent band swept across buttons on press.
+  metalTop: string;
+  metalBottom: string;
+  metalEdge: string;
+  accentMetalTop: string;
+  accentMetalBottom: string;
+  sheen: string;
 }
 
 const light: ThemeColors = {
-  background: "#FBFAF6",
-  surface: "#FFFFFF",
-  surfaceMuted: "#F0EDE2",
-  border: "#EDEAE0",
-  textPrimary: "#16150F",
-  textSecondary: "#807D6E",
-  textMuted: "#B4B0A0",
-  textFootnote: "#807D6E",
-  accent: "#FF5A1F",
-  accentPressed: "#E04A12",
-  accentSurface: "#FFF1EA",
-  accentSoft: "#FFB08C",
+  background: "#F2F4F8",
+  surface: "#FBFCFE",
+  surfaceMuted: "#E7EAF0",
+  border: "#DCE1E9",
+  textPrimary: "#0D1117",
+  textSecondary: "#5B6470",
+  textMuted: "#9AA3B1",
+  textFootnote: "#5B6470",
+  accent: "#2E66FF",
+  accentPressed: "#1D4FE0",
+  accentSurface: "#EAF0FF",
+  accentSoft: "#93B0FF",
   onAccent: "#FFFFFF",
-  chipBorder: "#DDD9CC",
-  quietDot: "#C9C5B4",
+  chipBorder: "#CBD2DD",
+  quietDot: "#C2C9D4",
   live: "#12A150",
-  liveSurface: "#E4F4EA",
+  liveSurface: "#E3F3EB",
   warning: "#8A6404",
   warningSurface: "#FBF3DA",
   warningBorder: "#E8D08C",
   danger: "#B3261E",
-  overlay: "rgba(22, 21, 15, 0.45)",
+  overlay: "rgba(13, 17, 23, 0.45)",
+  metalTop: "#FFFFFF",
+  metalBottom: "#E4E8EF",
+  metalEdge: "#FFFFFF",
+  accentMetalTop: "#4478FF",
+  accentMetalBottom: "#1D4FE0",
+  sheen: "rgba(255, 255, 255, 0.55)",
 };
 
 const dark: ThemeColors = {
-  background: "#16150F",
-  surface: "#26251E",
-  surfaceMuted: "#2E2D25",
-  border: "#3B3931",
-  textPrimary: "#F4F2E9",
-  textSecondary: "#D8D5C8",
-  textMuted: "#8B8878",
-  textFootnote: "#6B6858",
-  accent: "#FF5A1F",
-  accentPressed: "#E04A12",
-  accentSurface: "#3A2117",
-  accentSoft: "#B45A33",
+  background: "#0C0E12",
+  surface: "#171A20",
+  surfaceMuted: "#1F242C",
+  border: "#2A303A",
+  textPrimary: "#EDF0F5",
+  textSecondary: "#C2C9D4",
+  textMuted: "#7C8494",
+  textFootnote: "#5D6472",
+  accent: "#4C82FF",
+  accentPressed: "#2E66FF",
+  accentSurface: "#16233F",
+  accentSoft: "#5B82D9",
   onAccent: "#FFFFFF",
-  chipBorder: "#3B3931",
-  quietDot: "#55524A",
+  chipBorder: "#2A303A",
+  quietDot: "#454C58",
   live: "#12A150",
-  liveSurface: "#1E3327",
+  liveSurface: "#142A20",
   warning: "#E3B341",
-  warningSurface: "#2E2817",
+  warningSurface: "#2A2415",
   warningBorder: "#57491F",
   danger: "#F2726A",
-  overlay: "rgba(0, 0, 0, 0.55)",
+  overlay: "rgba(0, 0, 0, 0.6)",
+  metalTop: "#272D37",
+  metalBottom: "#12151A",
+  metalEdge: "rgba(255, 255, 255, 0.16)",
+  accentMetalTop: "#5B8CFF",
+  accentMetalBottom: "#2453D6",
+  sheen: "rgba(255, 255, 255, 0.2)",
 };
 
 export const spacing = {
@@ -190,28 +213,30 @@ export const type = {
 // consumed on iOS; elevation is the Android equivalent.
 export const shadows = {
   cta: {
-    shadowColor: "#FF5A1F",
+    shadowColor: "#2E66FF",
     shadowOpacity: 0.35,
     shadowRadius: 16,
     shadowOffset: { width: 0, height: 6 },
     elevation: 6,
   },
+  // Pins mark live activity, so their glow keys to the live green rather
+  // than the brand accent.
   pin: {
-    shadowColor: "#FF5A1F",
+    shadowColor: "#12A150",
     shadowOpacity: 0.45,
     shadowRadius: 16,
     shadowOffset: { width: 0, height: 6 },
     elevation: 6,
   },
   sheet: {
-    shadowColor: "#16150F",
+    shadowColor: "#0D1117",
     shadowOpacity: 0.14,
     shadowRadius: 30,
     shadowOffset: { width: 0, height: -8 },
     elevation: 12,
   },
   chrome: {
-    shadowColor: "#16150F",
+    shadowColor: "#0D1117",
     shadowOpacity: 0.12,
     shadowRadius: 16,
     shadowOffset: { width: 0, height: 4 },

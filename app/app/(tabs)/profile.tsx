@@ -4,10 +4,8 @@ import { useRef, useState } from "react";
 import {
   ActivityIndicator,
   Platform,
-  Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   View,
 } from "react-native";
 import { captureRef } from "react-native-view-shot";
@@ -77,22 +75,13 @@ function ProfileContent() {
       contentContainerStyle={{ padding: t.spacing.lg }}
     >
       {user ? <PlayerCard user={user} stats={stats} innerRef={cardRef} /> : null}
-      <Pressable
-        onPress={() => void shareCard()}
-        disabled={sharing}
-        style={({ pressed }) => [
-          styles.shareButton,
-          {
-            borderColor: t.colors.textPrimary,
-            backgroundColor: pressed ? t.colors.surfaceMuted : "transparent",
-            opacity: sharing ? 0.6 : 1,
-          },
-        ]}
-      >
-        <Text style={[t.type.button, { color: t.colors.textPrimary }]}>
-          {linkCopied ? "Link copied" : "Share player card"}
-        </Text>
-      </Pressable>
+      <View style={{ marginTop: t.spacing.sm }}>
+        <Button
+          title={linkCopied ? "Link copied" : "Share player card"}
+          busy={sharing}
+          onPress={() => void shareCard()}
+        />
+      </View>
       <ErrorText message={shareError} />
       <Button
         title="Profile settings"
@@ -105,13 +94,4 @@ function ProfileContent() {
 
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
-  shareButton: {
-    borderWidth: 1.5,
-    borderRadius: 14,
-    paddingVertical: 13,
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 48,
-    marginBottom: 16,
-  },
 });
