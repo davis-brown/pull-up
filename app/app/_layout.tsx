@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { Ionicons } from "@expo/vector-icons";
 import {
   Barlow_400Regular,
   Barlow_500Medium,
@@ -12,6 +13,7 @@ import { Stack, useRouter } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useRef, useState } from "react";
+import { Pressable } from "react-native";
 import * as Sentry from "@sentry/react-native";
 import { AuthProvider } from "@/lib/auth-context";
 // Side-effect import: registers the geofence background task at startup so
@@ -167,7 +169,23 @@ function ThemedApp() {
         <Stack.Screen name="user/[id]/followers" options={{ title: "Followers" }} />
         <Stack.Screen name="user/[id]/following" options={{ title: "Following" }} />
         <Stack.Screen name="follow-requests" options={{ title: "Follow requests" }} />
-        <Stack.Screen name="profile-settings" options={{ title: "Profile settings" }} />
+        <Stack.Screen
+          name="profile-settings"
+          options={{
+            title: "Profile settings",
+            // Reachable via deep link / direct URL / notification with no
+            // prior history — fall back to home instead of a dead-end
+            // screen with no back button.
+            headerLeft: () => (
+              <Pressable
+                onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))}
+                hitSlop={8}
+              >
+                <Ionicons name="chevron-back" size={26} color={t.colors.textPrimary} />
+              </Pressable>
+            ),
+          }}
+        />
         <Stack.Screen name="flag" options={{ title: "Report", presentation: "modal" }} />
         <Stack.Screen name="admin/index" options={{ title: "Moderation" }} />
         <Stack.Screen
