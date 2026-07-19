@@ -1,8 +1,16 @@
 import { backgroundStorage as storage, platformOS } from "./storage";
 import type { User } from "./types";
 
+// Web is always same-origin (the web Worker proxies /api). Native builds get
+// EXPO_PUBLIC_API_URL baked in from eas.json; if that's ever missing, dev
+// bundles fall back to the local server and release bundles to the production
+// API origin — never localhost in a shipped app. Native talks to the API
+// Worker directly (the canonical web origin sits behind Cloudflare Access).
+const DEV_API_URL = "http://localhost:8080";
+const PROD_API_URL = "https://pull-up-api.davisbrown245.workers.dev";
+const isDevBundle = typeof __DEV__ !== "undefined" && __DEV__;
 export const API_URL = process.env.EXPO_PUBLIC_API_URL ??
-  (platformOS === "web" ? "" : "http://localhost:8080");
+  (platformOS === "web" ? "" : isDevBundle ? DEV_API_URL : PROD_API_URL);
 const API_BASE_URL = API_URL.replace(/\/+$/, "");
 
 const TOKEN_PAIR_KEY = "pullup.token_pair";
