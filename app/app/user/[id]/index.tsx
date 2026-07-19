@@ -1,12 +1,12 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Avatar } from "@/components/Avatar";
 import { GetTheAppBanner } from "@/components/GetTheAppBanner";
 import { QueryError } from "@/components/QueryError";
 import { SignInAction } from "@/components/SignInCta";
-import { Button, Card, ErrorText } from "@/components/ui";
+import { Button, Card, ErrorText, FullScreenLoader } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
 import { useProfile, useSetFollow } from "@/lib/hooks";
 import { parseRouteId, safePathSegment } from "@/lib/routes";
@@ -38,11 +38,7 @@ export default function ProfileScreen() {
     );
   }
   if (isLoading || !profile) {
-    return (
-      <View style={[styles.center, { backgroundColor: t.colors.background }]}>
-        <ActivityIndicator size="large" color={t.colors.accent} />
-      </View>
-    );
+    return <FullScreenLoader />;
   }
 
   const isSelf = user?.id === profile.id;

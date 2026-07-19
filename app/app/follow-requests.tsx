@@ -1,9 +1,9 @@
 import { useRouter, type Href } from "expo-router";
 import { useState } from "react";
-import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
+import { FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import { Avatar } from "@/components/Avatar";
 import { AuthGate } from "@/components/AuthGate";
-import { Button, ErrorText } from "@/components/ui";
+import { Button, ErrorText, FullScreenLoader } from "@/components/ui";
 import { EmptyState } from "@/components/EmptyState";
 import { QueryError } from "@/components/QueryError";
 import { useAcceptFollowRequest, useFollowRequests, useRejectFollowRequest } from "@/lib/hooks";
@@ -27,11 +27,7 @@ function FollowRequestsContent() {
   const [mutationError, setMutationError] = useState<string | null>(null);
 
   if (isLoading) {
-    return (
-      <View style={[styles.center, { backgroundColor: t.colors.background }]}>
-        <ActivityIndicator size="large" color={t.colors.accent} />
-      </View>
-    );
+    return <FullScreenLoader />;
   }
   if (error && !data) {
     return (

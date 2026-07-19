@@ -2,30 +2,24 @@ import { useRouter, type Href } from "expo-router";
 import * as Sharing from "expo-sharing";
 import { useRef, useState } from "react";
 import {
-  ActivityIndicator,
   Platform,
   ScrollView,
-  StyleSheet,
   View,
 } from "react-native";
 import { captureRef } from "react-native-view-shot";
-import { Button, ErrorText } from "@/components/ui";
+import { Button, ErrorText, FullScreenLoader } from "@/components/ui";
 import { PlayerCard } from "@/components/PlayerCard";
 import { SignInScreenCta } from "@/components/SignInCta";
 import { useAuth } from "@/lib/auth-context";
+import { getErrorMessage } from "@/lib/errors";
 import { useMeStats } from "@/lib/hooks";
 import { buildProfileLink } from "@/lib/links";
 import { useTheme } from "@/lib/theme";
 
 export default function ProfileScreen() {
   const { user, loading } = useAuth();
-  const t = useTheme();
   if (loading) {
-    return (
-      <View style={[styles.center, { backgroundColor: t.colors.background }]}>
-        <ActivityIndicator size="large" color={t.colors.accent} />
-      </View>
-    );
+    return <FullScreenLoader />;
   }
   if (!user) {
     return (
@@ -63,7 +57,7 @@ function ProfileContent() {
       const uri = await captureRef(cardRef, { format: "png", quality: 0.9 });
       await Sharing.shareAsync(uri);
     } catch (e) {
-      setShareError(e instanceof Error ? e.message : "Could not share your player card.");
+      setShareError(getErrorMessage(e, "Could not share your player card."));
     } finally {
       setSharing(false);
     }
@@ -91,7 +85,3 @@ function ProfileContent() {
     </ScrollView>
   );
 }
-
-const styles = StyleSheet.create({
-  center: { flex: 1, alignItems: "center", justifyContent: "center" },
-});

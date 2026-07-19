@@ -11,6 +11,7 @@ import { useEffect, useState } from "react";
 import { Platform, StyleSheet, Text, View } from "react-native";
 import { Button, ErrorText } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
+import { getErrorMessage } from "@/lib/errors";
 import { useTheme } from "@/lib/theme";
 
 WebBrowser.maybeCompleteAuthSession();
@@ -38,7 +39,7 @@ function GoogleButton({ onError }: { onError: (msg: string) => void }) {
   useEffect(() => {
     if (response?.type === "success" && response.params.id_token) {
       oauthSignIn("google", response.params.id_token).catch((e) =>
-        onError(e instanceof Error ? e.message : "Google sign-in failed"),
+        onError(getErrorMessage(e, "Google sign-in failed")),
       );
     } else if (response?.type === "error") {
       onError("Google sign-in failed");
@@ -83,7 +84,7 @@ function AppleButton({ onError }: { onError: (msg: string) => void }) {
       await oauthSignIn("apple", credential.identityToken, name || undefined);
     } catch (e) {
       if ((e as { code?: string }).code === "ERR_REQUEST_CANCELED") return;
-      onError(e instanceof Error ? e.message : "Apple sign-in failed");
+      onError(getErrorMessage(e, "Apple sign-in failed"));
     }
   };
 

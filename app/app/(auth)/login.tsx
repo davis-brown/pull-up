@@ -5,6 +5,7 @@ import { OAuthButtons } from "@/components/OAuthButtons";
 import { Button, ErrorText, Field } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
 import { ApiError } from "@/lib/api";
+import { getErrorMessage } from "@/lib/errors";
 import { useTheme } from "@/lib/theme";
 
 export default function LoginScreen() {
@@ -30,7 +31,7 @@ export default function LoginScreen() {
         } as Href);
         return;
       }
-      setError(e instanceof Error ? e.message : "Sign in failed");
+      setError(getErrorMessage(e, "Sign in failed"));
     } finally {
       setBusy(false);
     }

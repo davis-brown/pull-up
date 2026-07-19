@@ -28,7 +28,7 @@ import { PopularTimes } from "@/components/court/PopularTimes";
 import { PermissionPrimer } from "@/components/PermissionPrimer";
 import { QueryError } from "@/components/QueryError";
 import { SignInAction, useSignInDetour } from "@/components/SignInCta";
-import { Button, Card, ErrorText, Overline } from "@/components/ui";
+import { Button, Card, ErrorText, FullScreenLoader, Overline } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
 import { markPushPrimerDone, pushPrimerDone } from "@/lib/first-run";
 import {
@@ -44,6 +44,7 @@ import {
 } from "@/lib/hooks";
 import { buildCourtLink, courtShareMessage, parseRunParam } from "@/lib/links";
 import { registerPushToken } from "@/lib/push-registration";
+import { formatClockTime } from "@/lib/relative-time";
 import { parseRouteId, safePathSegment } from "@/lib/routes";
 import { useTheme } from "@/lib/theme";
 import type { CourtDetail } from "@/lib/types";
@@ -163,11 +164,7 @@ export default function CourtDetailScreen() {
   }
 
   if (isLoading || !court) {
-    return (
-      <View style={[styles.center, { backgroundColor: t.colors.background }]}>
-        <ActivityIndicator size="large" color={t.colors.accent} />
-      </View>
-    );
+    return <FullScreenLoader />;
   }
 
   const detail: CourtDetail = court;
@@ -491,10 +488,7 @@ export default function CourtDetailScreen() {
                       {ci.display_name}
                     </Text>
                     {"  ·  since "}
-                    {new Date(ci.created_at).toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
+                    {formatClockTime(ci.created_at)}
                   </Text>
                 ))}
               </View>
@@ -555,10 +549,7 @@ export default function CourtDetailScreen() {
                     ) : null}
                     <Text style={[t.type.caption, { color: t.colors.textMuted, marginTop: 2 }]}>
                       {r.display_name}  ·{" "}
-                      {new Date(r.created_at).toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
+                      {formatClockTime(r.created_at)}
                     </Text>
                   </View>
                 ))}

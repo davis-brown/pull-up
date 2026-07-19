@@ -2,7 +2,6 @@ import { useFocusEffect, useRouter, type Href } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import { useCallback, useState } from "react";
 import {
-  ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -10,10 +9,11 @@ import {
   View,
 } from "react-native";
 import { Avatar } from "@/components/Avatar";
-import { Button, Card, Chip, ErrorText, Field } from "@/components/ui";
+import { Button, Card, Chip, ErrorText, Field, FullScreenLoader } from "@/components/ui";
 import { SignInScreenCta } from "@/components/SignInCta";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import { getErrorMessage } from "@/lib/errors";
 import {
   geofencingSupported,
   getGeofenceMode,
@@ -39,6 +39,7 @@ import {
   STYLE_TAGS,
   formatHeight,
 } from "@/lib/player";
+import { formatClockTime } from "@/lib/relative-time";
 import { useTheme, useThemePreference, type ThemePreference } from "@/lib/theme";
 import type { User } from "@/lib/types";
 
@@ -56,13 +57,8 @@ const geofenceOptions: Array<{ value: GeofenceMode; label: string }> = [
 
 export default function ProfileSettingsScreen() {
   const { user, loading } = useAuth();
-  const t = useTheme();
   if (loading) {
-    return (
-      <View style={[styles.center, { backgroundColor: t.colors.background }]}>
-        <ActivityIndicator size="large" color={t.colors.accent} />
-      </View>
-    );
+    return <FullScreenLoader />;
   }
   if (!user) {
     return (
@@ -110,7 +106,7 @@ function ProfileSettingsContent() {
       await api<User>("/me", { method: "PATCH", body: JSON.stringify({ is_private: next }) });
       await refreshUser();
     } catch (e) {
-      setProfileError(e instanceof Error ? e.message : "Could not update privacy.");
+      setProfileError(getErrorMessage(e, "Could not update privacy."));
     }
   };
 
@@ -178,7 +174,7 @@ function ProfileSettingsContent() {
       await api<User>("/me", { method: "PATCH", body: JSON.stringify({ display_name: name }) });
       await refreshUser();
     } catch (e) {
-      setProfileError(e instanceof Error ? e.message : "Could not save your name.");
+      setProfileError(getErrorMessage(e, "Could not save your name."));
     } finally {
       setSavingName(false);
     }
@@ -216,7 +212,7 @@ function ProfileSettingsContent() {
       });
       await refreshUser();
     } catch (e) {
-      setProfileError(e instanceof Error ? e.message : "Could not save your player details.");
+      setProfileError(getErrorMessage(e, "Could not save your player details."));
     } finally {
       setSavingDetails(false);
     }
@@ -408,11 +404,7 @@ function ProfileSettingsContent() {
               { color: t.colors.textSecondary, marginTop: 2, marginBottom: t.spacing.sm },
             ]}
           >
-            Expires at{" "}
-            {new Date(checkIn.expires_at).toLocaleTimeString([], {
-              hour: "2-digit",
-              minute: "2-digit",
-            })}
+            Expires at {formatClockTime(checkIn.expires_at)}
           </Text>
           <Button
             title="Check out"
@@ -588,7 +580,6 @@ function ProfileSettingsContent() {
 }
 
 const styles = StyleSheet.create({
-  center: { flex: 1, alignItems: "center", justifyContent: "center" },
   avatarRow: { flexDirection: "row", alignItems: "center", gap: 16, marginBottom: 8 },
   avatarActions: { gap: 8 },
   chips: { flexDirection: "row", flexWrap: "wrap", marginBottom: -8 },
