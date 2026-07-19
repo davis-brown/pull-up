@@ -8,19 +8,17 @@ commands.
 
 ## 1. One-time account setup (blocks the steps after it)
 
-- [ ] **Sentry** — org `pull-up-cl` / project `pull-up` and the DSN are
+- [x] **Sentry** — org `pull-up-cl` / project `pull-up` and the DSN are
       wired into `app/eas.json` (native) and `.github/workflows/deploy.yml`
-      (web). One value remains: an org auth token in EAS env as a secret
-      named `SENTRY_AUTH_TOKEN` (never committed). The token MUST exist
-      before the next preview/production build — with auto-upload no
-      longer disabled, a build without it fails at the source-map upload
-      step.
-- [ ] **Firebase project** (Android push) — create it for package
-      `com.pullup.app`, download `google-services.json` into `app/`
-      (`app.config.ts` picks it up automatically when present).
-- [ ] **Reviewer inbox** — Cloudflare Email Routing forwarding
-      `reviewer@davisbrown.dev` to a personal inbox (see
-      `review-notes.md`).
+      (web); `SENTRY_AUTH_TOKEN` lives in EAS env as a secret (never
+      committed). If the token is ever rotated/removed, builds fail at the
+      source-map upload step.
+- [x] **Firebase** (Android push) — project `pull-up-bb392`;
+      `app/google-services.json` is committed and the FCM V1 service
+      account key is uploaded to EAS credentials.
+- [x] **Reviewer inbox** — `davisbrown.dev` has a catch-all forward, so
+      `reviewer@davisbrown.dev` (see `review-notes.md`) already routes to a
+      readable inbox.
 - [ ] **App Store Connect / Play Console records** — once the iOS record
       exists, set the Worker dashboard vars `IOS_APP_ID`
       (`<TEAM_ID>.com.pullup.app`) and `APPLE_APP_STORE_ID` (numeric); both
