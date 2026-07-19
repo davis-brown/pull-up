@@ -40,6 +40,11 @@ const config: ExpoConfig = {
   },
   android: {
     package: "com.pullup.app",
+    adaptiveIcon: {
+      foregroundImage: "./assets/android-icon-foreground.png",
+      backgroundImage: "./assets/android-icon-background.png",
+      monochromeImage: "./assets/android-icon-monochrome.png",
+    },
     intentFilters: [
       {
         action: "VIEW",
@@ -66,7 +71,20 @@ const config: ExpoConfig = {
     "expo-router",
     "expo-secure-store",
     "expo-font",
-    "expo-splash-screen",
+    [
+      "expo-splash-screen",
+      {
+        image: "./assets/splash-icon.png",
+        imageWidth: 200,
+        resizeMode: "contain",
+        // Theme background tokens (lib/theme.ts): titanium light, gunmetal dark.
+        backgroundColor: "#F2F4F8",
+        dark: {
+          image: "./assets/splash-icon.png",
+          backgroundColor: "#0C0E12",
+        },
+      },
+    ],
     [
       "expo-location",
       {
