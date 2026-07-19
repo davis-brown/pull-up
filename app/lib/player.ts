@@ -49,6 +49,24 @@ export const POSITIONS: { key: string; label: string }[] = [
   { key: "center", label: "Center" },
 ];
 
+export const SKILL_LEVELS: { key: string; label: string }[] = [
+  { key: "beginner", label: "Beginner" },
+  { key: "intermediate", label: "Intermediate" },
+  { key: "advanced", label: "Advanced" },
+  { key: "elite", label: "Elite" },
+];
+
+// Structured availability windows (server allowlist) — when a player usually
+// pulls up, without free-text scheduling.
+export const AVAILABILITY_WINDOWS: { key: string; label: string }[] = [
+  { key: "weekday_morning", label: "Weekday mornings" },
+  { key: "weekday_lunch", label: "Weekday lunch" },
+  { key: "weekday_evening", label: "Weekday evenings" },
+  { key: "weekend_morning", label: "Weekend mornings" },
+  { key: "weekend_afternoon", label: "Weekend afternoons" },
+  { key: "weekend_evening", label: "Weekend evenings" },
+];
+
 export const BADGES: { id: string; label: string; icon: string }[] = [
   { id: "first_run", label: "First Run", icon: "basketball" },
   { id: "explorer", label: "Explorer", icon: "map" },

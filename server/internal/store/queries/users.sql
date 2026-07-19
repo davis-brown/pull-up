@@ -3,11 +3,13 @@ INSERT INTO users (email, password_hash, display_name)
 VALUES ($1, $2, $3)
 RETURNING id, email, display_name, avatar_url, reputation, created_at, is_admin,
     is_private, jersey_number, position, height_cm, style_tags,
+    skill_level, availability,
     (email_verified_at IS NOT NULL)::bool AS email_verified;
 
 -- name: GetUserByEmail :one
 SELECT id, email, password_hash, display_name, avatar_url, reputation, created_at,
     is_admin, is_private, jersey_number, position, height_cm, style_tags,
+    skill_level, availability,
     (email_verified_at IS NOT NULL)::bool AS email_verified
 FROM users
 WHERE email = $1;
@@ -15,6 +17,7 @@ WHERE email = $1;
 -- name: GetUserByID :one
 SELECT id, email, display_name, avatar_url, reputation, created_at, is_admin,
     is_private, jersey_number, position, height_cm, style_tags,
+    skill_level, availability,
     (email_verified_at IS NOT NULL)::bool AS email_verified
 FROM users
 WHERE id = $1;
@@ -31,10 +34,14 @@ UPDATE users SET
                           THEN sqlc.narg('position')::text ELSE position END,
     height_cm      = CASE WHEN sqlc.arg('height_cm_set')::bool
                           THEN sqlc.narg('height_cm')::smallint ELSE height_cm END,
-    style_tags     = coalesce(sqlc.narg('style_tags')::text[], style_tags)
+    style_tags     = coalesce(sqlc.narg('style_tags')::text[], style_tags),
+    skill_level    = CASE WHEN sqlc.arg('skill_level_set')::bool
+                          THEN sqlc.narg('skill_level')::text ELSE skill_level END,
+    availability   = coalesce(sqlc.narg('availability')::text[], availability)
 WHERE id = sqlc.arg('id')
 RETURNING id, email, display_name, avatar_url, reputation, created_at, is_admin,
     is_private, jersey_number, position, height_cm, style_tags,
+    skill_level, availability,
     (email_verified_at IS NOT NULL)::bool AS email_verified;
 
 -- name: ClearUserAvatar :exec
@@ -109,9 +116,10 @@ WITH consumed AS (
       AND u.email_verified_at IS NULL
     RETURNING u.id, u.email, u.display_name, u.avatar_url, u.reputation,
         u.created_at, u.is_admin, u.is_private, u.jersey_number, u.position,
-        u.height_cm, u.style_tags
+        u.height_cm, u.style_tags, u.skill_level, u.availability
 )
 SELECT id, email, display_name, avatar_url, reputation, created_at, is_admin,
     is_private, jersey_number, position, height_cm, style_tags,
+    skill_level, availability,
     true::bool AS email_verified
 FROM verified;

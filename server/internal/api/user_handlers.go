@@ -38,6 +38,24 @@ var validStyleTags = []string{"shooter", "pass_first", "defense", "rim_runner", 
 
 var validPositions = map[string]bool{"guard": true, "wing": true, "forward": true, "center": true}
 
+var validSkillLevels = map[string]bool{"beginner": true, "intermediate": true, "advanced": true, "elite": true}
+
+// validAvailability enumerates the structured availability windows a player
+// can advertise; free-text scheduling is deliberately not supported.
+var validAvailability = []string{
+	"weekday_morning", "weekday_lunch", "weekday_evening",
+	"weekend_morning", "weekend_afternoon", "weekend_evening",
+}
+
+func isValidAvailability(window string) bool {
+	for _, w := range validAvailability {
+		if w == window {
+			return true
+		}
+	}
+	return false
+}
+
 func isValidStyleTag(tag string) bool {
 	for _, t := range validStyleTags {
 		if t == tag {
@@ -55,6 +73,8 @@ type patchMeRequest struct {
 	Position     optionalNullable[string] `json:"position"`
 	HeightCm     optionalNullable[int]    `json:"height_cm"`
 	StyleTags    []string                 `json:"style_tags"`
+	SkillLevel   optionalNullable[string] `json:"skill_level"`
+	Availability []string                 `json:"availability"`
 }
 
 // optionalNullable distinguishes an omitted PATCH field from an explicit
@@ -115,6 +135,28 @@ func (s *Server) handlePatchMe(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+	if req.SkillLevel.Value != nil && !validSkillLevels[*req.SkillLevel.Value] {
+		writeError(w, http.StatusBadRequest, "skill_level must be one of beginner, intermediate, advanced, elite")
+		return
+	}
+	if req.Availability != nil {
+		if len(req.Availability) > len(validAvailability) {
+			writeError(w, http.StatusBadRequest, "availability has too many entries")
+			return
+		}
+		seen := map[string]bool{}
+		for _, window := range req.Availability {
+			if !isValidAvailability(window) {
+				writeError(w, http.StatusBadRequest, "invalid availability window: "+window)
+				return
+			}
+			if seen[window] {
+				writeError(w, http.StatusBadRequest, "duplicate availability window: "+window)
+				return
+			}
+			seen[window] = true
+		}
+	}
 	uid := userID(r)
 	if req.AvatarURL.Value != nil {
 		value := strings.TrimSpace(*req.AvatarURL.Value)
@@ -157,6 +199,9 @@ func (s *Server) handlePatchMe(w http.ResponseWriter, r *http.Request) {
 		HeightCmSet:     req.HeightCm.Set,
 		HeightCm:        heightCm,
 		StyleTags:       req.StyleTags,
+		SkillLevelSet:   req.SkillLevel.Set,
+		SkillLevel:      req.SkillLevel.Value,
+		Availability:    req.Availability,
 	})
 	if err != nil {
 		s.internalError(w, "update user", err)
