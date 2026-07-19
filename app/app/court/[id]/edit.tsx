@@ -1,8 +1,8 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useState } from "react";
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { AuthGate } from "@/components/AuthGate";
-import { Button, Chip, ErrorText } from "@/components/ui";
+import { Button, Chip, ErrorText, FullScreenLoader } from "@/components/ui";
 import { QueryError } from "@/components/QueryError";
 import { useCourt, usePatchCourtAttributes } from "@/lib/hooks";
 import { parseRouteId } from "@/lib/routes";
@@ -73,11 +73,7 @@ function EditCourtContent({ id }: { id: string }) {
   }
 
   if (isLoading || !court) {
-    return (
-      <View style={[styles.center, { backgroundColor: t.colors.background }]}>
-        <ActivityIndicator size="large" color={t.colors.accent} />
-      </View>
-    );
+    return <FullScreenLoader />;
   }
 
   return <EditForm court={court} courtId={id} onSaved={() => router.back()} />;
