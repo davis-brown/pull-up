@@ -8,10 +8,13 @@ commands.
 
 ## 1. One-time account setup (blocks the steps after it)
 
-- [ ] **Sentry org** — create the org/project, then set
-      `SENTRY_DISABLE_AUTO_UPLOAD` to unset (remove it from both `preview`
-      and `production` env in `app/eas.json`) and add the Sentry org/project
-      + auth token per Expo's Sentry guide.
+- [ ] **Sentry** — org `pull-up-cl` / project `pull-up` are wired into
+      `app/eas.json`. Two values remain: the project DSN goes in
+      `EXPO_PUBLIC_SENTRY_DSN` (eas.json env; DSNs are client-side-safe),
+      and an org auth token goes in EAS env as a secret named
+      `SENTRY_AUTH_TOKEN` (never committed). The token MUST exist before
+      the next preview/production build — with auto-upload no longer
+      disabled, a build without it fails at the source-map upload step.
 - [ ] **Firebase project** (Android push) — create it for package
       `com.pullup.app`, download `google-services.json` into `app/`
       (`app.config.ts` picks it up automatically when present).
