@@ -68,6 +68,8 @@ type Court struct {
 	EnrichRequestedAt *time.Time `json:"enrich_requested_at"`
 	EnrichClaimedAt   *time.Time `json:"enrich_claimed_at"`
 	EnrichAttempts    int32      `json:"enrich_attempts"`
+	RimType           *string    `json:"rim_type"`
+	NetType           *string    `json:"net_type"`
 }
 
 type CourtAttributeEdit struct {
@@ -77,6 +79,14 @@ type CourtAttributeEdit struct {
 	Field     string    `json:"field"`
 	OldValue  *string   `json:"old_value"`
 	NewValue  *string   `json:"new_value"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type CourtFactConfirmation struct {
+	CourtID   uuid.UUID `json:"court_id"`
+	UserID    uuid.UUID `json:"user_id"`
+	Fact      string    `json:"fact"`
+	Value     string    `json:"value"`
 	CreatedAt time.Time `json:"created_at"`
 }
 

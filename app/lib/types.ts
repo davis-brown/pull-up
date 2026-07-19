@@ -91,6 +91,8 @@ export interface CourtDetail {
   toilets: boolean | null;
   parking: boolean | null;
   fenced: boolean | null;
+  rim_type: "single" | "double" | null;
+  net_type: "chain" | "nylon" | "none" | null;
   opening_hours: string | null;
   website: string | null;
   description: string | null;
@@ -99,6 +101,14 @@ export interface CourtDetail {
   created_at: string;
   active_count: number;
   net_votes: number;
+}
+
+// Per-fact confirmation freshness from GET /courts/{id}/facts.
+export interface CourtFact {
+  fact: string;
+  confirmations: number;
+  last_confirmed_at: string;
+  majority_value: string;
 }
 
 export interface ExternalPhoto {

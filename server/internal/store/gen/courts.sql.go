@@ -42,6 +42,7 @@ SELECT
     c.address, c.hoop_count, c.indoor, c.surface, c.lighting, c.is_public,
     c.drinking_water, c.toilets, c.parking, c.fenced,
     c.covered, c.fee, c.access,
+    c.rim_type, c.net_type,
     c.source, c.status,
     ac.active_count,
     lr.player_count AS latest_player_count,
@@ -116,6 +117,8 @@ type CourtsInBBoxRow struct {
 	Covered           *bool     `json:"covered"`
 	Fee               *bool     `json:"fee"`
 	Access            *string   `json:"access"`
+	RimType           *string   `json:"rim_type"`
+	NetType           *string   `json:"net_type"`
 	Source            string    `json:"source"`
 	Status            string    `json:"status"`
 	ActiveCount       int32     `json:"active_count"`
@@ -168,6 +171,8 @@ func (q *Queries) CourtsInBBox(ctx context.Context, arg CourtsInBBoxParams) ([]C
 			&i.Covered,
 			&i.Fee,
 			&i.Access,
+			&i.RimType,
+			&i.NetType,
 			&i.Source,
 			&i.Status,
 			&i.ActiveCount,
@@ -193,6 +198,7 @@ SELECT
     c.address, c.hoop_count, c.indoor, c.surface, c.lighting, c.is_public,
     c.drinking_water, c.toilets, c.parking, c.fenced,
     c.covered, c.fee, c.access,
+    c.rim_type, c.net_type,
     c.source, c.status,
     ST_Distance(c.location, ST_SetSRID(ST_MakePoint($1::float8, $2::float8), 4326)::geography)::float8 AS distance_m,
     ac.active_count,
@@ -266,6 +272,8 @@ type CourtsNearbyRow struct {
 	Covered           *bool     `json:"covered"`
 	Fee               *bool     `json:"fee"`
 	Access            *string   `json:"access"`
+	RimType           *string   `json:"rim_type"`
+	NetType           *string   `json:"net_type"`
 	Source            string    `json:"source"`
 	Status            string    `json:"status"`
 	DistanceM         float64   `json:"distance_m"`
@@ -318,6 +326,8 @@ func (q *Queries) CourtsNearby(ctx context.Context, arg CourtsNearbyParams) ([]C
 			&i.Covered,
 			&i.Fee,
 			&i.Access,
+			&i.RimType,
+			&i.NetType,
 			&i.Source,
 			&i.Status,
 			&i.DistanceM,
@@ -496,7 +506,8 @@ SELECT
     ST_X(c.location::geometry)::float8 AS lng,
     c.address, c.hoop_count, c.indoor, c.surface, c.lighting, c.is_public,
     c.drinking_water, c.toilets, c.parking, c.fenced,
-    c.access, c.fee, c.covered, c.opening_hours, c.website, c.description,
+    c.access, c.fee, c.covered, c.rim_type, c.net_type,
+    c.opening_hours, c.website, c.description,
     c.source, c.osm_type, c.osm_id, c.status, c.submitted_by, c.created_at,
     c.enriched_at,
     ac.active_count,
@@ -533,6 +544,8 @@ type GetCourtRow struct {
 	Access        *string    `json:"access"`
 	Fee           *bool      `json:"fee"`
 	Covered       *bool      `json:"covered"`
+	RimType       *string    `json:"rim_type"`
+	NetType       *string    `json:"net_type"`
 	OpeningHours  *string    `json:"opening_hours"`
 	Website       *string    `json:"website"`
 	Description   *string    `json:"description"`
@@ -568,6 +581,8 @@ func (q *Queries) GetCourt(ctx context.Context, id uuid.UUID) (GetCourtRow, erro
 		&i.Access,
 		&i.Fee,
 		&i.Covered,
+		&i.RimType,
+		&i.NetType,
 		&i.OpeningHours,
 		&i.Website,
 		&i.Description,
@@ -651,8 +666,10 @@ UPDATE courts SET
     toilets        = coalesce($9, toilets),
     parking        = coalesce($10, parking),
     fenced         = coalesce($11, fenced),
+    rim_type       = coalesce($12, rim_type),
+    net_type       = coalesce($13, net_type),
     updated_at     = now()
-WHERE id = $12
+WHERE id = $14
 RETURNING id
 `
 
@@ -668,6 +685,8 @@ type UpdateCourtAttributesParams struct {
 	Toilets       *bool     `json:"toilets"`
 	Parking       *bool     `json:"parking"`
 	Fenced        *bool     `json:"fenced"`
+	RimType       *string   `json:"rim_type"`
+	NetType       *string   `json:"net_type"`
 	ID            uuid.UUID `json:"id"`
 }
 
@@ -685,6 +704,8 @@ func (q *Queries) UpdateCourtAttributes(ctx context.Context, arg UpdateCourtAttr
 		arg.Toilets,
 		arg.Parking,
 		arg.Fenced,
+		arg.RimType,
+		arg.NetType,
 		arg.ID,
 	)
 	var id uuid.UUID

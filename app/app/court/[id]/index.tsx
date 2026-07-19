@@ -21,6 +21,7 @@ import CourtMap from "@/components/CourtMap/CourtMap";
 import type { CourtPin } from "@/components/CourtMap/types";
 import { CourtChat } from "@/components/CourtChat";
 import { CourtSessions } from "@/components/CourtSessions";
+import { CourtConditions } from "@/components/court/CourtConditions";
 import { FactsGrid } from "@/components/court/FactsGrid";
 import { LiveBar } from "@/components/court/LiveBar";
 import { PopularTimes } from "@/components/court/PopularTimes";
@@ -297,6 +298,11 @@ export default function CourtDetailScreen() {
 
             <View style={styles.section}>
               <FactsGrid court={detail} />
+            </View>
+
+            <View style={styles.section}>
+              <Overline style={{ marginBottom: t.spacing.sm }}>Conditions</Overline>
+              <CourtConditions court={detail} />
             </View>
 
             {hasPhotos && (
