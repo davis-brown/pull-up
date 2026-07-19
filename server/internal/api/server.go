@@ -132,6 +132,7 @@ func (s *Server) Routes() http.Handler {
 			r.Get("/courts", s.handleListCourts)
 			r.Post("/courts/search", s.handleSearchCourts)
 			r.Get("/courts/{id}", s.handleGetCourt)
+			r.Get("/courts/{id}/facts", s.handleListCourtFacts)
 		})
 		r.Get("/courts/{id}/activity", s.handleCourtActivity)
 		r.Get("/courts/{id}/photos", s.handleListPhotos)
@@ -172,6 +173,7 @@ func (s *Server) Routes() http.Handler {
 
 			r.Post("/courts", s.handleCreateCourt)
 			r.Patch("/courts/{id}/attributes", s.handlePatchCourtAttributes)
+			r.Post("/courts/{id}/facts", s.handleConfirmCourtFact)
 			r.Post("/courts/{id}/vote", s.handleVoteCourt)
 			r.Post("/courts/{id}/check-ins", s.handleCheckIn)
 			r.Post("/courts/{id}/reports", s.handleCreateReport)
