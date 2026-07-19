@@ -1,9 +1,11 @@
 // Themed UI kit. Every component reads design tokens from useTheme() —
 // no hardcoded colors anywhere else in the app.
 import { Ionicons } from "@expo/vector-icons";
-import type { ReactNode } from "react";
+import { LinearGradient } from "expo-linear-gradient";
+import { useRef, type ReactNode } from "react";
 import {
   ActivityIndicator,
+  Animated,
   Pressable,
   StyleSheet,
   Text,
@@ -29,6 +31,10 @@ export function withAlpha(hex: string, alpha: number): string {
 
 type ButtonVariant = "primary" | "secondary" | "danger" | "ghost";
 
+// Width the sheen band travels across; generous enough for full-bleed
+// buttons on tablets while staying cheap (transform-only animation).
+const SHEEN_TRAVEL = 640;
+
 export function Button({
   title,
   onPress,
@@ -46,52 +52,106 @@ export function Button({
   compact?: boolean;
 }) {
   const t = useTheme();
-  const background: Record<ButtonVariant, string> = {
-    primary: t.colors.accent,
-    secondary: "transparent",
-    danger: "transparent",
-    ghost: "transparent",
+  // Machined-metal press feedback: the button settles slightly (scale) while
+  // a sheen band sweeps across the face, like light moving over brushed metal.
+  const scale = useRef(new Animated.Value(1)).current;
+  const sheenX = useRef(new Animated.Value(-SHEEN_TRAVEL / 2)).current;
+
+  const pressIn = () => {
+    Animated.spring(scale, {
+      toValue: 0.97,
+      speed: 40,
+      bounciness: 0,
+      useNativeDriver: true,
+    }).start();
+    sheenX.setValue(-SHEEN_TRAVEL / 2);
+    Animated.timing(sheenX, {
+      toValue: SHEEN_TRAVEL / 2,
+      duration: 450,
+      useNativeDriver: true,
+    }).start();
+  };
+  const pressOut = () => {
+    Animated.spring(scale, { toValue: 1, speed: 30, bounciness: 6, useNativeDriver: true }).start();
+  };
+
+  // primary and secondary render as metal (accent alloy / bare titanium);
+  // danger and ghost stay flat so destructive and quiet actions read as such.
+  const metalStops: Partial<Record<ButtonVariant, [string, string]>> = {
+    primary: [t.colors.accentMetalTop, t.colors.accentMetalBottom],
+    secondary: [t.colors.metalTop, t.colors.metalBottom],
   };
   const pressedBackground: Record<ButtonVariant, string> = {
     primary: t.colors.accentPressed,
-    secondary: t.colors.accentSurface,
+    secondary: t.colors.surfaceMuted,
     danger: t.colors.warningSurface,
     ghost: t.colors.surfaceMuted,
   };
   const label: Record<ButtonVariant, string> = {
     primary: t.colors.onAccent,
-    secondary: t.colors.accent,
+    secondary: t.colors.textPrimary,
     danger: t.colors.danger,
     ghost: t.colors.textSecondary,
   };
   const borderColor: Record<ButtonVariant, string> = {
-    primary: t.colors.accent,
-    secondary: t.colors.accent,
+    primary: t.colors.accentPressed,
+    secondary: t.colors.chipBorder,
     danger: t.colors.danger,
     ghost: "transparent",
   };
+  const stops = metalStops[variant];
   return (
-    <Pressable
-      onPress={onPress}
-      disabled={disabled || busy}
-      style={({ pressed }) => [
-        styles.button,
-        compact ? styles.buttonCompact : null,
-        variant === "primary" ? t.shadows.cta : null,
-        {
-          backgroundColor: pressed ? pressedBackground[variant] : background[variant],
-          borderColor: borderColor[variant],
-          borderRadius: 14,
-          opacity: disabled || busy ? 0.45 : 1,
-        },
-      ]}
-    >
-      {busy ? (
-        <ActivityIndicator color={label[variant]} />
-      ) : (
-        <Text style={[t.type.button, { color: label[variant] }]}>{title}</Text>
-      )}
-    </Pressable>
+    <Animated.View style={{ transform: [{ scale }] }}>
+      <Pressable
+        onPress={onPress}
+        disabled={disabled || busy}
+        onPressIn={pressIn}
+        onPressOut={pressOut}
+        style={({ pressed }) => [
+          styles.button,
+          compact ? styles.buttonCompact : null,
+          variant === "primary" ? t.shadows.cta : null,
+          {
+            backgroundColor: pressed && !stops ? pressedBackground[variant] : "transparent",
+            borderColor: borderColor[variant],
+            borderRadius: 14,
+            opacity: disabled || busy ? 0.45 : 1,
+            overflow: "hidden",
+          },
+        ]}
+      >
+        {stops ? (
+          <>
+            <LinearGradient
+              colors={stops}
+              start={{ x: 0.5, y: 0 }}
+              end={{ x: 0.5, y: 1 }}
+              style={StyleSheet.absoluteFill}
+            />
+            {/* Milled top edge: a hairline highlight where light would catch. */}
+            <View
+              style={[styles.metalEdge, { backgroundColor: t.colors.metalEdge }]}
+            />
+            <Animated.View
+              pointerEvents="none"
+              style={[styles.sheen, { transform: [{ translateX: sheenX }, { rotate: "18deg" }] }]}
+            >
+              <LinearGradient
+                colors={["transparent", t.colors.sheen, "transparent"]}
+                start={{ x: 0, y: 0.5 }}
+                end={{ x: 1, y: 0.5 }}
+                style={StyleSheet.absoluteFill}
+              />
+            </Animated.View>
+          </>
+        ) : null}
+        {busy ? (
+          <ActivityIndicator color={label[variant]} />
+        ) : (
+          <Text style={[t.type.button, { color: label[variant] }]}>{title}</Text>
+        )}
+      </Pressable>
+    </Animated.View>
   );
 }
 
@@ -279,6 +339,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     marginVertical: 0,
     minHeight: 40,
+  },
+  metalEdge: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: StyleSheet.hairlineWidth * 2,
+  },
+  sheen: {
+    position: "absolute",
+    top: -20,
+    bottom: -20,
+    width: 90,
+    left: "50%",
+    marginLeft: -45,
   },
   input: {
     borderWidth: 1,
