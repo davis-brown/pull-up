@@ -23,8 +23,13 @@
       "service": "pull-up-api"
     }
   ],
-  // IOS_APP_ID, ANDROID_CERT_SHA256, and APPLE_APP_STORE_ID are optional
-  // dashboard vars. Invalid or missing values disable their metadata safely.
+  // IOS_APP_ID and APPLE_APP_STORE_ID are optional dashboard vars. Invalid or
+  // missing values disable their metadata safely. ANDROID_CERT_SHA256 is the
+  // EAS-managed release keystore fingerprint (not a secret — it ships in every
+  // APK); it activates /.well-known/assetlinks.json for Android App Links.
+  "vars": {
+    "ANDROID_CERT_SHA256": "B7:2F:60:6E:6B:15:F9:E4:06:BD:A5:B3:BF:1A:FE:D7:C4:96:C1:9C:12:1F:0C:6A:27:2B:66:CF:B7:4C:97:26"
+  },
   "observability": {
     "enabled": true,
     "logs": {
