@@ -71,6 +71,7 @@ INSERT INTO users (email, password_hash, display_name)
 VALUES ($1, $2, $3)
 RETURNING id, email, display_name, avatar_url, reputation, created_at, is_admin,
     is_private, jersey_number, position, height_cm, style_tags,
+    skill_level, availability,
     (email_verified_at IS NOT NULL)::bool AS email_verified
 `
 
@@ -93,6 +94,8 @@ type CreateUserRow struct {
 	Position      *string   `json:"position"`
 	HeightCm      *int16    `json:"height_cm"`
 	StyleTags     []string  `json:"style_tags"`
+	SkillLevel    *string   `json:"skill_level"`
+	Availability  []string  `json:"availability"`
 	EmailVerified bool      `json:"email_verified"`
 }
 
@@ -112,6 +115,8 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CreateU
 		&i.Position,
 		&i.HeightCm,
 		&i.StyleTags,
+		&i.SkillLevel,
+		&i.Availability,
 		&i.EmailVerified,
 	)
 	return i, err
@@ -233,6 +238,7 @@ func (q *Queries) GetUnverifiedPasswordUserByEmailForUpdate(ctx context.Context,
 const getUserByEmail = `-- name: GetUserByEmail :one
 SELECT id, email, password_hash, display_name, avatar_url, reputation, created_at,
     is_admin, is_private, jersey_number, position, height_cm, style_tags,
+    skill_level, availability,
     (email_verified_at IS NOT NULL)::bool AS email_verified
 FROM users
 WHERE email = $1
@@ -252,6 +258,8 @@ type GetUserByEmailRow struct {
 	Position      *string   `json:"position"`
 	HeightCm      *int16    `json:"height_cm"`
 	StyleTags     []string  `json:"style_tags"`
+	SkillLevel    *string   `json:"skill_level"`
+	Availability  []string  `json:"availability"`
 	EmailVerified bool      `json:"email_verified"`
 }
 
@@ -272,6 +280,8 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (GetUserByEm
 		&i.Position,
 		&i.HeightCm,
 		&i.StyleTags,
+		&i.SkillLevel,
+		&i.Availability,
 		&i.EmailVerified,
 	)
 	return i, err
@@ -280,6 +290,7 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (GetUserByEm
 const getUserByID = `-- name: GetUserByID :one
 SELECT id, email, display_name, avatar_url, reputation, created_at, is_admin,
     is_private, jersey_number, position, height_cm, style_tags,
+    skill_level, availability,
     (email_verified_at IS NOT NULL)::bool AS email_verified
 FROM users
 WHERE id = $1
@@ -298,6 +309,8 @@ type GetUserByIDRow struct {
 	Position      *string   `json:"position"`
 	HeightCm      *int16    `json:"height_cm"`
 	StyleTags     []string  `json:"style_tags"`
+	SkillLevel    *string   `json:"skill_level"`
+	Availability  []string  `json:"availability"`
 	EmailVerified bool      `json:"email_verified"`
 }
 
@@ -317,6 +330,8 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (GetUserByIDRow
 		&i.Position,
 		&i.HeightCm,
 		&i.StyleTags,
+		&i.SkillLevel,
+		&i.Availability,
 		&i.EmailVerified,
 	)
 	return i, err
@@ -381,10 +396,14 @@ UPDATE users SET
                           THEN $8::text ELSE position END,
     height_cm      = CASE WHEN $9::bool
                           THEN $10::smallint ELSE height_cm END,
-    style_tags     = coalesce($11::text[], style_tags)
-WHERE id = $12
+    style_tags     = coalesce($11::text[], style_tags),
+    skill_level    = CASE WHEN $12::bool
+                          THEN $13::text ELSE skill_level END,
+    availability   = coalesce($14::text[], availability)
+WHERE id = $15
 RETURNING id, email, display_name, avatar_url, reputation, created_at, is_admin,
     is_private, jersey_number, position, height_cm, style_tags,
+    skill_level, availability,
     (email_verified_at IS NOT NULL)::bool AS email_verified
 `
 
@@ -400,6 +419,9 @@ type UpdateUserParams struct {
 	HeightCmSet     bool      `json:"height_cm_set"`
 	HeightCm        *int16    `json:"height_cm"`
 	StyleTags       []string  `json:"style_tags"`
+	SkillLevelSet   bool      `json:"skill_level_set"`
+	SkillLevel      *string   `json:"skill_level"`
+	Availability    []string  `json:"availability"`
 	ID              uuid.UUID `json:"id"`
 }
 
@@ -416,6 +438,8 @@ type UpdateUserRow struct {
 	Position      *string   `json:"position"`
 	HeightCm      *int16    `json:"height_cm"`
 	StyleTags     []string  `json:"style_tags"`
+	SkillLevel    *string   `json:"skill_level"`
+	Availability  []string  `json:"availability"`
 	EmailVerified bool      `json:"email_verified"`
 }
 
@@ -432,6 +456,9 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (UpdateU
 		arg.HeightCmSet,
 		arg.HeightCm,
 		arg.StyleTags,
+		arg.SkillLevelSet,
+		arg.SkillLevel,
+		arg.Availability,
 		arg.ID,
 	)
 	var i UpdateUserRow
@@ -448,6 +475,8 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (UpdateU
 		&i.Position,
 		&i.HeightCm,
 		&i.StyleTags,
+		&i.SkillLevel,
+		&i.Availability,
 		&i.EmailVerified,
 	)
 	return i, err
@@ -470,10 +499,11 @@ WITH consumed AS (
       AND u.email_verified_at IS NULL
     RETURNING u.id, u.email, u.display_name, u.avatar_url, u.reputation,
         u.created_at, u.is_admin, u.is_private, u.jersey_number, u.position,
-        u.height_cm, u.style_tags
+        u.height_cm, u.style_tags, u.skill_level, u.availability
 )
 SELECT id, email, display_name, avatar_url, reputation, created_at, is_admin,
     is_private, jersey_number, position, height_cm, style_tags,
+    skill_level, availability,
     true::bool AS email_verified
 FROM verified
 `
@@ -491,6 +521,8 @@ type VerifyEmailWithTokenRow struct {
 	Position      *string   `json:"position"`
 	HeightCm      *int16    `json:"height_cm"`
 	StyleTags     []string  `json:"style_tags"`
+	SkillLevel    *string   `json:"skill_level"`
+	Availability  []string  `json:"availability"`
 	EmailVerified bool      `json:"email_verified"`
 }
 
@@ -510,6 +542,8 @@ func (q *Queries) VerifyEmailWithToken(ctx context.Context, tokenHash string) (V
 		&i.Position,
 		&i.HeightCm,
 		&i.StyleTags,
+		&i.SkillLevel,
+		&i.Availability,
 		&i.EmailVerified,
 	)
 	return i, err
