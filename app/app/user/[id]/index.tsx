@@ -3,6 +3,7 @@ import { useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useState } from "react";
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Avatar } from "@/components/Avatar";
+import { GetTheAppBanner } from "@/components/GetTheAppBanner";
 import { QueryError } from "@/components/QueryError";
 import { SignInAction } from "@/components/SignInCta";
 import { Button, Card, ErrorText } from "@/components/ui";
@@ -56,6 +57,9 @@ export default function ProfileScreen() {
       style={{ backgroundColor: t.colors.background }}
       contentContainerStyle={{ padding: t.spacing.lg }}
     >
+      {/* Shared player-card links land here on web: give non-users an
+          install path (component no-ops on native and when dismissed). */}
+      <GetTheAppBanner />
       <View style={styles.header}>
         <Avatar avatarUrl={profile.avatar_url} displayName={profile.display_name} seed={profile.id} size={72} />
         <Text
