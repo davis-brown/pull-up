@@ -1,6 +1,8 @@
 import type { CourtForecast } from "./forecast";
+import { AVAILABILITY_WINDOWS } from "./player";
 import {
   todaysWindows,
+  WINDOW_SPANS,
   yourWindowHours,
   yourWindowSummary,
 } from "./your-window";
@@ -15,6 +17,16 @@ function forecastWith(hours: Record<number, number>, hasHistory = true): CourtFo
   for (const [h, v] of Object.entries(hours)) arr[Number(h)] = v;
   return { court_id: "court-1", hours: arr, has_history: hasHistory, sessions: [] };
 }
+
+describe("WINDOW_SPANS", () => {
+  it("covers exactly the availability keys players can pick in settings", () => {
+    // A window added to profile settings without a span here would silently
+    // miss the lens (and vice versa) — this pins the two lists together.
+    expect(WINDOW_SPANS.map((w) => w.key).sort()).toEqual(
+      AVAILABILITY_WINDOWS.map((w) => w.key).sort(),
+    );
+  });
+});
 
 describe("todaysWindows", () => {
   it("keeps only weekday windows on a weekday", () => {

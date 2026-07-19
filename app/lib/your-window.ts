@@ -10,7 +10,9 @@ export interface WindowSpan {
   label: string; // short, lowercase, for sentences
 }
 
-const WINDOW_SPANS: WindowSpan[] = [
+// Exported so tests can assert these stay in sync with the availability
+// keys players actually pick in profile settings (player.ts).
+export const WINDOW_SPANS: WindowSpan[] = [
   { key: "weekday_morning", dayType: "weekday", start: 6, end: 11, label: "morning" },
   { key: "weekday_lunch", dayType: "weekday", start: 11, end: 14, label: "lunch" },
   { key: "weekday_evening", dayType: "weekday", start: 17, end: 22, label: "evening" },

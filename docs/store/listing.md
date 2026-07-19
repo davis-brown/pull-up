@@ -33,8 +33,8 @@ basketball,pickup,hoops,courts,run,streetball,check in,games near me,rec,ball
 
 ## URLs
 
-- Privacy policy: https://<web-app-domain>/privacy
-- Terms of service: https://<web-app-domain>/terms
+- Privacy policy: https://pull-up.davisbrown.dev/privacy
+- Terms of service: https://pull-up.davisbrown.dev/terms
 - Support contact: contact@davisbrown.dev
 
 ## Screenshots (capture from simulator/emulator, light mode)
