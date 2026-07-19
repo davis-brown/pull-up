@@ -1,5 +1,10 @@
 import type { ExpoConfig } from "expo/config";
 
+// Node builtin, typed locally: the app tsconfig has no node types, and this
+// config file only ever executes under Node (expo-cli / EAS).
+declare const require: (id: string) => unknown;
+const { existsSync } = require("fs") as { existsSync: (path: string) => boolean };
+
 // Host for universal links (iOS) / app links (Android), from the same origin
 // used to build share links. Falls back to the production domain.
 const configuredWebUrl = process.env.EXPO_PUBLIC_WEB_URL ?? "https://pull-up.davisbrown.dev";
@@ -40,6 +45,11 @@ const config: ExpoConfig = {
   },
   android: {
     package: "com.pullup.app",
+    // FCM config for push notifications. Committed once Firebase is set up;
+    // guarded so builds work before the file exists.
+    ...(existsSync("./google-services.json")
+      ? { googleServicesFile: "./google-services.json" }
+      : {}),
     adaptiveIcon: {
       foregroundImage: "./assets/android-icon-foreground.png",
       backgroundImage: "./assets/android-icon-background.png",
