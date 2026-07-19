@@ -444,8 +444,12 @@ func (s *Server) handleCreateFlag(w http.ResponseWriter, r *http.Request) {
 	}
 	switch req.EntityType {
 	case "court", "photo", "report", "message", "session", "user":
+	case "feedback":
+		// App feedback has no separate target; it is recorded against the
+		// reporting user so entity_id stays meaningful in the admin queue.
+		req.EntityID = userID(r)
 	default:
-		writeError(w, http.StatusBadRequest, "entity_type must be court, photo, report, message, session, or user")
+		writeError(w, http.StatusBadRequest, "entity_type must be court, photo, report, message, session, user, or feedback")
 		return
 	}
 	req.Reason = strings.TrimSpace(req.Reason)
