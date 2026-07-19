@@ -15,10 +15,18 @@
       "distribution": "internal",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://pull-up-api.davisbrown245.workers.dev",
+        "EXPO_PUBLIC_WEB_URL": "https://pull-up.davisbrown.dev"
       }
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_API_URL": "https://pull-up-api.davisbrown245.workers.dev",
+        "EXPO_PUBLIC_WEB_URL": "https://pull-up.davisbrown.dev"
+      }
     }
   },
   "submit": {
