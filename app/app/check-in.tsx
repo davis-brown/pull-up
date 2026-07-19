@@ -230,10 +230,10 @@ function CheckInContent({ courtId, via }: { courtId: string; via?: "gps" }) {
                     style={[
                       t.type.button,
                       styles.bringChipLabel,
-                      // Selected chip is ink text on the accent-orange
+                      // Selected chip is ink text on the electric-accent
                       // background, not onAccent (white) — t.colors.background
-                      // is the dark palette's ink literal (#16150F), and this
-                      // screen is always dark (darkTheme()).
+                      // is the dark palette's near-black, and this screen is
+                      // always dark (darkTheme()).
                       { color: selected ? t.colors.background : t.colors.textMuted },
                     ]}
                   >
