@@ -8,14 +8,22 @@ import type { Ref } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Avatar } from "@/components/Avatar";
 import { Overline, withAlpha } from "@/components/ui";
-import { BADGES, STYLE_TAGS, playerSubline } from "@/lib/player";
+import { BADGES, STYLE_TAGS, availabilityLine, playerSubline } from "@/lib/player";
 import { safePathSegment } from "@/lib/routes";
 import { darkTheme, useTheme } from "@/lib/theme";
 import type { MeStats, User } from "@/lib/types";
 
 export type PlayerCardUser = Pick<
   User,
-  "id" | "display_name" | "avatar_url" | "jersey_number" | "position" | "height_cm" | "style_tags"
+  | "id"
+  | "display_name"
+  | "avatar_url"
+  | "jersey_number"
+  | "position"
+  | "height_cm"
+  | "style_tags"
+  | "skill_level"
+  | "availability"
 >;
 
 export function PlayerCard({
@@ -32,6 +40,7 @@ export function PlayerCard({
   const router = useRouter();
 
   const subline = playerSubline(user);
+  const plays = availabilityLine(user.availability);
   const games = stats?.games ?? 0;
   const courts = stats?.courts ?? 0;
   const weekStreak = stats?.week_streak ?? 0;
@@ -125,6 +134,13 @@ export function PlayerCard({
               );
             })}
           </View>
+        </View>
+      ) : null}
+
+      {plays ? (
+        <View style={styles.section}>
+          <Overline style={{ marginBottom: t.spacing.xs }}>PLAYS</Overline>
+          <Text style={[t.type.caption, { color: t.colors.textSecondary }]}>{plays}</Text>
         </View>
       ) : null}
 
