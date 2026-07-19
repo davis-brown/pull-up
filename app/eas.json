@@ -19,7 +19,8 @@
       "env": {
         "EXPO_PUBLIC_API_URL": "https://pull-up-api.davisbrown245.workers.dev",
         "EXPO_PUBLIC_WEB_URL": "https://pull-up.davisbrown.dev",
-        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
+        "SENTRY_ORG": "pull-up-cl",
+        "SENTRY_PROJECT": "pull-up"
       }
     },
     "production": {
@@ -27,7 +28,8 @@
       "env": {
         "EXPO_PUBLIC_API_URL": "https://pull-up-api.davisbrown245.workers.dev",
         "EXPO_PUBLIC_WEB_URL": "https://pull-up.davisbrown.dev",
-        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
+        "SENTRY_ORG": "pull-up-cl",
+        "SENTRY_PROJECT": "pull-up"
       }
     }
   },
