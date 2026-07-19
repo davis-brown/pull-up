@@ -31,7 +31,14 @@ import {
   useSetBlocked,
   useUploadAvatar,
 } from "@/lib/hooks";
-import { MAX_STYLE_TAGS, POSITIONS, STYLE_TAGS, formatHeight } from "@/lib/player";
+import {
+  AVAILABILITY_WINDOWS,
+  MAX_STYLE_TAGS,
+  POSITIONS,
+  SKILL_LEVELS,
+  STYLE_TAGS,
+  formatHeight,
+} from "@/lib/player";
 import { useTheme, useThemePreference, type ThemePreference } from "@/lib/theme";
 import type { User } from "@/lib/types";
 
@@ -81,6 +88,8 @@ function ProfileSettingsContent() {
   const [positionDraft, setPositionDraft] = useState<string | null>(user?.position ?? null);
   const [heightDraft, setHeightDraft] = useState(initialHeight);
   const [styleTagsDraft, setStyleTagsDraft] = useState<string[]>(user?.style_tags ?? []);
+  const [skillDraft, setSkillDraft] = useState<string | null>(user?.skill_level ?? null);
+  const [availabilityDraft, setAvailabilityDraft] = useState<string[]>(user?.availability ?? []);
   const [savingDetails, setSavingDetails] = useState(false);
   const { data } = useCurrentCheckIn();
   const checkOut = useCheckOut();
@@ -179,7 +188,9 @@ function ProfileSettingsContent() {
     jerseyDraft !== initialJersey ||
     positionDraft !== (user?.position ?? null) ||
     heightDraft !== initialHeight ||
-    styleTagsDraft.join(",") !== (user?.style_tags ?? []).join(",");
+    styleTagsDraft.join(",") !== (user?.style_tags ?? []).join(",") ||
+    skillDraft !== (user?.skill_level ?? null) ||
+    availabilityDraft.join(",") !== (user?.availability ?? []).join(",");
 
   // Server clamps height_cm to 120-250 (400s outside that range) — validate
   // the same bound client-side so the save button reflects it instead of
@@ -199,6 +210,8 @@ function ProfileSettingsContent() {
           position: positionDraft,
           height_cm: heightDraft.trim() === "" ? null : Number(heightDraft),
           style_tags: styleTagsDraft,
+          skill_level: skillDraft,
+          availability: availabilityDraft,
         }),
       });
       await refreshUser();
@@ -280,6 +293,38 @@ function ProfileSettingsContent() {
                 label={p.label}
                 selected={positionDraft === p.key}
                 onPress={() => setPositionDraft(positionDraft === p.key ? null : p.key)}
+              />
+            ))}
+          </View>
+
+          <Text style={[t.type.label, { color: t.colors.textSecondary, marginTop: t.spacing.md, marginBottom: t.spacing.xs + 2 }]}>
+            Skill level
+          </Text>
+          <View style={styles.chips}>
+            {SKILL_LEVELS.map((s) => (
+              <Chip
+                key={s.key}
+                label={s.label}
+                selected={skillDraft === s.key}
+                onPress={() => setSkillDraft(skillDraft === s.key ? null : s.key)}
+              />
+            ))}
+          </View>
+
+          <Text style={[t.type.label, { color: t.colors.textSecondary, marginTop: t.spacing.md, marginBottom: t.spacing.xs + 2 }]}>
+            When you usually play
+          </Text>
+          <View style={styles.chips}>
+            {AVAILABILITY_WINDOWS.map((w) => (
+              <Chip
+                key={w.key}
+                label={w.label}
+                selected={availabilityDraft.includes(w.key)}
+                onPress={() =>
+                  setAvailabilityDraft((prev) =>
+                    prev.includes(w.key) ? prev.filter((k) => k !== w.key) : [...prev, w.key],
+                  )
+                }
               />
             ))}
           </View>
