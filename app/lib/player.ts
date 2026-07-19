@@ -16,19 +16,30 @@ function capitalize(s: string): string {
   return s.length ? s[0].toUpperCase() + s.slice(1) : s;
 }
 
-// Builds the player card's caption subline, e.g. "#23 · Guard · 6'1"".
+// Builds the player card's caption subline, e.g. "#23 · Guard · 6'1" · Advanced".
 // Omits any missing part cleanly (no dangling "·"); "" when all are missing.
 export function playerSubline(u: {
   jersey_number: number | null;
   position: string | null;
   height_cm: number | null;
+  skill_level?: string | null;
 }): string {
   const parts: string[] = [];
   if (u.jersey_number != null) parts.push(`#${u.jersey_number}`);
   if (u.position) parts.push(capitalize(u.position));
   const height = formatHeight(u.height_cm);
   if (height) parts.push(height);
+  if (u.skill_level) parts.push(capitalize(u.skill_level));
   return parts.join(" · ");
+}
+
+// "Weekday evenings · Weekend mornings" from availability keys; unknown keys
+// are skipped so the card never renders raw enum values.
+export function availabilityLine(keys: string[]): string {
+  return keys
+    .map((key) => AVAILABILITY_WINDOWS.find((w) => w.key === key)?.label)
+    .filter((label): label is string => Boolean(label))
+    .join(" · ");
 }
 
 export const STYLE_TAGS: { key: string; label: string }[] = [

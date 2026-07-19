@@ -1,4 +1,4 @@
-import { BADGES, STYLE_TAGS, formatHeight, playerSubline } from "./player";
+import { BADGES, STYLE_TAGS, availabilityLine, formatHeight, playerSubline } from "./player";
 
 describe("formatHeight", () => {
   it("rounds to the nearest inch", () => {
@@ -76,5 +76,32 @@ describe("BADGES", () => {
       { id: "streak_4", label: "On a Streak", icon: "flame" },
       { id: "host", label: "Host", icon: "people" },
     ]);
+  });
+});
+
+describe("playerSubline with skill level", () => {
+  it("appends the capitalized skill level", () => {
+    expect(
+      playerSubline({ jersey_number: 23, position: "guard", height_cm: 185, skill_level: "advanced" }),
+    ).toBe("#23 · Guard · 6'1\" · Advanced");
+  });
+
+  it("omits a null skill level", () => {
+    expect(
+      playerSubline({ jersey_number: null, position: null, height_cm: null, skill_level: null }),
+    ).toBe("");
+  });
+});
+
+describe("availabilityLine", () => {
+  it("joins window labels with middots", () => {
+    expect(availabilityLine(["weekday_evening", "weekend_morning"])).toBe(
+      "Weekday evenings · Weekend mornings",
+    );
+  });
+
+  it("skips unknown keys and returns empty for none", () => {
+    expect(availabilityLine(["not_a_window"])).toBe("");
+    expect(availabilityLine([])).toBe("");
   });
 });
