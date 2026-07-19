@@ -109,6 +109,10 @@ jobs:
         env:
           WEB_ORIGIN: ${{ vars.WEB_ORIGIN }}
           EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID: ${{ secrets.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID }}
+          # Store links for the web "get the app" banner; empty (bannerless
+          # link) until the Play/App Store listings exist.
+          EXPO_PUBLIC_ANDROID_STORE_URL: ${{ vars.ANDROID_STORE_URL }}
+          EXPO_PUBLIC_IOS_STORE_URL: ${{ vars.IOS_STORE_URL }}
         run: |
           test -n "$WEB_ORIGIN"
           case "$WEB_ORIGIN" in https://*) ;; *) exit 1 ;; esac
