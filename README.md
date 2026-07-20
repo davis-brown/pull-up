@@ -64,6 +64,18 @@ comes from geo-verified check-ins and crowd reports.
 - Per-court message board to coordinate with the regulars at that court
   (moderated, same flagging path as everything else)
 
+**Levels & XP**
+- Players earn XP for showing up — checking in, turning an RSVP into an
+  actual appearance, planning runs that draw a crowd, adding courts that get
+  verified, keeping a court's conditions current, and week streaks — and
+  level up through six tiers (Rookie → Legend). Deliberately a separate
+  track from reputation, which weights court verification: play activity
+  must never buy moderation power
+- Anti-farming by design: every award is dedup-keyed, repeat check-ins at
+  one court inside 20h earn nothing, and a day is capped at 75 XP
+- One opt-out-able nudge — late in the week, in your own timezone, when a
+  streak you built is about to lapse
+
 **Social**
 - Public user profiles with a reputation score
 - Shareable player card — jersey number, position, height, and style tags

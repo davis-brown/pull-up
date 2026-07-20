@@ -15,9 +15,11 @@ export interface User {
   style_tags: string[];
   skill_level: string | null;
   availability: string[];
+  xp: number;
   // Optional: only the /me and PATCH /me responses carry it (login/register
   // payloads predate phase 16 and are left untouched).
   window_alerts_enabled?: boolean;
+  play_nudges_enabled?: boolean;
 }
 
 // /me/stats (Task 6): the player card's stats, badges, and home courts.
@@ -39,6 +41,12 @@ export interface MeStats {
   week_streak: number;
   badges: MeStatsBadge[];
   home_courts: MeStatsHomeCourt[];
+  // Phase 20: XP and level. xp_for_next_level is 0 at the level cap.
+  level: number;
+  tier: string;
+  xp: number;
+  xp_into_level: number;
+  xp_for_next_level: number;
 }
 
 export interface LatestReport {
@@ -317,6 +325,9 @@ export interface Profile {
   follows_you: boolean;
   is_private: boolean;
   has_requested: boolean;
+  // Null when a private account hides its activity from this viewer.
+  level: number | null;
+  tier: string | null;
 }
 
 export interface FollowUser {

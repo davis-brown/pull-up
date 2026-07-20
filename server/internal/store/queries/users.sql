@@ -3,13 +3,13 @@ INSERT INTO users (email, password_hash, display_name)
 VALUES ($1, $2, $3)
 RETURNING id, email, display_name, avatar_url, reputation, created_at, is_admin,
     is_private, jersey_number, position, height_cm, style_tags,
-    skill_level, availability,
+    skill_level, availability, xp,
     (email_verified_at IS NOT NULL)::bool AS email_verified;
 
 -- name: GetUserByEmail :one
 SELECT id, email, password_hash, display_name, avatar_url, reputation, created_at,
     is_admin, is_private, jersey_number, position, height_cm, style_tags,
-    skill_level, availability,
+    skill_level, availability, xp,
     (email_verified_at IS NOT NULL)::bool AS email_verified
 FROM users
 WHERE email = $1;
@@ -18,6 +18,7 @@ WHERE email = $1;
 SELECT id, email, display_name, avatar_url, reputation, created_at, is_admin,
     is_private, jersey_number, position, height_cm, style_tags,
     skill_level, availability, window_alerts_enabled,
+    xp, play_nudges_enabled,
     (email_verified_at IS NOT NULL)::bool AS email_verified
 FROM users
 WHERE id = $1;
@@ -38,12 +39,14 @@ UPDATE users SET
     skill_level    = CASE WHEN sqlc.arg('skill_level_set')::bool
                           THEN sqlc.narg('skill_level')::text ELSE skill_level END,
     availability   = coalesce(sqlc.narg('availability')::text[], availability),
+    play_nudges_enabled = coalesce(sqlc.narg('play_nudges_enabled')::bool, play_nudges_enabled),
     timezone       = coalesce(sqlc.narg('timezone')::text, timezone),
     window_alerts_enabled = coalesce(sqlc.narg('window_alerts_enabled')::bool, window_alerts_enabled)
 WHERE id = sqlc.arg('id')
 RETURNING id, email, display_name, avatar_url, reputation, created_at, is_admin,
     is_private, jersey_number, position, height_cm, style_tags,
     skill_level, availability, window_alerts_enabled,
+    xp, play_nudges_enabled,
     (email_verified_at IS NOT NULL)::bool AS email_verified;
 
 -- name: SetUserTimezone :exec
@@ -121,10 +124,10 @@ WITH consumed AS (
       AND u.email_verified_at IS NULL
     RETURNING u.id, u.email, u.display_name, u.avatar_url, u.reputation,
         u.created_at, u.is_admin, u.is_private, u.jersey_number, u.position,
-        u.height_cm, u.style_tags, u.skill_level, u.availability
+        u.height_cm, u.style_tags, u.skill_level, u.availability, u.xp
 )
 SELECT id, email, display_name, avatar_url, reputation, created_at, is_admin,
     is_private, jersey_number, position, height_cm, style_tags,
-    skill_level, availability,
+    skill_level, availability, xp,
     true::bool AS email_verified
 FROM verified;

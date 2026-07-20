@@ -80,6 +80,7 @@ type patchMeRequest struct {
 	// a device always has a zone to report).
 	Timezone            *string `json:"timezone"`
 	WindowAlertsEnabled *bool   `json:"window_alerts_enabled"`
+	PlayNudgesEnabled   *bool   `json:"play_nudges_enabled"`
 }
 
 // optionalNullable distinguishes an omitted PATCH field from an explicit
@@ -213,6 +214,7 @@ func (s *Server) handlePatchMe(w http.ResponseWriter, r *http.Request) {
 		Availability:        req.Availability,
 		Timezone:            req.Timezone,
 		WindowAlertsEnabled: req.WindowAlertsEnabled,
+		PlayNudgesEnabled:   req.PlayNudgesEnabled,
 	})
 	if err != nil {
 		s.internalError(w, "update user", err)

@@ -274,10 +274,22 @@ type User struct {
 	Availability        []string   `json:"availability"`
 	Timezone            *string    `json:"timezone"`
 	WindowAlertsEnabled bool       `json:"window_alerts_enabled"`
+	Xp                  int32      `json:"xp"`
+	PlayNudgesEnabled   bool       `json:"play_nudges_enabled"`
+	LastPlayNudgeAt     *time.Time `json:"last_play_nudge_at"`
 }
 
 type WindowAlert struct {
 	UserID  uuid.UUID `json:"user_id"`
 	CourtID uuid.UUID `json:"court_id"`
 	SentAt  time.Time `json:"sent_at"`
+}
+
+type XpEvent struct {
+	ID        uuid.UUID `json:"id"`
+	UserID    uuid.UUID `json:"user_id"`
+	Kind      string    `json:"kind"`
+	Points    int32     `json:"points"`
+	DedupKey  string    `json:"dedup_key"`
+	CreatedAt time.Time `json:"created_at"`
 }

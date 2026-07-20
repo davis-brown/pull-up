@@ -7,6 +7,7 @@ import { useRouter, type Href } from "expo-router";
 import type { Ref } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Avatar } from "@/components/Avatar";
+import { LevelBar } from "@/components/LevelBar";
 import { Overline, withAlpha } from "@/components/ui";
 import { BADGES, STYLE_TAGS, availabilityLine, playerSubline } from "@/lib/player";
 import { safePathSegment } from "@/lib/routes";
@@ -100,6 +101,8 @@ export function PlayerCard({
         <View style={[styles.divider, { backgroundColor: t.colors.border }]} />
         <StatColumn value={weekStreak} label="WK STREAK" accent />
       </View>
+
+      <LevelBar stats={stats} />
 
       {user.style_tags.length > 0 ? (
         <View style={styles.section}>

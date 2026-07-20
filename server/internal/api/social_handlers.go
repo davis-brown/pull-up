@@ -51,8 +51,16 @@ func (s *Server) handleGetProfile(w http.ResponseWriter, r *http.Request) {
 
 	// Private accounts hide their activity aggregates from non-followers.
 	checkInCount, courtsAdded, streakDays := stats.CheckInCount, stats.CourtsAddedCount, streak
+	// Level is an activity aggregate too (phase 20), so it hides with the
+	// rest of them — null rather than 0, since "Level 1 Rookie" would be a
+	// wrong answer where "not shown" is the true one.
+	progress := progressFor(int(stats.Xp))
+	var level *int
+	var tier *string
 	if stats.IsPrivate && !isSelf && !isFollowing {
 		checkInCount, courtsAdded, streakDays = 0, 0, 0
+	} else {
+		level, tier = &progress.Level, &progress.Tier
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -60,6 +68,8 @@ func (s *Server) handleGetProfile(w http.ResponseWriter, r *http.Request) {
 		"display_name":       stats.DisplayName,
 		"avatar_url":         stats.AvatarUrl,
 		"reputation":         stats.Reputation,
+		"level":              level,
+		"tier":               tier,
 		"member_since":       stats.MemberSince,
 		"is_private":         stats.IsPrivate,
 		"check_in_count":     checkInCount,
