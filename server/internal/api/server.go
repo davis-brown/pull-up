@@ -136,7 +136,8 @@ func (s *Server) Routes() http.Handler {
 		})
 		r.Get("/courts/{id}/activity", s.handleCourtActivity)
 		r.Get("/courts/{id}/photos", s.handleListPhotos)
-		r.Get("/courts/{id}/sessions", s.handleListSessions) // personalizes via optional bearer
+		r.Get("/courts/{id}/sessions", s.handleListSessions)      // personalizes via optional bearer
+		r.Get("/courts/{id}/run-intents", s.handleListRunIntents) // public: who wants to run where
 		r.Get("/courts/{id}/messages", s.handleListMessages)
 		r.Get("/sessions/nearby", s.handleNearbyRuns) // static must precede /sessions/{id}; personalizes via optional bearer
 		r.Get("/sessions/{id}/attendees", s.handleSessionAttendees)
@@ -186,6 +187,8 @@ func (s *Server) Routes() http.Handler {
 			r.Post("/flags", s.handleCreateFlag)
 
 			r.Post("/courts/{id}/sessions", s.handleCreateSession)
+			r.Put("/courts/{id}/run-intents", s.handleSetRunIntent)
+			r.Delete("/courts/{id}/run-intents", s.handleWithdrawRunIntent)
 			r.Post("/courts/{id}/messages", s.handleCreateMessage)
 			r.Delete("/sessions/{id}", s.handleCancelSession)
 			r.Put("/sessions/{id}/rsvp", s.handleRSVP)

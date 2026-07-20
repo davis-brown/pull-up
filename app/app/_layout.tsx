@@ -20,6 +20,8 @@ import { AuthProvider } from "@/lib/auth-context";
 // headless launches (geofence event with the app killed) can handle events.
 import { geofencingSupported, refreshGeofences } from "@/lib/geofencing";
 import { onboardingSeen } from "@/lib/first-run";
+import { dayOffsetFromToday } from "@/lib/run-intents";
+import { WINDOW_SPANS } from "@/lib/your-window";
 import { navChrome, ThemePreferenceProvider, useTheme } from "@/lib/theme";
 
 const sentryDSN = process.env.EXPO_PUBLIC_SENTRY_DSN;
@@ -127,9 +129,24 @@ function ThemedApp() {
       if (typeof courtId !== "string") return;
       if (data?.kind === "geofence_prompt") {
         router.push(`/check-in?courtId=${courtId}&via=gps`);
-      } else {
-        router.push(`/court/${courtId}`);
+        return;
       }
+      // "Looking to play" pushes (phase 19): the threshold push opens the
+      // plan screen prefilled from the bucket; the conversion push opens
+      // the court with the newly-planned run highlighted (same ?run=
+      // path shared links use).
+      if (data?.action === "plan_run" && typeof data.runDate === "string" && typeof data.windowKey === "string") {
+        const span = WINDOW_SPANS.find((w) => w.key === data.windowKey);
+        const dayOffset = dayOffsetFromToday(data.runDate, new Date());
+        const hourParam = span ? `&prefillHour=${span.start}` : "";
+        router.push(`/court/${courtId}/plan?prefillDay=${dayOffset}${hourParam}`);
+        return;
+      }
+      if (data?.action === "view_run" && typeof data.sessionId === "string") {
+        router.push(`/court/${courtId}?run=${data.sessionId}`);
+        return;
+      }
+      router.push(`/court/${courtId}`);
     });
     return () => sub.remove();
   }, [router]);

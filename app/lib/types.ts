@@ -78,6 +78,17 @@ export interface CourtSummary {
   next_run_at: string | null;
 }
 
+// A single seeker row from GET /courts/{id}/run-intents (phase 19): the
+// app groups these flat rows into buckets via lib/run-intents.ts.
+export interface RunIntentSeeker {
+  run_date: string;
+  window_key: string;
+  user_id: string;
+  display_name: string;
+  avatar_url: string | null;
+  skill_level: string | null;
+}
+
 // A nearby upcoming run from GET /sessions/nearby (phase 17): public
 // discovery for the Activity tab's "Runs near you" rail.
 export interface NearbyRun {

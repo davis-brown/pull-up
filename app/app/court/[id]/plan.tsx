@@ -23,6 +23,7 @@ export default function PlanSessionScreen() {
   const params = useLocalSearchParams();
   const id = parseRouteId(params.id);
   const prefillHour = typeof params.prefillHour === "string" ? params.prefillHour : undefined;
+  const prefillDay = typeof params.prefillDay === "string" ? params.prefillDay : undefined;
   if (!id) {
     return (
       <QueryError
@@ -32,15 +33,27 @@ export default function PlanSessionScreen() {
       />
     );
   }
-  const next = `/court/${safePathSegment(id)}/plan${prefillHour ? `?prefillHour=${encodeURIComponent(prefillHour)}` : ""}`;
+  const prefillParams = [
+    prefillHour ? `prefillHour=${encodeURIComponent(prefillHour)}` : null,
+    prefillDay ? `prefillDay=${encodeURIComponent(prefillDay)}` : null,
+  ].filter(Boolean);
+  const next = `/court/${safePathSegment(id)}/plan${prefillParams.length ? `?${prefillParams.join("&")}` : ""}`;
   return (
     <AuthGate next={next}>
-      <PlanSessionContent id={id} prefillHour={prefillHour} />
+      <PlanSessionContent id={id} prefillHour={prefillHour} prefillDay={prefillDay} />
     </AuthGate>
   );
 }
 
-function PlanSessionContent({ id, prefillHour }: { id: string; prefillHour?: string }) {
+function PlanSessionContent({
+  id,
+  prefillHour,
+  prefillDay,
+}: {
+  id: string;
+  prefillHour?: string;
+  prefillDay?: string;
+}) {
   const router = useRouter();
   const t = useTheme();
   const createSession = useCreateSession(id);
@@ -51,7 +64,15 @@ function PlanSessionContent({ id, prefillHour }: { id: string; prefillHour?: str
     const n = Number(prefillHour);
     return Number.isInteger(n) && n > new Date().getHours() && n <= 23 ? n : null;
   }, [prefillHour]);
-  const [dayOffset, setDayOffset] = useState(0);
+  // "Looking to play" (phase 19) passes the bucket's day as ?prefillDay — an
+  // approximation (the bucket is a UTC calendar date, this picker is local
+  // days-from-now), so it's a starting point the player can still correct,
+  // never auto-submitted.
+  const prefillDayOffset = useMemo(() => {
+    const n = Number(prefillDay);
+    return Number.isInteger(n) && n >= 0 && n <= 7 ? n : 0;
+  }, [prefillDay]);
+  const [dayOffset, setDayOffset] = useState(prefillDayOffset);
   const [hour, setHour] = useState<number | null>(prefill);
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);

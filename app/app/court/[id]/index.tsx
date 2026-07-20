@@ -22,6 +22,7 @@ import type { CourtPin } from "@/components/CourtMap/types";
 import { CourtChat } from "@/components/CourtChat";
 import { CourtSessions } from "@/components/CourtSessions";
 import { CourtConditions } from "@/components/court/CourtConditions";
+import { LookingToPlay } from "@/components/court/LookingToPlay";
 import { FactsGrid } from "@/components/court/FactsGrid";
 import { LiveBar } from "@/components/court/LiveBar";
 import { PopularTimes } from "@/components/court/PopularTimes";
@@ -503,6 +504,8 @@ export default function CourtDetailScreen() {
                 onPress={() => router.push(`/court/${safePathSegment(id)}/report`)}
               />
             </View>
+
+            <LookingToPlay courtId={id ?? ""} />
 
             <CourtSessions
               courtId={id ?? ""}
