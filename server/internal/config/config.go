@@ -35,6 +35,12 @@ type Config struct {
 	AppleAudiences  string
 	// SentryDSN enables server-side crash/error reporting when set.
 	SentryDSN string
+	// Workers AI credentials for text moderation (Llama Guard). Both must be
+	// set to enable it; with either empty, user text is accepted unscreened,
+	// which is what keeps local development and CI running without
+	// Cloudflare credentials.
+	CloudflareAccountID string
+	CloudflareAIToken   string
 	// Per-IP rate limits (requests/minute). 0 disables the limiter.
 	RateLimitAuthPerMin      int
 	RateLimitWritePerMin     int
@@ -69,6 +75,8 @@ func Load() (*Config, error) {
 		GoogleClientIDs:          getenv("GOOGLE_CLIENT_IDS", ""),
 		AppleAudiences:           getenv("APPLE_AUDIENCES", ""),
 		SentryDSN:                os.Getenv("SENTRY_DSN"),
+		CloudflareAccountID:      os.Getenv("CLOUDFLARE_ACCOUNT_ID"),
+		CloudflareAIToken:        os.Getenv("CLOUDFLARE_AI_TOKEN"),
 		RateLimitAuthPerMin:      getenvInt("RATE_LIMIT_AUTH_PER_MIN", 10),
 		RateLimitWritePerMin:     getenvInt("RATE_LIMIT_WRITE_PER_MIN", 60),
 		RateLimitDiscoveryPerMin: getenvInt("RATE_LIMIT_DISCOVERY_PER_MIN", 120),

@@ -12,7 +12,11 @@
   "keep_vars": true,
   "vars": {
     "EMAIL_FROM": "verify@pull-up.davisbrown.dev",
-    "WEB_ORIGIN": "https://pull-up.davisbrown.dev"
+    "WEB_ORIGIN": "https://pull-up.davisbrown.dev",
+    // Account id for the Workers AI REST call that backs text moderation.
+    // Not a secret — it appears in dashboard URLs — and useless without
+    // CLOUDFLARE_AI_TOKEN, which is.
+    "CLOUDFLARE_ACCOUNT_ID": "720bb9fc6dc82b02f5612a450a8d6ebf"
   },
   "secrets": {
     "required": [
