@@ -115,3 +115,12 @@ WHERE id = sqlc.arg('user_id');
 
 -- name: AckLevelUp :exec
 UPDATE users SET level_up_pending = NULL WHERE id = $1;
+
+-- name: XPSince :one
+-- Total XP earned in a window — the season total. Deliberately summed live
+-- rather than cached: xp_events_user_created_idx covers it, it is one row
+-- per profile load, and a cached per-season counter would be a second
+-- source of truth to keep correct across backfills and season rollovers.
+SELECT coalesce(sum(points), 0)::int AS xp
+FROM xp_events
+WHERE user_id = sqlc.arg('user_id') AND created_at >= sqlc.arg('since');

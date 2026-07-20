@@ -61,6 +61,23 @@ export interface MeStats {
   // Phase 21b: badge ids earned since the app last showed them. Empty
   // rather than null when there is nothing to celebrate.
   new_badges: string[];
+  // Phase 22b: this quarter's standing. level/tier above stay LIFETIME and
+  // never reset; this is the part that does.
+  season: SeasonStats;
+}
+
+// The window a season-scoped payload covers. Shared by /me/stats and both
+// leaderboards, so two season-scoped numbers can be trusted to line up.
+export interface SeasonInfo {
+  key: string;
+  label: string;
+  started_at: string;
+  ends_at: string;
+}
+
+export interface SeasonStats extends SeasonInfo {
+  xp: number;
+  tier: string;
 }
 
 // One award kind's contribution to recent XP. kind is the raw ledger kind
@@ -412,7 +429,7 @@ export interface LeaderboardEntry {
 
 export interface Leaderboard {
   metric: string;
-  window_days: number;
+  season: SeasonInfo;
   entries: LeaderboardEntry[];
   // Null when the viewer does not appear in the returned slice.
   viewer_rank: number | null;

@@ -522,7 +522,7 @@ export default function CourtDetailScreen() {
             {user && (
               <Card>
                 <Text style={[t.type.label, { color: t.colors.textSecondary }]}>
-                  Regulars · last {courtBoard?.window_days ?? 30} days
+                  Regulars · {courtBoard?.season.label ?? "this season"}
                 </Text>
                 <View style={{ marginTop: t.spacing.sm }}>
                   <Leaderboard
