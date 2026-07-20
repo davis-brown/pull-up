@@ -59,13 +59,17 @@ export function CourtPinMarker({
             ]}
           >
             <Ionicons name="basketball" size={18} color={t.colors.onAccent} />
+            {pin.nextRunAt ? <RunTick t={t} /> : null}
           </View>
         </Pressable>
       );
     }
     return (
       <Pressable onPress={onPress} hitSlop={12}>
-        <View style={[styles.quietDot, { backgroundColor: t.colors.quietDot }]} />
+        <View>
+          <View style={[styles.quietDot, { backgroundColor: t.colors.quietDot }]} />
+          {pin.nextRunAt ? <RunTick t={t} /> : null}
+        </View>
       </Pressable>
     );
   }
@@ -101,6 +105,7 @@ export function CourtPinMarker({
               {count}
             </Text>
           </View>
+          {pin.nextRunAt ? <RunTick t={t} /> : null}
         </View>
         {selected && (
           <View
@@ -114,6 +119,23 @@ export function CourtPinMarker({
         )}
       </View>
     </Pressable>
+  );
+}
+
+// Small accent tick at a pin's top-right corner: this court has a run
+// scheduled in the next 24h (phase 17). Absolute-positioned so every pin
+// variant can carry it without reflowing; the surface ring keeps it legible
+// on both the accent pin and the live bubble.
+function RunTick({ t }: { t: Theme }) {
+  return (
+    <View
+      pointerEvents="none"
+      style={[
+        styles.runTick,
+        // Ink, not accent: several pin variants are themselves accent-colored.
+        { backgroundColor: t.colors.textPrimary, borderColor: t.colors.surface },
+      ]}
+    />
   );
 }
 
@@ -175,20 +197,23 @@ function AllCourtsPin({
   if (!live) {
     return (
       <Pressable onPress={onPress} hitSlop={12}>
-        <View
-          style={[
-            styles.badge,
-            {
-              backgroundColor: pending ? t.colors.surface : t.colors.accent,
-              borderColor: pending ? t.colors.textMuted : t.colors.surface,
-            },
-          ]}
-        >
-          <Ionicons
-            name="basketball"
-            size={13}
-            color={pending ? t.colors.textMuted : t.colors.onAccent}
-          />
+        <View>
+          <View
+            style={[
+              styles.badge,
+              {
+                backgroundColor: pending ? t.colors.surface : t.colors.accent,
+                borderColor: pending ? t.colors.textMuted : t.colors.surface,
+              },
+            ]}
+          >
+            <Ionicons
+              name="basketball"
+              size={13}
+              color={pending ? t.colors.textMuted : t.colors.onAccent}
+            />
+          </View>
+          {pin.nextRunAt ? <RunTick t={t} /> : null}
         </View>
       </Pressable>
     );
@@ -196,13 +221,16 @@ function AllCourtsPin({
 
   return (
     <Pressable onPress={onPress} hitSlop={8}>
-      <View
-        style={[
-          styles.liveBubble,
-          { backgroundColor: t.colors.live, borderColor: t.colors.surface },
-        ]}
-      >
-        <Text style={styles.liveCount}>{pin.activeCount}</Text>
+      <View>
+        <View
+          style={[
+            styles.liveBubble,
+            { backgroundColor: t.colors.live, borderColor: t.colors.surface },
+          ]}
+        >
+          <Text style={styles.liveCount}>{pin.activeCount}</Text>
+        </View>
+        {pin.nextRunAt ? <RunTick t={t} /> : null}
       </View>
     </Pressable>
   );
@@ -245,6 +273,15 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   halo: {},
+  runTick: {
+    position: "absolute",
+    top: -3,
+    right: -3,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    borderWidth: 2,
+  },
   labelChip: {
     marginTop: 4,
     paddingVertical: 4,

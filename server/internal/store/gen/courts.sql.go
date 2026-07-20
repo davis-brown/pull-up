@@ -47,7 +47,8 @@ SELECT
     ac.active_count,
     lr.player_count AS latest_player_count,
     lr.run_quality  AS latest_run_quality,
-    coalesce(lr.created_at, 'epoch'::timestamptz) AS latest_report_at
+    coalesce(lr.created_at, 'epoch'::timestamptz) AS latest_report_at,
+    coalesce(nr.next_run_at, 'epoch'::timestamptz) AS next_run_at
 FROM courts c
 LEFT JOIN LATERAL (
     SELECT coalesce(sum(ci.party_size), 0)::int AS active_count
@@ -61,6 +62,15 @@ LEFT JOIN LATERAL (
     ORDER BY cr.created_at DESC
     LIMIT 1
 ) lr ON true
+LEFT JOIN LATERAL (
+    -- Earliest run in the next 24h: drives the map pin's run badge.
+    SELECT s.starts_at AS next_run_at
+    FROM sessions s
+    WHERE s.court_id = c.id AND s.canceled_at IS NULL
+      AND s.starts_at > now() AND s.starts_at < now() + interval '24 hours'
+    ORDER BY s.starts_at
+    LIMIT 1
+) nr ON true
 WHERE c.status <> 'rejected'
   AND c.location && ST_MakeEnvelope(
         $1::float8, $2::float8,
@@ -125,6 +135,7 @@ type CourtsInBBoxRow struct {
 	LatestPlayerCount *int16    `json:"latest_player_count"`
 	LatestRunQuality  *string   `json:"latest_run_quality"`
 	LatestReportAt    time.Time `json:"latest_report_at"`
+	NextRunAt         time.Time `json:"next_run_at"`
 }
 
 func (q *Queries) CourtsInBBox(ctx context.Context, arg CourtsInBBoxParams) ([]CourtsInBBoxRow, error) {
@@ -179,6 +190,7 @@ func (q *Queries) CourtsInBBox(ctx context.Context, arg CourtsInBBoxParams) ([]C
 			&i.LatestPlayerCount,
 			&i.LatestRunQuality,
 			&i.LatestReportAt,
+			&i.NextRunAt,
 		); err != nil {
 			return nil, err
 		}
@@ -204,7 +216,8 @@ SELECT
     ac.active_count,
     lr.player_count AS latest_player_count,
     lr.run_quality  AS latest_run_quality,
-    coalesce(lr.created_at, 'epoch'::timestamptz) AS latest_report_at
+    coalesce(lr.created_at, 'epoch'::timestamptz) AS latest_report_at,
+    coalesce(nr.next_run_at, 'epoch'::timestamptz) AS next_run_at
 FROM courts c
 LEFT JOIN LATERAL (
     SELECT coalesce(sum(ci.party_size), 0)::int AS active_count
@@ -218,6 +231,15 @@ LEFT JOIN LATERAL (
     ORDER BY cr.created_at DESC
     LIMIT 1
 ) lr ON true
+LEFT JOIN LATERAL (
+    -- Earliest run in the next 24h: drives the map pin's run badge.
+    SELECT s.starts_at AS next_run_at
+    FROM sessions s
+    WHERE s.court_id = c.id AND s.canceled_at IS NULL
+      AND s.starts_at > now() AND s.starts_at < now() + interval '24 hours'
+    ORDER BY s.starts_at
+    LIMIT 1
+) nr ON true
 WHERE c.status <> 'rejected'
   AND ST_DWithin(c.location, ST_SetSRID(ST_MakePoint($1::float8, $2::float8), 4326)::geography, $3::float8)
   AND ($4::bool   IS NULL OR c.indoor = $4)
@@ -281,6 +303,7 @@ type CourtsNearbyRow struct {
 	LatestPlayerCount *int16    `json:"latest_player_count"`
 	LatestRunQuality  *string   `json:"latest_run_quality"`
 	LatestReportAt    time.Time `json:"latest_report_at"`
+	NextRunAt         time.Time `json:"next_run_at"`
 }
 
 func (q *Queries) CourtsNearby(ctx context.Context, arg CourtsNearbyParams) ([]CourtsNearbyRow, error) {
@@ -335,6 +358,7 @@ func (q *Queries) CourtsNearby(ctx context.Context, arg CourtsNearbyParams) ([]C
 			&i.LatestPlayerCount,
 			&i.LatestRunQuality,
 			&i.LatestReportAt,
+			&i.NextRunAt,
 		); err != nil {
 			return nil, err
 		}

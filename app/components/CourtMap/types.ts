@@ -12,6 +12,9 @@ export interface CourtPin {
    * activeCount when omitted. */
   expectedCount?: number;
   selected?: boolean;
+  /** ISO start of the earliest run in the next 24h; a set value puts the
+   * accent run tick on the pin (phase 17). */
+  nextRunAt?: string | null;
 }
 
 export interface LatLng {
