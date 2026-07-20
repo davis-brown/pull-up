@@ -398,3 +398,22 @@ export interface FollowRequest {
   avatar_url: string | null;
   created_at: string;
 }
+
+// Phase 22: scoped leaderboards. score is check-ins on a court board and
+// XP on a circle board; metric says which, so one component renders both.
+export interface LeaderboardEntry {
+  rank: number;
+  user_id: string;
+  display_name: string;
+  avatar_url: string | null;
+  score: number;
+  metric: string;
+}
+
+export interface Leaderboard {
+  metric: string;
+  window_days: number;
+  entries: LeaderboardEntry[];
+  // Null when the viewer does not appear in the returned slice.
+  viewer_rank: number | null;
+}

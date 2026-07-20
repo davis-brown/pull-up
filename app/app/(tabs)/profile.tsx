@@ -13,10 +13,11 @@ import { Button, Card, ErrorText, FullScreenLoader, Overline } from "@/component
 import { BadgeCelebration } from "@/components/BadgeCelebration";
 import { LevelUpCelebration } from "@/components/LevelUpCelebration";
 import { PlayerCard } from "@/components/PlayerCard";
+import { Leaderboard } from "@/components/Leaderboard";
 import { SignInScreenCta } from "@/components/SignInCta";
 import { useAuth } from "@/lib/auth-context";
 import { getErrorMessage } from "@/lib/errors";
-import { useAckBadges, useAckLevelUp, useMeStats } from "@/lib/hooks";
+import { useAckBadges, useAckLevelUp, useCircleLeaderboard, useMeStats } from "@/lib/hooks";
 import { XP_SOURCES } from "@/lib/levels";
 import { buildProfileLink } from "@/lib/links";
 import { useTheme } from "@/lib/theme";
@@ -39,6 +40,7 @@ function ProfileContent() {
   const router = useRouter();
   const t = useTheme();
   const { data: stats } = useMeStats();
+  const { data: circleBoard } = useCircleLeaderboard();
   const cardRef = useRef<View>(null);
   const [sharing, setSharing] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
@@ -113,6 +115,16 @@ function ProfileContent() {
         />
       </View>
       <ErrorText message={shareError} />
+      <Card>
+        <Overline>Your circle · last {circleBoard?.window_days ?? 30} days</Overline>
+        <View style={{ marginTop: t.spacing.sm }}>
+          <Leaderboard
+            data={circleBoard}
+            viewerId={user?.id}
+            emptyMessage="Follow some players to see how you stack up."
+          />
+        </View>
+      </Card>
       <Card>
         <Overline>How you earn XP</Overline>
         {XP_SOURCES.map((src) => (
