@@ -690,8 +690,25 @@ async function drainObjectDeletions(env: RuntimeEnv): Promise<number> {
   return keys.length;
 }
 
+// Entries become claimable an hour after they are enqueued (see
+// ScheduleUploadedObjectCleanup), so the cron is the only drain that can ever
+// find work — a drain fired from the request that created the entry would
+// always claim nothing. Looping here keeps deletion throughput independent of
+// the cron interval, bounded so one invocation cannot run away.
+const MAX_DELETION_PASSES = 20;
+
+async function drainObjectDeletionsFully(env: RuntimeEnv): Promise<number> {
+  let total = 0;
+  for (let pass = 0; pass < MAX_DELETION_PASSES; pass += 1) {
+    const claimed = await drainObjectDeletions(env);
+    total += claimed;
+    if (claimed < MAX_DELETION_BATCH) break;
+  }
+  return total;
+}
+
 export default {
-  async fetch(request: Request, env: RuntimeEnv, ctx: ExecutionContext): Promise<Response> {
+  async fetch(request: Request, env: RuntimeEnv): Promise<Response> {
     const url = new URL(request.url);
     if (url.pathname.startsWith(PHOTO_PREFIX)) {
       return handlePhotos(request, env, url);
@@ -716,18 +733,9 @@ export default {
       const response = await getContainer(env.API_CONTAINER).fetch(
         containerProxyRequest(request, injectSecret ? env.INTERNAL_TASK_SECRET : undefined),
       );
-      const result = isEmailRequest
+      return isEmailRequest
         ? await deliverVerificationEmail(response, env)
         : response;
-      if (["POST", "PUT", "PATCH", "DELETE"].includes(request.method)) {
-        ctx.waitUntil(drainObjectDeletions(env).catch((error: unknown) => {
-          console.warn(JSON.stringify({
-            message: "post-request media cleanup failed",
-            error: error instanceof Error ? error.message : String(error),
-          }));
-        }));
-      }
-      return result;
     } catch (error) {
       console.error(JSON.stringify({
         message: "container request failed",
@@ -742,7 +750,7 @@ export default {
   async scheduled(event: ScheduledController, env: RuntimeEnv): Promise<void> {
     const [backlog, deletions] = await Promise.allSettled([
       drainBackendBacklog(env),
-      drainObjectDeletions(env),
+      drainObjectDeletionsFully(env),
     ]);
     const errors: string[] = [];
     if (backlog.status === "rejected") {
