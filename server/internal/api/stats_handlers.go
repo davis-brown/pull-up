@@ -241,6 +241,19 @@ type meStatsResponse struct {
 	// Phase 21b: badge slugs earned since the last time the app showed
 	// them. Empty (never null) so the client can iterate unconditionally.
 	NewBadges []string `json:"new_badges"`
+	// Phase 22b: this quarter's standing. Level/Tier above stay LIFETIME —
+	// they are the player's identity and never reset. Season is the part
+	// that does.
+	Season seasonStats `json:"season"`
+}
+
+// seasonStats is the current season's window plus what the player has done
+// inside it. SeasonTier applies the same tier table to season XP, so "Q3
+// Rookie, lifetime All-Star" is a coherent thing to say about someone.
+type seasonStats struct {
+	seasonInfo
+	XP   int    `json:"xp"`
+	Tier string `json:"tier"`
 }
 
 // xpBreakdownWindowDays bounds the "what have I earned lately" view. Long
@@ -371,6 +384,15 @@ func (s *Server) handleMeStats(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	season := currentSeason()
+	seasonXP, err := s.store.Queries.XPSince(ctx, gen.XPSinceParams{
+		UserID: uid, Since: season.StartedAt,
+	})
+	if err != nil {
+		s.internalError(w, "season xp", err)
+		return
+	}
+
 	var levelUpPending *int
 	if xpState.LevelUpPending != nil {
 		level := int(*xpState.LevelUpPending)
@@ -393,6 +415,14 @@ func (s *Server) handleMeStats(w http.ResponseWriter, r *http.Request) {
 		XPBreakdown:    breakdown,
 		LevelUpPending: levelUpPending,
 		NewBadges:      newBadges,
+		Season: seasonStats{
+			seasonInfo: season,
+			XP:         int(seasonXP),
+			// levelFor/tierFor are the same curve the lifetime level uses,
+			// applied to the season total — so a season tier means the same
+			// amount of play a lifetime tier ever did.
+			Tier: tierFor(levelFor(int(seasonXP))),
+		},
 	})
 }
 

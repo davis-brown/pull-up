@@ -18,6 +18,14 @@ function stats(overrides: Partial<MeStats>): MeStats {
     xp_breakdown: [],
     level_up_pending: null,
     new_badges: [],
+    season: {
+      key: "2026-Q3",
+      label: "Q3 2026",
+      started_at: "2026-07-01T00:00:00Z",
+      ends_at: "2026-10-01T00:00:00Z",
+      xp: 0,
+      tier: "Rookie",
+    },
     ...overrides,
   };
 }

@@ -56,6 +56,19 @@ export function LevelBar({ stats }: { stats: MeStats | undefined }) {
         />
       </View>
 
+      {/* Season standing sits under the lifetime bar rather than replacing
+          it: the level is who you are, the season is how you're doing now. */}
+      {stats?.season ? (
+        <View style={styles.seasonRow}>
+          <Text style={[t.type.caption, { color: t.colors.textSecondary }]}>
+            {stats.season.label}
+          </Text>
+          <Text style={[t.type.caption, { color: t.colors.textSecondary }]}>
+            {stats.season.xp} XP · {stats.season.tier}
+          </Text>
+        </View>
+      ) : null}
+
       {expanded && canExpand ? (
         <View style={styles.breakdown}>
           <Text style={[t.type.caption, { color: t.colors.textSecondary }]}>LAST 30 DAYS</Text>
@@ -84,6 +97,7 @@ const styles = StyleSheet.create({
   headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "baseline", gap: 8 },
   track: { height: 8, overflow: "hidden" },
   fill: { height: 8 },
+  seasonRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "baseline", gap: 8, paddingTop: 2 },
   breakdown: { gap: 4, paddingTop: 4 },
   breakdownRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "baseline", gap: 12 },
   breakdownLabel: { flexShrink: 1 },
