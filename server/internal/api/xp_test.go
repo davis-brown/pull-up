@@ -35,6 +35,12 @@ type meStatsXP struct {
 	XPIntoLevel    int    `json:"xp_into_level"`
 	XPForNextLevel int    `json:"xp_for_next_level"`
 	WeekStreak     int    `json:"week_streak"`
+	XPBreakdown    []struct {
+		Kind   string `json:"kind"`
+		Points int    `json:"points"`
+		Events int    `json:"events"`
+	} `json:"xp_breakdown"`
+	LevelUpPending *int `json:"level_up_pending"`
 }
 
 func TestCheckInAwardsXPIdempotentlyAndLevelsUp(t *testing.T) {
@@ -140,6 +146,61 @@ func TestCheckInAwardsXPIdempotentlyAndLevelsUp(t *testing.T) {
 	resp.Body.Close()
 	if !waitFor(func() bool { return sink.count("Level 2") == 1 }) {
 		t.Fatalf("level-up pushes = %d, want 1 (xp now %d)", sink.count("Level 2"), xpTotal())
+	}
+
+	// Phase 21: the crossing is also recorded for the app to celebrate,
+	// because the award happened off the request path and no response could
+	// have carried it.
+	var pending *int
+	if !waitFor(func() bool {
+		resp := doJSON(t, ts, http.MethodGet, "/me/stats?tz_offset_minutes=0", u.AccessToken, nil)
+		defer resp.Body.Close()
+		pending = decodeJSON[meStatsXP](t, resp).LevelUpPending
+		return pending != nil
+	}) {
+		t.Fatalf("level_up_pending = nil, want the level just crossed")
+	}
+	if *pending != 2 {
+		t.Errorf("level_up_pending = %d, want 2", *pending)
+	}
+
+	// Acking clears it, so the celebration shows once and not on every
+	// subsequent stats fetch.
+	resp = doJSON(t, ts, http.MethodPost, "/me/level-up/ack", u.AccessToken, nil)
+	if resp.StatusCode != http.StatusNoContent {
+		defer resp.Body.Close()
+		t.Fatalf("ack level up: status %d: %s", resp.StatusCode, readBody(t, resp))
+	}
+	resp.Body.Close()
+
+	resp = doJSON(t, ts, http.MethodGet, "/me/stats?tz_offset_minutes=0", u.AccessToken, nil)
+	stats = decodeJSON[meStatsXP](t, resp)
+	if stats.LevelUpPending != nil {
+		t.Errorf("level_up_pending = %d after ack, want null", *stats.LevelUpPending)
+	}
+
+	// The breakdown explains the total rather than just reporting it: the
+	// kinds actually earned are present, and their points sum to the XP the
+	// ledger holds for the window.
+	if len(stats.XPBreakdown) == 0 {
+		t.Fatalf("xp_breakdown is empty, want the kinds that earned %d XP", stats.XP)
+	}
+	sum := 0
+	kinds := map[string]bool{}
+	for _, entry := range stats.XPBreakdown {
+		sum += entry.Points
+		kinds[entry.Kind] = true
+		if entry.Events < 1 {
+			t.Errorf("breakdown entry %q has %d events, want at least 1", entry.Kind, entry.Events)
+		}
+	}
+	if sum != stats.XP {
+		t.Errorf("breakdown sums to %d, want the %d XP total", sum, stats.XP)
+	}
+	for _, want := range []string{"check_in", "daily_first"} {
+		if !kinds[want] {
+			t.Errorf("breakdown missing %q; got %v", want, kinds)
+		}
 	}
 }
 

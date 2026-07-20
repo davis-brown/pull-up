@@ -7,9 +7,19 @@ package gen
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 )
+
+const ackLevelUp = `-- name: AckLevelUp :exec
+UPDATE users SET level_up_pending = NULL WHERE id = $1
+`
+
+func (q *Queries) AckLevelUp(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.Exec(ctx, ackLevelUp, id)
+	return err
+}
 
 const awardXP = `-- name: AwardXP :one
 
@@ -105,14 +115,21 @@ func (q *Queries) FindAttendedSessionForCheckIn(ctx context.Context, arg FindAtt
 }
 
 const getUserXP = `-- name: GetUserXP :one
-SELECT xp FROM users WHERE id = $1
+SELECT xp, level_up_pending FROM users WHERE id = $1
 `
 
-func (q *Queries) GetUserXP(ctx context.Context, id uuid.UUID) (int32, error) {
+type GetUserXPRow struct {
+	Xp             int32  `json:"xp"`
+	LevelUpPending *int32 `json:"level_up_pending"`
+}
+
+// Both halves of the player card's XP state in one read: the cached
+// lifetime total, and any level crossing not yet shown to the player.
+func (q *Queries) GetUserXP(ctx context.Context, id uuid.UUID) (GetUserXPRow, error) {
 	row := q.db.QueryRow(ctx, getUserXP, id)
-	var xp int32
-	err := row.Scan(&xp)
-	return xp, err
+	var i GetUserXPRow
+	err := row.Scan(&i.Xp, &i.LevelUpPending)
+	return i, err
 }
 
 const listStreakNudgeCandidates = `-- name: ListStreakNudgeCandidates :many
@@ -167,6 +184,27 @@ func (q *Queries) ListStreakNudgeCandidates(ctx context.Context, maxCandidates i
 	return items, nil
 }
 
+const markLevelUpPending = `-- name: MarkLevelUpPending :exec
+UPDATE users
+SET level_up_pending = GREATEST(coalesce(level_up_pending, 0), $1::int)
+WHERE id = $2
+`
+
+type MarkLevelUpPendingParams struct {
+	Level  int32     `json:"level"`
+	UserID uuid.UUID `json:"user_id"`
+}
+
+// Records a level crossing for a player who can't be told about it in the
+// response that caused it (awardCheckInXP runs off the request path).
+// GREATEST keeps the highest unseen level when two crossings land before
+// the player opens the app, so a double level-up celebrates the level they
+// actually reached rather than the first one.
+func (q *Queries) MarkLevelUpPending(ctx context.Context, arg MarkLevelUpPendingParams) error {
+	_, err := q.db.Exec(ctx, markLevelUpPending, arg.Level, arg.UserID)
+	return err
+}
+
 const markPlayNudgeSent = `-- name: MarkPlayNudgeSent :exec
 UPDATE users SET last_play_nudge_at = now() WHERE id = $1
 `
@@ -174,4 +212,54 @@ UPDATE users SET last_play_nudge_at = now() WHERE id = $1
 func (q *Queries) MarkPlayNudgeSent(ctx context.Context, id uuid.UUID) error {
 	_, err := q.db.Exec(ctx, markPlayNudgeSent, id)
 	return err
+}
+
+const xPBreakdownSince = `-- name: XPBreakdownSince :many
+
+SELECT kind,
+       sum(points)::int AS points,
+       count(*)::int    AS events
+FROM xp_events
+WHERE user_id = $1
+  AND created_at >= $2
+GROUP BY kind
+ORDER BY points DESC, kind
+`
+
+type XPBreakdownSinceParams struct {
+	UserID uuid.UUID `json:"user_id"`
+	Since  time.Time `json:"since"`
+}
+
+type XPBreakdownSinceRow struct {
+	Kind   string `json:"kind"`
+	Points int32  `json:"points"`
+	Events int32  `json:"events"`
+}
+
+// Phase 21: XP legibility --------------------------------------------------
+// What a player's recent XP is actually made of, grouped by award kind.
+// Reads the xp_events ledger directly (phase 20 wrote it but never read
+// it); xp_events_user_created_idx covers this exactly. Kinds with no
+// events in the window are simply absent — the client renders the fixed
+// list and fills in zeros, so a new award kind never needs a migration
+// here.
+func (q *Queries) XPBreakdownSince(ctx context.Context, arg XPBreakdownSinceParams) ([]XPBreakdownSinceRow, error) {
+	rows, err := q.db.Query(ctx, xPBreakdownSince, arg.UserID, arg.Since)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []XPBreakdownSinceRow
+	for rows.Next() {
+		var i XPBreakdownSinceRow
+		if err := rows.Scan(&i.Kind, &i.Points, &i.Events); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
