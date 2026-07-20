@@ -17,6 +17,7 @@ function stats(overrides: Partial<MeStats>): MeStats {
     losses: 0,
     xp_breakdown: [],
     level_up_pending: null,
+    new_badges: [],
     ...overrides,
   };
 }
