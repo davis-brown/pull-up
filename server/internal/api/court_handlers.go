@@ -442,6 +442,7 @@ func (s *Server) handleVoteCourt(w http.ResponseWriter, r *http.Request) {
 		}
 		if err == nil && submitter != nil && *submitter != uid {
 			s.awardReputation(r.Context(), *submitter, repCourtVerified)
+			s.awardXP(r.Context(), *submitter, "court_verified", "court:"+courtID.String(), xpCourtVerified)
 		}
 		status = "verified"
 	}

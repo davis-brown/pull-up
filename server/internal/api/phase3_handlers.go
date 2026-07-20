@@ -250,6 +250,15 @@ func (s *Server) handleRSVP(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, "count attendees", err)
 		return
 	}
+	// A run that drew real attendance pays its planner (phase 20). Keyed
+	// on the session, so it lands once however the RSVP count churns.
+	if req.Status == "going" && int(goingCount) >= hostedRunMinAttendees && session.CreatedBy != userID(r) {
+		s.runBackground("award hosted-run xp", func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			s.awardXP(ctx, session.CreatedBy, "hosted_run", "hosted:"+id.String(), xpHostedRun)
+		})
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"status": req.Status, "going_count": goingCount})
 }
 
