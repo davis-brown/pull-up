@@ -680,6 +680,17 @@ export function useAckLevelUp() {
   });
 }
 
+// Marks every unseen badge as shown. Same shape and rationale as
+// useAckLevelUp: stats refetch in the background, so the moment has to be
+// spent explicitly rather than by reading.
+export function useAckBadges() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => api<void>("/me/badges/ack", { method: "POST" }),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["me", "stats"] }),
+  });
+}
+
 export function useProfile(id: string | undefined) {
   return useQuery({
     queryKey: ["users", id],

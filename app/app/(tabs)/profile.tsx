@@ -10,12 +10,13 @@ import {
 } from "react-native";
 import { captureRef } from "react-native-view-shot";
 import { Button, Card, ErrorText, FullScreenLoader, Overline } from "@/components/ui";
+import { BadgeCelebration } from "@/components/BadgeCelebration";
 import { LevelUpCelebration } from "@/components/LevelUpCelebration";
 import { PlayerCard } from "@/components/PlayerCard";
 import { SignInScreenCta } from "@/components/SignInCta";
 import { useAuth } from "@/lib/auth-context";
 import { getErrorMessage } from "@/lib/errors";
-import { useAckLevelUp, useMeStats } from "@/lib/hooks";
+import { useAckBadges, useAckLevelUp, useMeStats } from "@/lib/hooks";
 import { XP_SOURCES } from "@/lib/levels";
 import { buildProfileLink } from "@/lib/links";
 import { useTheme } from "@/lib/theme";
@@ -55,6 +56,19 @@ function ProfileContent() {
     ackLevelUp.mutate();
   };
 
+  // New badges, shown AFTER any level-up rather than stacked on top of it:
+  // a check-in that levels a player often earns a badge in the same breath,
+  // and two modals at once reads as a bug.
+  const ackBadges = useAckBadges();
+  const [badgesCelebrated, setBadgesCelebrated] = useState(false);
+  const newBadges = stats?.new_badges ?? [];
+  const badgeSlugs =
+    celebrationLevel === null && !badgesCelebrated ? newBadges : [];
+  const dismissBadges = () => {
+    setBadgesCelebrated(true);
+    ackBadges.mutate();
+  };
+
   const shareCard = async () => {
     if (!user) return;
     setShareError(null);
@@ -89,6 +103,7 @@ function ProfileContent() {
         tier={stats?.tier}
         onDismiss={dismissLevelUp}
       />
+      <BadgeCelebration slugs={badgeSlugs} onDismiss={dismissBadges} />
       {user ? <PlayerCard user={user} stats={stats} innerRef={cardRef} /> : null}
       <View style={{ marginTop: t.spacing.sm }}>
         <Button
