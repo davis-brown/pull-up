@@ -1,4 +1,4 @@
-import { levelProgressRatio, xpToNextLabel, XP_SOURCES } from "./levels";
+import { levelProgressRatio, xpKindLabel, xpToNextLabel, XP_SOURCES } from "./levels";
 import type { MeStats } from "./types";
 
 function stats(overrides: Partial<MeStats>): MeStats {
@@ -15,6 +15,8 @@ function stats(overrides: Partial<MeStats>): MeStats {
     xp_for_next_level: 50,
     wins: 0,
     losses: 0,
+    xp_breakdown: [],
+    level_up_pending: null,
     ...overrides,
   };
 }
@@ -68,5 +70,30 @@ describe("XP_SOURCES", () => {
       expect(src.label).toBeTruthy();
       expect(src.points).toMatch(/^\+\d/);
     }
+  });
+});
+
+describe("xpKindLabel", () => {
+  it("names every award kind the server can send", () => {
+    // Mirrors the kinds awarded in internal/api/xp.go and
+    // games_handlers.go. An unnamed kind would render as a raw key.
+    const kinds = [
+      "check_in",
+      "daily_first",
+      "showed_up",
+      "hosted_run",
+      "court_verified",
+      "fact_confirmed",
+      "game_played",
+      "streak_week",
+    ];
+    for (const kind of kinds) {
+      expect(xpKindLabel(kind)).not.toBe(kind);
+      expect(xpKindLabel(kind)).toBeTruthy();
+    }
+  });
+
+  it("degrades readably for a kind shipped ahead of the app", () => {
+    expect(xpKindLabel("some_future_award")).toBe("some future award");
   });
 });

@@ -50,6 +50,19 @@ export interface MeStats {
   // Phase 18: W-L across confirmed games only.
   wins: number;
   losses: number;
+  // Phase 21: recent XP grouped by award kind (last 30 days, highest
+  // first), and a level crossing not yet shown — null when there is
+  // nothing to celebrate.
+  xp_breakdown: MeStatsXPEntry[];
+  level_up_pending: number | null;
+}
+
+// One award kind's contribution to recent XP. kind is the raw ledger kind
+// (see xpKindLabel in lib/levels.ts for display).
+export interface MeStatsXPEntry {
+  kind: string;
+  points: number;
+  events: number;
 }
 
 // A player in a recorded game (phase 18). team is 0 or 1.
