@@ -32,7 +32,7 @@ export default function TermsScreen() {
       </Section>
 
       <Section title="Your content and conduct">
-        {"You own what you post and give us a license to display it within the service. Don't post content that is abusive, hateful, illegal, deceptive, or spam; don't harass other players; don't submit fake courts or false check-ins. You can report any content with the flag button and block any user; moderators may remove content or suspend accounts that break these rules — there is zero tolerance for objectionable content or abusive behavior."}
+        {"You own what you post and give us a license to display it within the service. Don't post content that is abusive, hateful, illegal, deceptive, or spam; don't harass other players; don't submit fake courts or false check-ins. Some features name other players — recording a game lists who played on each side — so don't record games that didn't happen or misrepresent who was there. A recorded game only becomes public when someone on the losing side confirms it, and you can decline to confirm a result you disagree with. You can report any content with the flag button and block any user; moderators may remove content or suspend accounts that break these rules — there is zero tolerance for objectionable content or abusive behavior."}
       </Section>
 
       <Section title="Play at your own risk">
