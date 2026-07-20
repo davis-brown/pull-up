@@ -31,12 +31,14 @@ import { PermissionPrimer } from "@/components/PermissionPrimer";
 import { QueryError } from "@/components/QueryError";
 import { SignInAction, useSignInDetour } from "@/components/SignInCta";
 import { Button, Card, ErrorText, FullScreenLoader, Overline } from "@/components/ui";
+import { Leaderboard } from "@/components/Leaderboard";
 import { useAuth } from "@/lib/auth-context";
 import { markPushPrimerDone, pushPrimerDone } from "@/lib/first-run";
 import {
   photoURL,
   useCourt,
   useCourtActivity,
+  useCourtLeaderboard,
   useCourtPhotos,
   useForecasts,
   useIsFavorite,
@@ -85,6 +87,7 @@ export default function CourtDetailScreen() {
   const detour = useSignInDetour();
   const { data: court, isLoading, error: courtError, refetch } = useCourt(id);
   const { data: activity, error: activityError } = useCourtActivity(id);
+  const { data: courtBoard } = useCourtLeaderboard(id);
   const vote = useVoteCourt(id ?? "");
   const { data: photoData, error: photoQueryError } = useCourtPhotos(id);
   const photos = photoData?.photos;
@@ -515,6 +518,21 @@ export default function CourtDetailScreen() {
               courtName={detail.name}
               highlightId={parseRunParam(run)}
             />
+
+            {user && (
+              <Card>
+                <Text style={[t.type.label, { color: t.colors.textSecondary }]}>
+                  Regulars · last {courtBoard?.window_days ?? 30} days
+                </Text>
+                <View style={{ marginTop: t.spacing.sm }}>
+                  <Leaderboard
+                    data={courtBoard}
+                    viewerId={user.id}
+                    emptyMessage="No check-ins here yet this month."
+                  />
+                </View>
+              </Card>
+            )}
 
             {(activity?.reports?.length ?? 0) > 0 && (
               <Card>

@@ -1,0 +1,79 @@
+-- Phase 22: scoped leaderboards.
+--
+-- Deliberately NOT global. A global ranking is meaningless for local pickup
+-- and would pit players against strangers three cities away. The two scopes
+-- that mean something are the court you actually run at, and the people you
+-- actually follow.
+--
+-- Both are authenticated-only, so viewer_id is always a real user and these
+-- queries never need the guest guard that the public activity queries carry.
+
+-- name: CourtLeaderboard :many
+-- Who shows up at this court, by check-in count over a rolling window.
+--
+-- Ranked on ATTENDANCE rather than XP on purpose: xp_events records no
+-- court, and XP is anyway earned partly by things that have nothing to do
+-- with this court (hosting, streaks, verifying). Counting appearances is
+-- both derivable and the truer answer to "who runs here".
+--
+-- Visibility mirrors ListActiveCheckIns exactly — self, public accounts, or
+-- accounts the viewer follows, minus blocks in either direction — so a
+-- player's presence at a court is never more visible on the board than it
+-- already is in the court's activity list.
+SELECT ci.user_id,
+       u.display_name,
+       u.avatar_url,
+       count(*)::int AS check_ins
+FROM check_ins ci
+JOIN users u ON u.id = ci.user_id
+WHERE ci.court_id = sqlc.arg(court_id)
+  AND ci.created_at >= sqlc.arg(since)
+  AND (
+      ci.user_id = sqlc.arg(viewer_id)
+      OR NOT u.is_private
+      OR EXISTS (
+          SELECT 1 FROM follows f
+          WHERE f.follower_id = sqlc.arg(viewer_id) AND f.followee_id = ci.user_id
+      )
+  )
+  AND NOT EXISTS (
+      SELECT 1 FROM blocked_users b
+      WHERE (b.blocker_id = sqlc.arg(viewer_id) AND b.blocked_id = ci.user_id)
+         OR (b.blocker_id = ci.user_id AND b.blocked_id = sqlc.arg(viewer_id))
+  )
+GROUP BY ci.user_id, u.display_name, u.avatar_url
+ORDER BY check_ins DESC, u.display_name
+LIMIT sqlc.arg(max_entries);
+
+-- name: CircleLeaderboard :many
+-- The viewer and everyone they follow, by XP earned in the window.
+--
+-- No privacy predicate is needed beyond blocks: `follows` only ever holds
+-- ACCEPTED follows (private accounts route through follow_requests first),
+-- so everyone here has already agreed to be seen by this viewer.
+--
+-- LEFT JOIN keeps followed players who earned nothing in the window, at 0.
+-- Dropping them would make a quiet week look like an empty feature and
+-- would hide the fact that the viewer is ahead of them.
+SELECT u.id AS user_id,
+       u.display_name,
+       u.avatar_url,
+       coalesce(sum(e.points), 0)::int AS xp
+FROM users u
+LEFT JOIN xp_events e
+       ON e.user_id = u.id AND e.created_at >= sqlc.arg(since)
+WHERE (
+        u.id = sqlc.arg(viewer_id)
+        OR EXISTS (
+            SELECT 1 FROM follows f
+            WHERE f.follower_id = sqlc.arg(viewer_id) AND f.followee_id = u.id
+        )
+      )
+  AND NOT EXISTS (
+      SELECT 1 FROM blocked_users b
+      WHERE (b.blocker_id = sqlc.arg(viewer_id) AND b.blocked_id = u.id)
+         OR (b.blocker_id = u.id AND b.blocked_id = sqlc.arg(viewer_id))
+  )
+GROUP BY u.id, u.display_name, u.avatar_url
+ORDER BY xp DESC, u.display_name
+LIMIT sqlc.arg(max_entries);
