@@ -56,6 +56,10 @@ jobs:
           node -e '
             const fs = require("fs");
             const names = ["DATABASE_URL", "JWT_SECRET", "UPLOAD_SIGNING_SECRET", "INTERNAL_TASK_SECRET"];
+            // Optional: absent means the feature stays off, not that the
+            // deploy is broken. CLOUDFLARE_AI_TOKEN gates Llama Guard text
+            // moderation; without it the API accepts text unscreened.
+            const optional = ["CLOUDFLARE_AI_TOKEN"];
             const out = {};
             for (const name of names) {
               const value = process.env[name];
@@ -64,6 +68,10 @@ jobs:
                 process.exit(1);
               }
               out[name] = value;
+            }
+            for (const name of optional) {
+              if (process.env[name]) out[name] = process.env[name];
+              else console.error(`optional secret not set, feature disabled: ${name}`);
             }
             fs.writeFileSync(process.argv[1], JSON.stringify(out));
           ' "$secrets_file"
@@ -74,6 +82,7 @@ jobs:
           JWT_SECRET: ${{ secrets.JWT_SECRET }}
           UPLOAD_SIGNING_SECRET: ${{ secrets.UPLOAD_SIGNING_SECRET }}
           INTERNAL_TASK_SECRET: ${{ secrets.INTERNAL_TASK_SECRET }}
+          CLOUDFLARE_AI_TOKEN: ${{ secrets.CLOUDFLARE_AI_TOKEN }}
           DEPLOY_COMMIT: ${{ github.event.workflow_run.head_sha }}
       - name: Wait for container version to match deployed commit
         env:

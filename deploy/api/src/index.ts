@@ -17,6 +17,11 @@ interface OptionalBindings {
   SENTRY_DSN?: string;
   EMAIL_FROM?: string;
   WEB_ORIGIN?: string;
+  // Workers AI text moderation (Llama Guard). Both must be present for the
+  // Go API to screen chat messages and notes; with either missing it
+  // accepts text unscreened rather than failing closed.
+  CLOUDFLARE_ACCOUNT_ID?: string;
+  CLOUDFLARE_AI_TOKEN?: string;
   // Set per-deploy via `wrangler deploy --var DEPLOY_COMMIT:<sha>` so the
   // container can report which commit it is running.
   DEPLOY_COMMIT?: string;
@@ -62,6 +67,8 @@ export class ApiContainer extends Container<RuntimeEnv> {
       GOOGLE_CLIENT_IDS: env.GOOGLE_CLIENT_IDS ?? "",
       APPLE_AUDIENCES: env.APPLE_AUDIENCES ?? "",
       SENTRY_DSN: env.SENTRY_DSN ?? "",
+      CLOUDFLARE_ACCOUNT_ID: env.CLOUDFLARE_ACCOUNT_ID ?? "",
+      CLOUDFLARE_AI_TOKEN: env.CLOUDFLARE_AI_TOKEN ?? "",
       TRUST_CF_CONNECTING_IP: "true",
       PORT: "8080",
       COMMIT: env.DEPLOY_COMMIT ?? "",

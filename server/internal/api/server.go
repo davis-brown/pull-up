@@ -15,6 +15,7 @@ import (
 	"github.com/davisbrown/pull-up/server/internal/auth"
 	"github.com/davisbrown/pull-up/server/internal/config"
 	"github.com/davisbrown/pull-up/server/internal/enrich"
+	"github.com/davisbrown/pull-up/server/internal/moderation"
 	"github.com/davisbrown/pull-up/server/internal/seeder"
 	"github.com/davisbrown/pull-up/server/internal/store"
 )
@@ -25,8 +26,9 @@ type Server struct {
 	issuer          *auth.Issuer
 	oauth           *auth.OAuthVerifier
 	log             *slog.Logger
-	seeder          *seeder.Seeder   // nil when auto-seeding is disabled
-	enricher        *enrich.Enricher // nil when enrichment is disabled
+	seeder          *seeder.Seeder     // nil when auto-seeding is disabled
+	enricher        *enrich.Enricher   // nil when enrichment is disabled
+	moderator       *moderation.Client // disabled without Workers AI credentials
 	backgroundSlots chan struct{}
 }
 
@@ -39,6 +41,7 @@ func NewServer(cfg *config.Config, st *store.Store, log *slog.Logger, sd *seeder
 		log:             log,
 		seeder:          sd,
 		enricher:        en,
+		moderator:       moderation.New(cfg.CloudflareAccountID, cfg.CloudflareAIToken),
 		backgroundSlots: make(chan struct{}, 32),
 	}
 }
