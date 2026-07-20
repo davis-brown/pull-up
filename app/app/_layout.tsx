@@ -125,6 +125,17 @@ function ThemedApp() {
     // slide-to-check-in screen instead.
     const sub = Notifications.addNotificationResponseReceivedListener((response) => {
       const data = response.notification.request.content.data;
+      // Phase 20 pushes carry no court: a level-up opens the profile
+      // (where the new level is), a streak nudge opens the map (where you
+      // go do something about it).
+      if (data?.action === "view_profile") {
+        router.push("/profile");
+        return;
+      }
+      if (data?.action === "view_map") {
+        router.push("/");
+        return;
+      }
       const courtId = data?.courtId;
       if (typeof courtId !== "string") return;
       if (data?.kind === "geofence_prompt") {

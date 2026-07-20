@@ -199,7 +199,7 @@ func (q *Queries) Follow(ctx context.Context, arg FollowParams) error {
 
 const getProfileStats = `-- name: GetProfileStats :one
 SELECT
-    u.id, u.display_name, u.avatar_url, u.is_private, u.reputation, u.created_at AS member_since,
+    u.id, u.display_name, u.avatar_url, u.is_private, u.reputation, u.xp, u.created_at AS member_since,
     (SELECT count(*) FROM check_ins ci WHERE ci.user_id = u.id)::int AS check_in_count,
     (SELECT count(*) FROM courts c WHERE c.submitted_by = u.id AND c.status = 'verified')::int AS courts_added_count,
     (SELECT count(*) FROM follows f WHERE f.followee_id = u.id)::int AS follower_count,
@@ -214,6 +214,7 @@ type GetProfileStatsRow struct {
 	AvatarUrl        *string   `json:"avatar_url"`
 	IsPrivate        bool      `json:"is_private"`
 	Reputation       int32     `json:"reputation"`
+	Xp               int32     `json:"xp"`
 	MemberSince      time.Time `json:"member_since"`
 	CheckInCount     int32     `json:"check_in_count"`
 	CourtsAddedCount int32     `json:"courts_added_count"`
@@ -230,6 +231,7 @@ func (q *Queries) GetProfileStats(ctx context.Context, id uuid.UUID) (GetProfile
 		&i.AvatarUrl,
 		&i.IsPrivate,
 		&i.Reputation,
+		&i.Xp,
 		&i.MemberSince,
 		&i.CheckInCount,
 		&i.CourtsAddedCount,

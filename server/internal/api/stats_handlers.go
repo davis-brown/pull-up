@@ -114,6 +114,13 @@ type meStatsResponse struct {
 	WeekStreak int         `json:"week_streak"`
 	Badges     []badge     `json:"badges"`
 	HomeCourts []homeCourt `json:"home_courts"`
+	// Phase 20: XP and level, flattened in so the player card renders
+	// from one request.
+	Level          int    `json:"level"`
+	Tier           string `json:"tier"`
+	XP             int    `json:"xp"`
+	XPIntoLevel    int    `json:"xp_into_level"`
+	XPForNextLevel int    `json:"xp_for_next_level"`
 }
 
 // handleMeStats serves the profile player card's stats: total games and
@@ -194,11 +201,23 @@ func (s *Server) handleMeStats(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	xp, err := s.store.Queries.GetUserXP(ctx, uid)
+	if err != nil {
+		s.internalError(w, "user xp", err)
+		return
+	}
+	progress := progressFor(int(xp))
+
 	writeJSON(w, http.StatusOK, meStatsResponse{
-		Games:      int(stats.Games),
-		Courts:     int(stats.Courts),
-		WeekStreak: streak,
-		Badges:     badges,
-		HomeCourts: homeCourts,
+		Games:          int(stats.Games),
+		Courts:         int(stats.Courts),
+		WeekStreak:     streak,
+		Badges:         badges,
+		HomeCourts:     homeCourts,
+		Level:          progress.Level,
+		Tier:           progress.Tier,
+		XP:             progress.XP,
+		XPIntoLevel:    progress.XPIntoLevel,
+		XPForNextLevel: progress.XPForNextLevel,
 	})
 }

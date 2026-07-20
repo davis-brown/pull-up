@@ -116,6 +116,7 @@ func (s *Server) handleCheckIn(w http.ResponseWriter, r *http.Request) {
 	}
 	if err == nil && submitter != nil && *submitter != uid {
 		s.awardReputation(r.Context(), *submitter, repCourtVerified)
+		s.awardXP(r.Context(), *submitter, "court_verified", "court:"+courtID.String(), xpCourtVerified)
 	}
 	// Reputation for showing up, capped to once per court per 20h so
 	// check-in/out loops don't farm it.
@@ -127,6 +128,10 @@ func (s *Server) handleCheckIn(w http.ResponseWriter, r *http.Request) {
 	} else if !recent {
 		s.awardReputation(r.Context(), uid, repCheckIn)
 	}
+	// XP (phase 20) rides the same gate but is a separate track — see
+	// internal/api/xp.go. Off the request path: gamification must never
+	// slow down or fail a check-in.
+	s.runBackground("award check-in xp", func() { s.awardCheckInXP(uid, courtID, checkIn.ID, recent) })
 	// If this started a run (0 → 1 active), ping the court's favoriters.
 	s.runBackground("notify run started", func() { s.notifyRunStarted(courtID, uid) })
 	// If this pushed the headcount over the alert threshold, ping favoriters

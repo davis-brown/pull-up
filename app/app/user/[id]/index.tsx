@@ -66,6 +66,18 @@ export default function ProfileScreen() {
         >
           {profile.display_name}
         </Text>
+        {profile.level != null && profile.tier ? (
+          <View
+            style={[
+              styles.levelChip,
+              { backgroundColor: t.colors.accentSurface, borderRadius: t.radius.full },
+            ]}
+          >
+            <Text style={[t.type.label, { color: t.colors.accent }]}>
+              LEVEL {profile.level} · {profile.tier.toUpperCase()}
+            </Text>
+          </View>
+        ) : null}
         <Text style={[t.type.caption, { color: t.colors.textMuted, marginTop: 2 }]}>
           {profile.reputation} rep · since {memberSince}
           {profile.follows_you ? "  ·  Follows you" : ""}
@@ -152,6 +164,7 @@ function Stat({ label, value }: { label: string; value: number }) {
 const styles = StyleSheet.create({
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   header: { alignItems: "center", marginBottom: 16 },
+  levelChip: { marginTop: 6, paddingVertical: 3, paddingHorizontal: 10 },
   statRow: { flexDirection: "row", justifyContent: "space-around" },
   stat: { alignItems: "center" },
   countRow: { flexDirection: "row", justifyContent: "space-around", marginTop: 12 },

@@ -51,7 +51,7 @@ WHERE (follower_id = $1 AND followee_id = $2)
 
 -- name: GetProfileStats :one
 SELECT
-    u.id, u.display_name, u.avatar_url, u.is_private, u.reputation, u.created_at AS member_since,
+    u.id, u.display_name, u.avatar_url, u.is_private, u.reputation, u.xp, u.created_at AS member_since,
     (SELECT count(*) FROM check_ins ci WHERE ci.user_id = u.id)::int AS check_in_count,
     (SELECT count(*) FROM courts c WHERE c.submitted_by = u.id AND c.status = 'verified')::int AS courts_added_count,
     (SELECT count(*) FROM follows f WHERE f.followee_id = u.id)::int AS follower_count,

@@ -107,6 +107,10 @@ func (s *Server) handleConfirmCourtFact(w http.ResponseWriter, r *http.Request) 
 		s.internalError(w, "confirm fact", err)
 		return
 	}
+	// Keeping a court's facts current earns a little XP (phase 20), keyed
+	// per court per day so re-tapping chips isn't a farm.
+	s.awardXP(r.Context(), userID(r), "fact_confirmed",
+		"fact:"+courtID.String()+":"+utcDay(time.Now()), xpFactConfirmed)
 
 	// The court's stored value follows the recent-window majority, so a
 	// wrong tap gets outvoted rather than moderated.
