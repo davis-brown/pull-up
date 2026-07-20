@@ -171,6 +171,10 @@ func (s *Server) Routes() http.Handler {
 			r.Get("/me/stats", s.handleMeStats)
 			r.Post("/me/level-up/ack", s.handleAckLevelUp)
 			r.Post("/me/badges/ack", s.handleAckBadges)
+			// Leaderboards are authenticated: they name players, and the
+			// visibility rules they enforce are all relative to a viewer.
+			r.Get("/courts/{id}/leaderboard", s.handleCourtLeaderboard)
+			r.Get("/me/circle/leaderboard", s.handleCircleLeaderboard)
 			r.Get("/me/favorites", s.handleListFavorites)
 			r.Post("/me/push-token", s.handleRegisterPushToken)
 			r.Delete("/me/push-token", s.handleUnregisterPushToken)

@@ -41,6 +41,7 @@ import type {
   FollowRequest,
   FollowUser,
   FriendPresence,
+  Leaderboard,
   MeStats,
   NearbyRun,
   PendingGame,
@@ -858,5 +859,26 @@ export function useVoteCourt(courtId: string) {
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["courts"] });
     },
+  });
+}
+
+// Phase 22: scoped leaderboards. Both are authenticated — the visibility
+// rules they enforce are all relative to a viewer — so both stay disabled
+// until there is a signed-in user.
+export function useCourtLeaderboard(courtId: string | undefined) {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ["courts", courtId, "leaderboard"],
+    enabled: !!user && !!courtId,
+    queryFn: () => api<Leaderboard>(`/courts/${idSegment(courtId!)}/leaderboard`),
+  });
+}
+
+export function useCircleLeaderboard() {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ["me", "circle", "leaderboard"],
+    enabled: !!user,
+    queryFn: () => api<Leaderboard>("/me/circle/leaderboard"),
   });
 }
