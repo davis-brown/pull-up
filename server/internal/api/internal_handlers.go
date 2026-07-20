@@ -42,7 +42,14 @@ func (s *Server) handleInternalDrain(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, "drain stale pending uploads", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"tiles": tiles, "courts": courts, "stale_pending_uploads": stale})
+	// Streak nudges (phase 20) ride this same cron rather than adding
+	// scheduling infrastructure. Self-limiting: each pass only touches
+	// players whose local clock is in the evening window, and each player
+	// is gated to one nudge per 6 days.
+	nudges := s.runStreakNudges(ctx)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"tiles": tiles, "courts": courts, "stale_pending_uploads": stale, "streak_nudges": nudges,
+	})
 }
 
 func (s *Server) drainStalePendingUploads(ctx context.Context) (int, error) {

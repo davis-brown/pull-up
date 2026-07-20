@@ -111,6 +111,19 @@ function ProfileSettingsContent() {
     }
   };
 
+  const togglePlayNudges = async (next: boolean) => {
+    setProfileError(null);
+    try {
+      await api<User>("/me", {
+        method: "PATCH",
+        body: JSON.stringify({ play_nudges_enabled: next }),
+      });
+      await refreshUser();
+    } catch (e) {
+      setProfileError(getErrorMessage(e, "Could not update nudges."));
+    }
+  };
+
   const toggleWindowAlerts = async (next: boolean) => {
     setProfileError(null);
     try {
@@ -415,6 +428,25 @@ function ProfileSettingsContent() {
             ]}
           >
             {(user?.window_alerts_enabled ?? true) ? "On" : "Off"}
+          </Text>
+        </Pressable>
+        <Pressable
+          onPress={() => void togglePlayNudges(!(user?.play_nudges_enabled ?? true))}
+          style={[styles.privacyRow, { borderTopColor: t.colors.border }]}
+        >
+          <View style={{ flex: 1 }}>
+            <Text style={[t.type.bodyMedium, { color: t.colors.textPrimary }]}>Streak reminders</Text>
+            <Text style={[t.type.caption, { color: t.colors.textSecondary }]}>
+              One nudge late in the week when your streak is about to lapse.
+            </Text>
+          </View>
+          <Text
+            style={[
+              t.type.bodyMedium,
+              { color: (user?.play_nudges_enabled ?? true) ? t.colors.accent : t.colors.textMuted },
+            ]}
+          >
+            {(user?.play_nudges_enabled ?? true) ? "On" : "Off"}
           </Text>
         </Pressable>
       </Card>
