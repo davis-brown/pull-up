@@ -27,6 +27,7 @@ import type {
   CourtActivity,
   CourtDetail,
   CourtFact,
+  CourtGame,
   CourtMessage,
   CourtPhoto,
   CourtSession,
@@ -42,6 +43,7 @@ import type {
   FriendPresence,
   MeStats,
   NearbyRun,
+  PendingGame,
   PhotoStatus,
   Profile,
   RunIntentSeeker,
@@ -368,6 +370,66 @@ export function useSetRunIntent(courtId: string) {
       }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ["courts", courtId, "run-intents"] });
+    },
+  });
+}
+
+// Phase 18: recorded games. Public listing — a confirmed result is a
+// fact about a public court, like its crowd reports.
+export function useCourtGames(courtId: string | undefined) {
+  return useQuery({
+    queryKey: ["courts", courtId, "games"],
+    enabled: !!courtId,
+    queryFn: async () => {
+      const res = await api<{ games: CourtGame[] }>(`/courts/${idSegment(courtId!)}/games`);
+      return res.games;
+    },
+  });
+}
+
+export function usePendingGames() {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ["me", "games", "pending"],
+    enabled: !!user,
+    queryFn: async () => {
+      const res = await api<{ games: PendingGame[] }>("/me/games/pending");
+      return res.games;
+    },
+  });
+}
+
+export interface NewGame {
+  team_a: string[];
+  team_b: string[];
+  winning_team: number;
+  score_win?: number;
+  score_lose?: number;
+}
+
+export function useRecordGame(courtId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (game: NewGame) =>
+      api<{ game: { id: string } }>(`/courts/${idSegment(courtId)}/games`, {
+        method: "POST",
+        body: JSON.stringify(game),
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["courts", courtId, "games"] });
+    },
+  });
+}
+
+export function useConfirmGame() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (gameId: string) =>
+      api<{ status: string }>(`/games/${idSegment(gameId)}/confirm`, { method: "POST" }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["me", "games", "pending"] });
+      void qc.invalidateQueries({ queryKey: ["courts"] });
+      void qc.invalidateQueries({ queryKey: ["me", "stats"] });
     },
   });
 }

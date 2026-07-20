@@ -121,6 +121,11 @@ type meStatsResponse struct {
 	XP             int    `json:"xp"`
 	XPIntoLevel    int    `json:"xp_into_level"`
 	XPForNextLevel int    `json:"xp_for_next_level"`
+	// Phase 18: W-L across confirmed games. Shown as a fact on the player
+	// card; deliberately not fed into XP or badges, since recording is
+	// voluntary and rewarding win RATE would just reward logging wins.
+	Wins   int `json:"wins"`
+	Losses int `json:"losses"`
 }
 
 // handleMeStats serves the profile player card's stats: total games and
@@ -201,6 +206,12 @@ func (s *Server) handleMeStats(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	record, err := s.store.Queries.UserGameRecord(ctx, uid)
+	if err != nil {
+		s.internalError(w, "user game record", err)
+		return
+	}
+
 	xp, err := s.store.Queries.GetUserXP(ctx, uid)
 	if err != nil {
 		s.internalError(w, "user xp", err)
@@ -219,5 +230,7 @@ func (s *Server) handleMeStats(w http.ResponseWriter, r *http.Request) {
 		XP:             progress.XP,
 		XPIntoLevel:    progress.XPIntoLevel,
 		XPForNextLevel: progress.XPForNextLevel,
+		Wins:           int(record.Wins),
+		Losses:         int(record.Losses),
 	})
 }
