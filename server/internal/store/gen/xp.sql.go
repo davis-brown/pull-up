@@ -263,3 +263,25 @@ func (q *Queries) XPBreakdownSince(ctx context.Context, arg XPBreakdownSincePara
 	}
 	return items, nil
 }
+
+const xPSince = `-- name: XPSince :one
+SELECT coalesce(sum(points), 0)::int AS xp
+FROM xp_events
+WHERE user_id = $1 AND created_at >= $2
+`
+
+type XPSinceParams struct {
+	UserID uuid.UUID `json:"user_id"`
+	Since  time.Time `json:"since"`
+}
+
+// Total XP earned in a window — the season total. Deliberately summed live
+// rather than cached: xp_events_user_created_idx covers it, it is one row
+// per profile load, and a cached per-season counter would be a second
+// source of truth to keep correct across backfills and season rollovers.
+func (q *Queries) XPSince(ctx context.Context, arg XPSinceParams) (int32, error) {
+	row := q.db.QueryRow(ctx, xPSince, arg.UserID, arg.Since)
+	var xp int32
+	err := row.Scan(&xp)
+	return xp, err
+}

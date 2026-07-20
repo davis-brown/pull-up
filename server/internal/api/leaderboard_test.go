@@ -6,9 +6,14 @@ import (
 )
 
 type leaderboardBody struct {
-	Metric     string `json:"metric"`
-	WindowDays int    `json:"window_days"`
-	Entries    []struct {
+	Metric string `json:"metric"`
+	Season struct {
+		Key       string `json:"key"`
+		Label     string `json:"label"`
+		StartedAt string `json:"started_at"`
+		EndsAt    string `json:"ends_at"`
+	} `json:"season"`
+	Entries []struct {
 		Rank        int    `json:"rank"`
 		UserID      string `json:"user_id"`
 		DisplayName string `json:"display_name"`
@@ -93,6 +98,10 @@ func TestCourtLeaderboardHidesPrivateStrangersAndBlocks(t *testing.T) {
 
 	if board.Metric != "check_ins" {
 		t.Errorf("metric = %q, want check_ins", board.Metric)
+	}
+	// The board is season-scoped, so it must say which season it covers.
+	if board.Season.Key == "" || board.Season.Label == "" || board.Season.StartedAt == "" {
+		t.Errorf("season = %+v, want a populated window", board.Season)
 	}
 	if board.ViewerRank == nil {
 		t.Error("viewer_rank is null, but the viewer checked in here")
