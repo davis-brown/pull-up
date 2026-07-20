@@ -17,6 +17,16 @@ const memoryTokens = new Map<string, string>();
 
 const tokenKey = (userId: string) => `${PUSH_TOKEN_KEY_PREFIX}${userId}`;
 
+// The device's IANA timezone, or undefined where the runtime can't say —
+// the server treats a missing/invalid zone as "no window alerts".
+export function deviceTimezone(): string | undefined {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function setPushRegistrationUser(userId: string): void {
   registrationGeneration += 1;
   activeUserId = userId;
@@ -81,7 +91,9 @@ export async function registerPushToken(opts?: {
     }
     await api<void>("/me/push-token", {
       method: "POST",
-      body: JSON.stringify({ token: token.data }),
+      // The device timezone rides along so the server can evaluate
+      // "is now inside this player's availability window" for alerts.
+      body: JSON.stringify({ token: token.data, timezone: deviceTimezone() }),
     });
   } catch {
     // Push is best-effort; never block login on it.

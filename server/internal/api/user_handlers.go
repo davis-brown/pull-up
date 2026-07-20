@@ -75,6 +75,11 @@ type patchMeRequest struct {
 	StyleTags    []string                 `json:"style_tags"`
 	SkillLevel   optionalNullable[string] `json:"skill_level"`
 	Availability []string                 `json:"availability"`
+	// IANA zone name reported by the device; drives your-window alert
+	// evaluation. Write-only from the app's perspective (never cleared —
+	// a device always has a zone to report).
+	Timezone            *string `json:"timezone"`
+	WindowAlertsEnabled *bool   `json:"window_alerts_enabled"`
 }
 
 // optionalNullable distinguishes an omitted PATCH field from an explicit
@@ -157,6 +162,10 @@ func (s *Server) handlePatchMe(w http.ResponseWriter, r *http.Request) {
 			seen[window] = true
 		}
 	}
+	if req.Timezone != nil && !validTimezone(*req.Timezone) {
+		writeError(w, http.StatusBadRequest, "timezone must be a valid IANA zone name")
+		return
+	}
 	uid := userID(r)
 	if req.AvatarURL.Value != nil {
 		value := strings.TrimSpace(*req.AvatarURL.Value)
@@ -199,9 +208,11 @@ func (s *Server) handlePatchMe(w http.ResponseWriter, r *http.Request) {
 		HeightCmSet:     req.HeightCm.Set,
 		HeightCm:        heightCm,
 		StyleTags:       req.StyleTags,
-		SkillLevelSet:   req.SkillLevel.Set,
-		SkillLevel:      req.SkillLevel.Value,
-		Availability:    req.Availability,
+		SkillLevelSet:       req.SkillLevel.Set,
+		SkillLevel:          req.SkillLevel.Value,
+		Availability:        req.Availability,
+		Timezone:            req.Timezone,
+		WindowAlertsEnabled: req.WindowAlertsEnabled,
 	})
 	if err != nil {
 		s.internalError(w, "update user", err)
