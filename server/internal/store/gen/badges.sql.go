@@ -78,11 +78,12 @@ func (q *Queries) MarkBadgesSynced(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
-const recordUserBadges = `-- name: RecordUserBadges :exec
+const recordUserBadges = `-- name: RecordUserBadges :many
 INSERT INTO user_badges (user_id, slug, seen_at)
 SELECT $1, unnest($2::text[]),
        CASE WHEN $3::bool THEN now() ELSE NULL END
 ON CONFLICT (user_id, slug) DO NOTHING
+RETURNING slug, earned_at
 `
 
 type RecordUserBadgesParams struct {
@@ -91,12 +92,38 @@ type RecordUserBadgesParams struct {
 	Seen   bool      `json:"seen"`
 }
 
+type RecordUserBadgesRow struct {
+	Slug     string    `json:"slug"`
+	EarnedAt time.Time `json:"earned_at"`
+}
+
 // Records newly-observed badges. seen decides whether they are celebrated:
 // the baseline sync passes true (everything already earned is old news),
 // every later call passes false so the badge gets its moment. ON CONFLICT
 // DO NOTHING keeps earned_at at the FIRST observation — re-recording an
 // existing badge must never reset its date or un-see it.
-func (q *Queries) RecordUserBadges(ctx context.Context, arg RecordUserBadgesParams) error {
-	_, err := q.db.Exec(ctx, recordUserBadges, arg.UserID, arg.Slugs, arg.Seen)
-	return err
+//
+// RETURNING carries the assigned earned_at back so the SAME response that
+// records a badge can report its date. Reading it beforehand cannot: the
+// row does not exist yet, which left earned_at null on exactly the request
+// that first earned the badge. Conflicting rows return nothing, which is
+// correct — their dates were already loaded by ListUserBadges.
+func (q *Queries) RecordUserBadges(ctx context.Context, arg RecordUserBadgesParams) ([]RecordUserBadgesRow, error) {
+	rows, err := q.db.Query(ctx, recordUserBadges, arg.UserID, arg.Slugs, arg.Seen)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []RecordUserBadgesRow
+	for rows.Next() {
+		var i RecordUserBadgesRow
+		if err := rows.Scan(&i.Slug, &i.EarnedAt); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
