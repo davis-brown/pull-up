@@ -48,6 +48,10 @@ comes from geo-verified check-ins and crowd reports.
   optional (Profile settings → Court alerts)
 
 **Planned runs (sessions)**
+- Looking for a run — mark "I'm looking to play" for a day + availability
+  window at a court; the demand is public ("3 players want to run Thursday
+  evening"), and hitting 4 seekers pushes everyone to plan it. Planning a
+  run in a matching window notifies that bucket's seekers to RSVP
 - Open-run discovery — a "Runs near you" rail on the Activity tab shows
   upcoming runs at any nearby court (no follows needed, guests included),
   and courts with a run in the next 24h carry a run tick on their map pin

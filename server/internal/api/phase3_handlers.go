@@ -113,6 +113,13 @@ func (s *Server) handleCreateSession(w http.ResponseWriter, r *http.Request) {
 	s.runBackground("notify session planned", func() {
 		s.notifySessionPlanned(courtID, court.Name, uid, session.StartsAt)
 	})
+	// This run may be exactly what a "looking for a run" bucket was
+	// waiting on (phase 19) — notify its seekers if so.
+	if date, windowKey, ok := bucketForSessionTime(session.StartsAt); ok {
+		s.runBackground("notify run intent converted", func() {
+			s.notifyRunIntentConverted(courtID, court.Name, date, windowKey, uid, session.ID)
+		})
+	}
 	writeJSON(w, http.StatusCreated, session)
 }
 
