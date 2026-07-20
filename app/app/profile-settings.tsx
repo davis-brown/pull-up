@@ -125,7 +125,7 @@ function ProfileSettingsContent() {
       });
       await refreshUser();
     } catch (e) {
-      setProfileError(e instanceof Error ? e.message : "Could not update alerts.");
+      setProfileError(getErrorMessage(e, "Could not update alerts."));
     }
   };
 
