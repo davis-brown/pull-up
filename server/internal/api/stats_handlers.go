@@ -108,10 +108,23 @@ func (s *Server) syncBadgeEarnedAt(ctx context.Context, uid uuid.UUID, badges []
 	}
 
 	if len(unrecorded) > 0 {
-		if err := s.store.Queries.RecordUserBadges(ctx, gen.RecordUserBadgesParams{
+		recorded, err := s.store.Queries.RecordUserBadges(ctx, gen.RecordUserBadgesParams{
 			UserID: uid, Slugs: unrecorded, Seen: baseline,
-		}); err != nil {
+		})
+		if err != nil {
 			return nil, err
+		}
+		// Fill in the dates just assigned, so the response that first
+		// records a badge reports its earn date rather than null.
+		dates := make(map[string]time.Time, len(recorded))
+		for _, row := range recorded {
+			dates[row.Slug] = row.EarnedAt
+		}
+		for i := range badges {
+			if earnedAt, ok := dates[badges[i].ID]; ok {
+				at := earnedAt
+				badges[i].EarnedAt = &at
+			}
 		}
 	}
 	if baseline {
