@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type AdminAction struct {
@@ -206,6 +207,22 @@ type RefreshToken struct {
 	CreatedAt      time.Time  `json:"created_at"`
 	FamilyID       uuid.UUID  `json:"family_id"`
 	ReplacedByHash *string    `json:"replaced_by_hash"`
+}
+
+type RunIntent struct {
+	CourtID   uuid.UUID   `json:"court_id"`
+	UserID    uuid.UUID   `json:"user_id"`
+	RunDate   pgtype.Date `json:"run_date"`
+	WindowKey string      `json:"window_key"`
+	CreatedAt time.Time   `json:"created_at"`
+}
+
+type RunIntentBucketEvent struct {
+	CourtID            uuid.UUID   `json:"court_id"`
+	RunDate            pgtype.Date `json:"run_date"`
+	WindowKey          string      `json:"window_key"`
+	ThresholdAlertedAt *time.Time  `json:"threshold_alerted_at"`
+	ConvertedAt        *time.Time  `json:"converted_at"`
 }
 
 type SeedRegion struct {

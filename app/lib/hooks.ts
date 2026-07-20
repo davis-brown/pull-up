@@ -44,6 +44,7 @@ import type {
   NearbyRun,
   PhotoStatus,
   Profile,
+  RunIntentSeeker,
   RunQuality,
   Surface,
   User,
@@ -338,6 +339,35 @@ export function useCourtSessions(courtId: string | undefined) {
     queryFn: async () => {
       const res = await api<{ sessions: CourtSession[] }>(`/courts/${idSegment(courtId!)}/sessions`);
       return res.sessions;
+    },
+  });
+}
+
+// Phase 19: looking-for-a-run. Public — no `enabled: !!user` gate, since
+// guests benefit from seeing demand before deciding whether to sign in.
+export function useRunIntents(courtId: string | undefined) {
+  return useQuery({
+    queryKey: ["courts", courtId, "run-intents"],
+    enabled: !!courtId,
+    queryFn: async () => {
+      const res = await api<{ seekers: RunIntentSeeker[] }>(
+        `/courts/${idSegment(courtId!)}/run-intents`,
+      );
+      return res.seekers;
+    },
+  });
+}
+
+export function useSetRunIntent(courtId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ joined, run_date, window_key }: { joined: boolean; run_date: string; window_key: string }) =>
+      api<{ joined: boolean; count: number }>(`/courts/${idSegment(courtId)}/run-intents`, {
+        method: joined ? "PUT" : "DELETE",
+        body: JSON.stringify({ run_date, window_key }),
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["courts", courtId, "run-intents"] });
     },
   });
 }
