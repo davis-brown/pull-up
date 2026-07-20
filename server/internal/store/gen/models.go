@@ -177,6 +177,26 @@ type FollowRequest struct {
 	CreatedAt   time.Time `json:"created_at"`
 }
 
+type Game struct {
+	ID          uuid.UUID  `json:"id"`
+	CourtID     uuid.UUID  `json:"court_id"`
+	RecordedBy  uuid.UUID  `json:"recorded_by"`
+	WinningTeam int16      `json:"winning_team"`
+	ScoreWin    *int16     `json:"score_win"`
+	ScoreLose   *int16     `json:"score_lose"`
+	Status      string     `json:"status"`
+	ConfirmedAt *time.Time `json:"confirmed_at"`
+	PlayedAt    time.Time  `json:"played_at"`
+	CreatedAt   time.Time  `json:"created_at"`
+}
+
+type GameParticipant struct {
+	GameID      uuid.UUID  `json:"game_id"`
+	UserID      uuid.UUID  `json:"user_id"`
+	Team        int16      `json:"team"`
+	ConfirmedAt *time.Time `json:"confirmed_at"`
+}
+
 type ObjectDeletionQueue struct {
 	StorageKey  string     `json:"storage_key"`
 	RequestedAt time.Time  `json:"requested_at"`

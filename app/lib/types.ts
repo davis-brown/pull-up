@@ -47,6 +47,43 @@ export interface MeStats {
   xp: number;
   xp_into_level: number;
   xp_for_next_level: number;
+  // Phase 18: W-L across confirmed games only.
+  wins: number;
+  losses: number;
+}
+
+// A player in a recorded game (phase 18). team is 0 or 1.
+export interface GamePlayer {
+  user_id: string;
+  display_name: string;
+  avatar_url: string | null;
+  team: number;
+}
+
+// A confirmed game from GET /courts/{id}/games.
+export interface CourtGame {
+  id: string;
+  court_id: string;
+  recorded_by: string;
+  winning_team: number;
+  score_win: number | null;
+  score_lose: number | null;
+  played_at: string;
+  players: GamePlayer[];
+}
+
+// A game awaiting the viewer's confirmation, from GET /me/games/pending.
+export interface PendingGame {
+  id: string;
+  court_id: string;
+  court_name: string;
+  recorded_by: string;
+  recorded_by_name: string;
+  winning_team: number;
+  score_win: number | null;
+  score_lose: number | null;
+  played_at: string;
+  my_team: number;
 }
 
 export interface LatestReport {

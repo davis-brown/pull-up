@@ -47,8 +47,15 @@ func (s *Server) handleInternalDrain(w http.ResponseWriter, r *http.Request) {
 	// players whose local clock is in the evening window, and each player
 	// is gated to one nudge per 6 days.
 	nudges := s.runStreakNudges(ctx)
+	// Unconfirmed games (phase 18) simply stop existing after 48h — a
+	// contested pickup result doesn't go to arbitration.
+	expiredGames, err := s.store.Queries.ExpireUnconfirmedGames(ctx)
+	if err != nil {
+		s.log.Error("expire unconfirmed games", "err", err)
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"tiles": tiles, "courts": courts, "stale_pending_uploads": stale, "streak_nudges": nudges,
+		"tiles": tiles, "courts": courts, "stale_pending_uploads": stale,
+		"streak_nudges": nudges, "expired_games": expiredGames,
 	})
 }
 
