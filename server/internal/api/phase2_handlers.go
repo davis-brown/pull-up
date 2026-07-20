@@ -139,6 +139,10 @@ func (s *Server) handleListFavorites(w http.ResponseWriter, r *http.Request) {
 
 type pushTokenRequest struct {
 	Token string `json:"token"`
+	// Device IANA timezone, best-effort: token registration is the one
+	// moment every notification-capable user passes through, so it doubles
+	// as the timezone capture point for your-window alerts.
+	Timezone string `json:"timezone,omitempty"`
 }
 
 func (s *Server) handleRegisterPushToken(w http.ResponseWriter, r *http.Request) {
@@ -156,6 +160,13 @@ func (s *Server) handleRegisterPushToken(w http.ResponseWriter, r *http.Request)
 	}); err != nil {
 		s.internalError(w, "register push token", err)
 		return
+	}
+	if tz := strings.TrimSpace(req.Timezone); validTimezone(tz) {
+		if err := s.store.Queries.SetUserTimezone(r.Context(), gen.SetUserTimezoneParams{
+			ID: userID(r), Timezone: &tz,
+		}); err != nil {
+			s.log.Error("set user timezone", "err", err)
+		}
 	}
 	w.WriteHeader(http.StatusNoContent)
 }

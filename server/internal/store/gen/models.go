@@ -237,22 +237,30 @@ type SessionRsvp struct {
 }
 
 type User struct {
-	ID              uuid.UUID  `json:"id"`
-	Email           string     `json:"email"`
-	PasswordHash    *string    `json:"password_hash"`
-	DisplayName     string     `json:"display_name"`
-	AvatarUrl       *string    `json:"avatar_url"`
-	Reputation      int32      `json:"reputation"`
-	CreatedAt       time.Time  `json:"created_at"`
-	AuthProvider    string     `json:"auth_provider"`
-	OauthSubject    *string    `json:"oauth_subject"`
-	IsAdmin         bool       `json:"is_admin"`
-	IsPrivate       bool       `json:"is_private"`
-	JerseyNumber    *int16     `json:"jersey_number"`
-	Position        *string    `json:"position"`
-	HeightCm        *int16     `json:"height_cm"`
-	StyleTags       []string   `json:"style_tags"`
-	EmailVerifiedAt *time.Time `json:"email_verified_at"`
-	SkillLevel      *string    `json:"skill_level"`
-	Availability    []string   `json:"availability"`
+	ID                  uuid.UUID  `json:"id"`
+	Email               string     `json:"email"`
+	PasswordHash        *string    `json:"password_hash"`
+	DisplayName         string     `json:"display_name"`
+	AvatarUrl           *string    `json:"avatar_url"`
+	Reputation          int32      `json:"reputation"`
+	CreatedAt           time.Time  `json:"created_at"`
+	AuthProvider        string     `json:"auth_provider"`
+	OauthSubject        *string    `json:"oauth_subject"`
+	IsAdmin             bool       `json:"is_admin"`
+	IsPrivate           bool       `json:"is_private"`
+	JerseyNumber        *int16     `json:"jersey_number"`
+	Position            *string    `json:"position"`
+	HeightCm            *int16     `json:"height_cm"`
+	StyleTags           []string   `json:"style_tags"`
+	EmailVerifiedAt     *time.Time `json:"email_verified_at"`
+	SkillLevel          *string    `json:"skill_level"`
+	Availability        []string   `json:"availability"`
+	Timezone            *string    `json:"timezone"`
+	WindowAlertsEnabled bool       `json:"window_alerts_enabled"`
+}
+
+type WindowAlert struct {
+	UserID  uuid.UUID `json:"user_id"`
+	CourtID uuid.UUID `json:"court_id"`
+	SentAt  time.Time `json:"sent_at"`
 }

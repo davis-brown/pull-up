@@ -290,28 +290,29 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email string) (GetUserByEm
 const getUserByID = `-- name: GetUserByID :one
 SELECT id, email, display_name, avatar_url, reputation, created_at, is_admin,
     is_private, jersey_number, position, height_cm, style_tags,
-    skill_level, availability,
+    skill_level, availability, window_alerts_enabled,
     (email_verified_at IS NOT NULL)::bool AS email_verified
 FROM users
 WHERE id = $1
 `
 
 type GetUserByIDRow struct {
-	ID            uuid.UUID `json:"id"`
-	Email         string    `json:"email"`
-	DisplayName   string    `json:"display_name"`
-	AvatarUrl     *string   `json:"avatar_url"`
-	Reputation    int32     `json:"reputation"`
-	CreatedAt     time.Time `json:"created_at"`
-	IsAdmin       bool      `json:"is_admin"`
-	IsPrivate     bool      `json:"is_private"`
-	JerseyNumber  *int16    `json:"jersey_number"`
-	Position      *string   `json:"position"`
-	HeightCm      *int16    `json:"height_cm"`
-	StyleTags     []string  `json:"style_tags"`
-	SkillLevel    *string   `json:"skill_level"`
-	Availability  []string  `json:"availability"`
-	EmailVerified bool      `json:"email_verified"`
+	ID                  uuid.UUID `json:"id"`
+	Email               string    `json:"email"`
+	DisplayName         string    `json:"display_name"`
+	AvatarUrl           *string   `json:"avatar_url"`
+	Reputation          int32     `json:"reputation"`
+	CreatedAt           time.Time `json:"created_at"`
+	IsAdmin             bool      `json:"is_admin"`
+	IsPrivate           bool      `json:"is_private"`
+	JerseyNumber        *int16    `json:"jersey_number"`
+	Position            *string   `json:"position"`
+	HeightCm            *int16    `json:"height_cm"`
+	StyleTags           []string  `json:"style_tags"`
+	SkillLevel          *string   `json:"skill_level"`
+	Availability        []string  `json:"availability"`
+	WindowAlertsEnabled bool      `json:"window_alerts_enabled"`
+	EmailVerified       bool      `json:"email_verified"`
 }
 
 func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (GetUserByIDRow, error) {
@@ -332,6 +333,7 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (GetUserByIDRow
 		&i.StyleTags,
 		&i.SkillLevel,
 		&i.Availability,
+		&i.WindowAlertsEnabled,
 		&i.EmailVerified,
 	)
 	return i, err
@@ -384,6 +386,20 @@ func (q *Queries) SetRefreshTokenReplacement(ctx context.Context, arg SetRefresh
 	return err
 }
 
+const setUserTimezone = `-- name: SetUserTimezone :exec
+UPDATE users SET timezone = $1::text WHERE id = $2
+`
+
+type SetUserTimezoneParams struct {
+	Timezone *string   `json:"timezone"`
+	ID       uuid.UUID `json:"id"`
+}
+
+func (q *Queries) SetUserTimezone(ctx context.Context, arg SetUserTimezoneParams) error {
+	_, err := q.db.Exec(ctx, setUserTimezone, arg.Timezone, arg.ID)
+	return err
+}
+
 const updateUser = `-- name: UpdateUser :one
 UPDATE users SET
     display_name   = coalesce($1, display_name),
@@ -399,48 +415,53 @@ UPDATE users SET
     style_tags     = coalesce($11::text[], style_tags),
     skill_level    = CASE WHEN $12::bool
                           THEN $13::text ELSE skill_level END,
-    availability   = coalesce($14::text[], availability)
-WHERE id = $15
+    availability   = coalesce($14::text[], availability),
+    timezone       = coalesce($15::text, timezone),
+    window_alerts_enabled = coalesce($16::bool, window_alerts_enabled)
+WHERE id = $17
 RETURNING id, email, display_name, avatar_url, reputation, created_at, is_admin,
     is_private, jersey_number, position, height_cm, style_tags,
-    skill_level, availability,
+    skill_level, availability, window_alerts_enabled,
     (email_verified_at IS NOT NULL)::bool AS email_verified
 `
 
 type UpdateUserParams struct {
-	DisplayName     *string   `json:"display_name"`
-	AvatarUrlSet    bool      `json:"avatar_url_set"`
-	AvatarUrl       *string   `json:"avatar_url"`
-	IsPrivate       *bool     `json:"is_private"`
-	JerseyNumberSet bool      `json:"jersey_number_set"`
-	JerseyNumber    *int16    `json:"jersey_number"`
-	PositionSet     bool      `json:"position_set"`
-	Position        *string   `json:"position"`
-	HeightCmSet     bool      `json:"height_cm_set"`
-	HeightCm        *int16    `json:"height_cm"`
-	StyleTags       []string  `json:"style_tags"`
-	SkillLevelSet   bool      `json:"skill_level_set"`
-	SkillLevel      *string   `json:"skill_level"`
-	Availability    []string  `json:"availability"`
-	ID              uuid.UUID `json:"id"`
+	DisplayName         *string   `json:"display_name"`
+	AvatarUrlSet        bool      `json:"avatar_url_set"`
+	AvatarUrl           *string   `json:"avatar_url"`
+	IsPrivate           *bool     `json:"is_private"`
+	JerseyNumberSet     bool      `json:"jersey_number_set"`
+	JerseyNumber        *int16    `json:"jersey_number"`
+	PositionSet         bool      `json:"position_set"`
+	Position            *string   `json:"position"`
+	HeightCmSet         bool      `json:"height_cm_set"`
+	HeightCm            *int16    `json:"height_cm"`
+	StyleTags           []string  `json:"style_tags"`
+	SkillLevelSet       bool      `json:"skill_level_set"`
+	SkillLevel          *string   `json:"skill_level"`
+	Availability        []string  `json:"availability"`
+	Timezone            *string   `json:"timezone"`
+	WindowAlertsEnabled *bool     `json:"window_alerts_enabled"`
+	ID                  uuid.UUID `json:"id"`
 }
 
 type UpdateUserRow struct {
-	ID            uuid.UUID `json:"id"`
-	Email         string    `json:"email"`
-	DisplayName   string    `json:"display_name"`
-	AvatarUrl     *string   `json:"avatar_url"`
-	Reputation    int32     `json:"reputation"`
-	CreatedAt     time.Time `json:"created_at"`
-	IsAdmin       bool      `json:"is_admin"`
-	IsPrivate     bool      `json:"is_private"`
-	JerseyNumber  *int16    `json:"jersey_number"`
-	Position      *string   `json:"position"`
-	HeightCm      *int16    `json:"height_cm"`
-	StyleTags     []string  `json:"style_tags"`
-	SkillLevel    *string   `json:"skill_level"`
-	Availability  []string  `json:"availability"`
-	EmailVerified bool      `json:"email_verified"`
+	ID                  uuid.UUID `json:"id"`
+	Email               string    `json:"email"`
+	DisplayName         string    `json:"display_name"`
+	AvatarUrl           *string   `json:"avatar_url"`
+	Reputation          int32     `json:"reputation"`
+	CreatedAt           time.Time `json:"created_at"`
+	IsAdmin             bool      `json:"is_admin"`
+	IsPrivate           bool      `json:"is_private"`
+	JerseyNumber        *int16    `json:"jersey_number"`
+	Position            *string   `json:"position"`
+	HeightCm            *int16    `json:"height_cm"`
+	StyleTags           []string  `json:"style_tags"`
+	SkillLevel          *string   `json:"skill_level"`
+	Availability        []string  `json:"availability"`
+	WindowAlertsEnabled bool      `json:"window_alerts_enabled"`
+	EmailVerified       bool      `json:"email_verified"`
 }
 
 func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (UpdateUserRow, error) {
@@ -459,6 +480,8 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (UpdateU
 		arg.SkillLevelSet,
 		arg.SkillLevel,
 		arg.Availability,
+		arg.Timezone,
+		arg.WindowAlertsEnabled,
 		arg.ID,
 	)
 	var i UpdateUserRow
@@ -477,6 +500,7 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (UpdateU
 		&i.StyleTags,
 		&i.SkillLevel,
 		&i.Availability,
+		&i.WindowAlertsEnabled,
 		&i.EmailVerified,
 	)
 	return i, err
