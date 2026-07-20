@@ -9,11 +9,20 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"time"
 )
 
-const endpoint = "https://exp.host/--/api/v2/push/send"
 const chunkSize = 100
+
+// endpoint resolves per call so tests can point sends at a local server
+// (EXPO_PUSH_URL); production never sets it and uses Expo's service.
+func endpoint() string {
+	if v := os.Getenv("EXPO_PUSH_URL"); v != "" {
+		return v
+	}
+	return "https://exp.host/--/api/v2/push/send"
+}
 
 type message struct {
 	To    []string          `json:"to"`
@@ -34,7 +43,7 @@ func Send(ctx context.Context, tokens []string, title, body string, data map[str
 		if err != nil {
 			return err
 		}
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(payload))
+		req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint(), bytes.NewReader(payload))
 		if err != nil {
 			return err
 		}

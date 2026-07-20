@@ -17,7 +17,7 @@ WHERE email = $1;
 -- name: GetUserByID :one
 SELECT id, email, display_name, avatar_url, reputation, created_at, is_admin,
     is_private, jersey_number, position, height_cm, style_tags,
-    skill_level, availability,
+    skill_level, availability, window_alerts_enabled,
     (email_verified_at IS NOT NULL)::bool AS email_verified
 FROM users
 WHERE id = $1;
@@ -37,12 +37,17 @@ UPDATE users SET
     style_tags     = coalesce(sqlc.narg('style_tags')::text[], style_tags),
     skill_level    = CASE WHEN sqlc.arg('skill_level_set')::bool
                           THEN sqlc.narg('skill_level')::text ELSE skill_level END,
-    availability   = coalesce(sqlc.narg('availability')::text[], availability)
+    availability   = coalesce(sqlc.narg('availability')::text[], availability),
+    timezone       = coalesce(sqlc.narg('timezone')::text, timezone),
+    window_alerts_enabled = coalesce(sqlc.narg('window_alerts_enabled')::bool, window_alerts_enabled)
 WHERE id = sqlc.arg('id')
 RETURNING id, email, display_name, avatar_url, reputation, created_at, is_admin,
     is_private, jersey_number, position, height_cm, style_tags,
-    skill_level, availability,
+    skill_level, availability, window_alerts_enabled,
     (email_verified_at IS NOT NULL)::bool AS email_verified;
+
+-- name: SetUserTimezone :exec
+UPDATE users SET timezone = sqlc.narg('timezone')::text WHERE id = sqlc.arg('id');
 
 -- name: ClearUserAvatar :exec
 UPDATE users SET avatar_url = NULL WHERE id = $1;

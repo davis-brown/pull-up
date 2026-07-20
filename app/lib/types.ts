@@ -15,6 +15,9 @@ export interface User {
   style_tags: string[];
   skill_level: string | null;
   availability: string[];
+  // Optional: only the /me and PATCH /me responses carry it (login/register
+  // payloads predate phase 16 and are left untouched).
+  window_alerts_enabled?: boolean;
 }
 
 // /me/stats (Task 6): the player card's stats, badges, and home courts.

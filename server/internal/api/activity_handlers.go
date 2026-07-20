@@ -129,6 +129,9 @@ func (s *Server) handleCheckIn(w http.ResponseWriter, r *http.Request) {
 	}
 	// If this started a run (0 → 1 active), ping the court's favoriters.
 	s.runBackground("notify run started", func() { s.notifyRunStarted(courtID, uid) })
+	// If this pushed the headcount over the alert threshold, ping favoriters
+	// whose availability window covers right now (phase 16).
+	s.runBackground("notify window alerts", func() { s.notifyWindowAlerts(courtID, uid, partySize) })
 	writeJSON(w, http.StatusCreated, checkIn)
 }
 
