@@ -29,5 +29,26 @@ export const XP_SOURCES: { label: string; points: string }[] = [
   { label: "A run you planned draws a crowd", points: "+20" },
   { label: "A court you added gets verified", points: "+25" },
   { label: "Confirm a court's conditions", points: "+2" },
+  { label: "Play a confirmed game", points: "+10" },
   { label: "Weekly streak bonus", points: "+10 per week, up to 5" },
 ];
+
+// Display names for the award kinds in /me/stats' xp_breakdown. Keyed by
+// the raw ledger kind from internal/api/xp.go. The server sends only kinds
+// that actually earned something in the window, so this map is read
+// defensively: an unrecognised kind (a new award shipped ahead of the app)
+// falls back to a readable form of the key rather than rendering blank.
+const XP_KIND_LABELS: Record<string, string> = {
+  check_in: "Check-ins",
+  daily_first: "First check-in of the day",
+  showed_up: "Showed up to a run",
+  hosted_run: "Runs you planned",
+  court_verified: "Courts you added, verified",
+  fact_confirmed: "Court conditions confirmed",
+  game_played: "Games played",
+  streak_week: "Weekly streak",
+};
+
+export function xpKindLabel(kind: string): string {
+  return XP_KIND_LABELS[kind] ?? kind.replace(/_/g, " ");
+}

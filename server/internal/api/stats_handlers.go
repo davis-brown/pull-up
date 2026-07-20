@@ -126,6 +126,26 @@ type meStatsResponse struct {
 	// voluntary and rewarding win RATE would just reward logging wins.
 	Wins   int `json:"wins"`
 	Losses int `json:"losses"`
+	// Phase 21: what the recent XP is made of, and a level crossing the
+	// player hasn't been shown yet (null when there is nothing to celebrate).
+	XPBreakdown    []xpBreakdownEntry `json:"xp_breakdown"`
+	LevelUpPending *int               `json:"level_up_pending"`
+}
+
+// xpBreakdownWindowDays bounds the "what have I earned lately" view. Long
+// enough that an occasional player still sees themselves in it, short
+// enough that it reads as recent rather than lifetime (users.xp already
+// carries lifetime).
+const xpBreakdownWindowDays = 30
+
+// xpBreakdownEntry is one award kind's contribution over the window. Kind
+// is the raw award kind from the ledger ("check_in", "showed_up", …); the
+// client owns the display name, so adding an award kind server-side needs
+// no client release to stop showing it as unlabelled.
+type xpBreakdownEntry struct {
+	Kind   string `json:"kind"`
+	Points int    `json:"points"`
+	Events int    `json:"events"`
 }
 
 // handleMeStats serves the profile player card's stats: total games and
@@ -212,12 +232,33 @@ func (s *Server) handleMeStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	xp, err := s.store.Queries.GetUserXP(ctx, uid)
+	xpState, err := s.store.Queries.GetUserXP(ctx, uid)
 	if err != nil {
 		s.internalError(w, "user xp", err)
 		return
 	}
-	progress := progressFor(int(xp))
+	progress := progressFor(int(xpState.Xp))
+
+	breakdownRows, err := s.store.Queries.XPBreakdownSince(ctx, gen.XPBreakdownSinceParams{
+		UserID: uid,
+		Since:  time.Now().AddDate(0, 0, -xpBreakdownWindowDays),
+	})
+	if err != nil {
+		s.internalError(w, "xp breakdown", err)
+		return
+	}
+	breakdown := make([]xpBreakdownEntry, 0, len(breakdownRows))
+	for _, b := range breakdownRows {
+		breakdown = append(breakdown, xpBreakdownEntry{
+			Kind: b.Kind, Points: int(b.Points), Events: int(b.Events),
+		})
+	}
+
+	var levelUpPending *int
+	if xpState.LevelUpPending != nil {
+		level := int(*xpState.LevelUpPending)
+		levelUpPending = &level
+	}
 
 	writeJSON(w, http.StatusOK, meStatsResponse{
 		Games:          int(stats.Games),
@@ -232,5 +273,20 @@ func (s *Server) handleMeStats(w http.ResponseWriter, r *http.Request) {
 		XPForNextLevel: progress.XPForNextLevel,
 		Wins:           int(record.Wins),
 		Losses:         int(record.Losses),
+		XPBreakdown:    breakdown,
+		LevelUpPending: levelUpPending,
 	})
+}
+
+// handleAckLevelUp clears a pending level crossing once the app has shown
+// it. Explicit rather than clearing inside /me/stats: the app refetches
+// stats on resume and in the background, so a read-clears-it design would
+// routinely spend the celebration on a fetch the player never saw.
+// Idempotent — acking nothing is a no-op, so a retry is safe.
+func (s *Server) handleAckLevelUp(w http.ResponseWriter, r *http.Request) {
+	if err := s.store.Queries.AckLevelUp(r.Context(), userID(r)); err != nil {
+		s.internalError(w, "ack level up", err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }

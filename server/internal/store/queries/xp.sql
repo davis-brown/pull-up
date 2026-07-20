@@ -35,7 +35,9 @@ SELECT (SELECT coalesce(sum(points), 0)::int FROM ins) AS awarded,
        (SELECT xp FROM bumped) AS total_xp;
 
 -- name: GetUserXP :one
-SELECT xp FROM users WHERE id = $1;
+-- Both halves of the player card's XP state in one read: the cached
+-- lifetime total, and any level crossing not yet shown to the player.
+SELECT xp, level_up_pending FROM users WHERE id = $1;
 
 -- name: FindAttendedSessionForCheckIn :one
 -- The run this check-in counts as showing up to: a session at this court
@@ -82,3 +84,34 @@ LIMIT sqlc.arg('max_candidates');
 
 -- name: MarkPlayNudgeSent :exec
 UPDATE users SET last_play_nudge_at = now() WHERE id = $1;
+
+-- Phase 21: XP legibility --------------------------------------------------
+
+-- name: XPBreakdownSince :many
+-- What a player's recent XP is actually made of, grouped by award kind.
+-- Reads the xp_events ledger directly (phase 20 wrote it but never read
+-- it); xp_events_user_created_idx covers this exactly. Kinds with no
+-- events in the window are simply absent — the client renders the fixed
+-- list and fills in zeros, so a new award kind never needs a migration
+-- here.
+SELECT kind,
+       sum(points)::int AS points,
+       count(*)::int    AS events
+FROM xp_events
+WHERE user_id = sqlc.arg('user_id')
+  AND created_at >= sqlc.arg('since')
+GROUP BY kind
+ORDER BY points DESC, kind;
+
+-- name: MarkLevelUpPending :exec
+-- Records a level crossing for a player who can't be told about it in the
+-- response that caused it (awardCheckInXP runs off the request path).
+-- GREATEST keeps the highest unseen level when two crossings land before
+-- the player opens the app, so a double level-up celebrates the level they
+-- actually reached rather than the first one.
+UPDATE users
+SET level_up_pending = GREATEST(coalesce(level_up_pending, 0), sqlc.arg('level')::int)
+WHERE id = sqlc.arg('user_id');
+
+-- name: AckLevelUp :exec
+UPDATE users SET level_up_pending = NULL WHERE id = $1;

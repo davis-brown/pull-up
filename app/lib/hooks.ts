@@ -666,6 +666,20 @@ export function useMeStats() {
   });
 }
 
+// Clears a pending level crossing after the app has shown it. Deliberately
+// separate from reading /me/stats: stats refetch on resume and in the
+// background, so clearing on read would spend the celebration on a fetch
+// the player never saw. Settles the stats cache either way — a failed ack
+// just means the celebration shows again next time, which is the harmless
+// direction to fail.
+export function useAckLevelUp() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => api<void>("/me/level-up/ack", { method: "POST" }),
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["me", "stats"] }),
+  });
+}
+
 export function useProfile(id: string | undefined) {
   return useQuery({
     queryKey: ["users", id],

@@ -10,11 +10,12 @@ import {
 } from "react-native";
 import { captureRef } from "react-native-view-shot";
 import { Button, Card, ErrorText, FullScreenLoader, Overline } from "@/components/ui";
+import { LevelUpCelebration } from "@/components/LevelUpCelebration";
 import { PlayerCard } from "@/components/PlayerCard";
 import { SignInScreenCta } from "@/components/SignInCta";
 import { useAuth } from "@/lib/auth-context";
 import { getErrorMessage } from "@/lib/errors";
-import { useMeStats } from "@/lib/hooks";
+import { useAckLevelUp, useMeStats } from "@/lib/hooks";
 import { XP_SOURCES } from "@/lib/levels";
 import { buildProfileLink } from "@/lib/links";
 import { useTheme } from "@/lib/theme";
@@ -41,6 +42,18 @@ function ProfileContent() {
   const [sharing, setSharing] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
   const [shareError, setShareError] = useState<string | null>(null);
+
+  // Level-up celebration. Tracking the level already celebrated locally
+  // means dismissing hides it immediately rather than waiting on the ack
+  // round-trip, and a failed ack can't re-open it on this screen.
+  const ackLevelUp = useAckLevelUp();
+  const [celebrated, setCelebrated] = useState<number | null>(null);
+  const pendingLevel = stats?.level_up_pending ?? null;
+  const celebrationLevel = pendingLevel !== celebrated ? pendingLevel : null;
+  const dismissLevelUp = () => {
+    setCelebrated(pendingLevel);
+    ackLevelUp.mutate();
+  };
 
   const shareCard = async () => {
     if (!user) return;
@@ -71,6 +84,11 @@ function ProfileContent() {
       style={{ backgroundColor: t.colors.background }}
       contentContainerStyle={{ padding: t.spacing.lg }}
     >
+      <LevelUpCelebration
+        level={celebrationLevel}
+        tier={stats?.tier}
+        onDismiss={dismissLevelUp}
+      />
       {user ? <PlayerCard user={user} stats={stats} innerRef={cardRef} /> : null}
       <View style={{ marginTop: t.spacing.sm }}>
         <Button

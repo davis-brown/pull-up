@@ -147,6 +147,15 @@ func (s *Server) awardXP(ctx context.Context, userID uuid.UUID, kind, dedupKey s
 	before := levelFor(int(row.TotalXp) - int(row.Awarded))
 	after := levelFor(int(row.TotalXp))
 	if after > before {
+		// Persist the crossing before pushing. Most awards land off the
+		// request path, so this flag is the only way the app can show the
+		// moment in-app; the push is a nudge to come look at it, not the
+		// notification of record.
+		if err := s.store.Queries.MarkLevelUpPending(ctx, gen.MarkLevelUpPendingParams{
+			UserID: userID, Level: int32(after),
+		}); err != nil {
+			s.log.Error("mark level up pending", "user", userID, "level", after, "err", err)
+		}
 		s.runBackground("notify level up", func() { s.notifyLevelUp(userID, after) })
 	}
 	return int(row.Awarded)

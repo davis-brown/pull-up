@@ -169,6 +169,7 @@ func (s *Server) Routes() http.Handler {
 			r.Get("/me/check-ins/current", s.handleCurrentCheckIn)
 			r.Get("/me/check-ins", s.handleCheckInHistory)
 			r.Get("/me/stats", s.handleMeStats)
+			r.Post("/me/level-up/ack", s.handleAckLevelUp)
 			r.Get("/me/favorites", s.handleListFavorites)
 			r.Post("/me/push-token", s.handleRegisterPushToken)
 			r.Delete("/me/push-token", s.handleUnregisterPushToken)
