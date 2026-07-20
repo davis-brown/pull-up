@@ -21,15 +21,16 @@ import (
 )
 
 type Server struct {
-	cfg             *config.Config
-	store           *store.Store
-	issuer          *auth.Issuer
-	oauth           *auth.OAuthVerifier
-	log             *slog.Logger
-	seeder          *seeder.Seeder     // nil when auto-seeding is disabled
-	enricher        *enrich.Enricher   // nil when enrichment is disabled
-	moderator       *moderation.Client // disabled without Workers AI credentials
-	backgroundSlots chan struct{}
+	cfg              *config.Config
+	store            *store.Store
+	issuer           *auth.Issuer
+	oauth            *auth.OAuthVerifier
+	log              *slog.Logger
+	seeder           *seeder.Seeder     // nil when auto-seeding is disabled
+	enricher         *enrich.Enricher   // nil when enrichment is disabled
+	moderator        *moderation.Client // disabled without Workers AI credentials
+	moderationOutage outageThrottle     // rate-limits the "classifier is down" alert
+	backgroundSlots  chan struct{}
 }
 
 func NewServer(cfg *config.Config, st *store.Store, log *slog.Logger, sd *seeder.Seeder, en *enrich.Enricher) *Server {
