@@ -38,6 +38,38 @@ WHERE s.court_id = sqlc.arg(court_id)
 ORDER BY s.starts_at
 LIMIT 20;
 
+-- name: ListNearbyUpcomingSessions :many
+-- Phase 17: the Activity tab's "runs near you" rail. Public discovery —
+-- viewer_id is uuid.Nil for guests (the blocked filter then matches
+-- nothing). Same -2h grace as ListUpcomingSessions so an in-progress run
+-- stays visible; capped at 24h out so the rail is about today, not the
+-- whole planning horizon.
+SELECT
+    s.id, s.court_id, c.name AS court_name,
+    ST_Distance(c.location, ST_SetSRID(ST_MakePoint(sqlc.arg(lng)::float8, sqlc.arg(lat)::float8), 4326)::geography)::float8 AS distance_m,
+    s.created_by, u.display_name AS created_by_name,
+    s.starts_at, s.note,
+    g.going_count
+FROM sessions s
+JOIN courts c ON c.id = s.court_id
+JOIN users u ON u.id = s.created_by
+LEFT JOIN LATERAL (
+    SELECT count(*)::int AS going_count
+    FROM session_rsvps r
+    WHERE r.session_id = s.id AND r.status = 'going'
+) g ON true
+WHERE s.canceled_at IS NULL
+  AND c.status <> 'rejected'
+  AND s.starts_at > now() - interval '2 hours'
+  AND s.starts_at < now() + interval '24 hours'
+  AND ST_DWithin(c.location, ST_SetSRID(ST_MakePoint(sqlc.arg(lng)::float8, sqlc.arg(lat)::float8), 4326)::geography, sqlc.arg(radius_m)::float8)
+  AND NOT EXISTS (
+      SELECT 1 FROM blocked_users b
+      WHERE b.blocker_id = sqlc.arg(viewer_id) AND b.blocked_id = s.created_by
+  )
+ORDER BY s.starts_at, distance_m
+LIMIT 10;
+
 -- name: CancelSession :execrows
 UPDATE sessions SET canceled_at = now()
 WHERE id = $1 AND created_by = $2 AND canceled_at IS NULL;

@@ -56,6 +56,7 @@ function makeCourt(overrides: Partial<CourtSummary>): CourtSummary {
     status: "verified",
     active_count: 0,
     latest_report: null,
+    next_run_at: null,
     ...overrides,
   };
 }

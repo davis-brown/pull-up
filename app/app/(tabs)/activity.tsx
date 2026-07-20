@@ -14,12 +14,13 @@ import { useQuery } from "@tanstack/react-query";
 import { EmptyState } from "@/components/EmptyState";
 import { FeedHeader } from "@/components/FeedHeader";
 import { FilterSheet } from "@/components/FilterSheet";
+import { NearbyRuns } from "@/components/NearbyRuns";
 import { QueryError } from "@/components/QueryError";
 import { Card, FullScreenLoader } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { filtersToQuery, type CourtFilters } from "@/lib/court-filters";
-import { useFeed } from "@/lib/hooks";
+import { useFeed, useNearbyRuns } from "@/lib/hooks";
 import { FALLBACK_CENTER, tryGetPosition, type Coords } from "@/lib/location";
 import { safePathSegment } from "@/lib/routes";
 import { useTheme } from "@/lib/theme";
@@ -41,6 +42,10 @@ export default function ActivityScreen() {
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
   const { user } = useAuth();
   const feed = useFeed();
+  const nearbyRuns = useNearbyRuns(pos);
+  // The signed-in feed already shows runs from followed planners/favorited
+  // courts — don't list the same run twice.
+  const feedRunIds = new Set((user && feed.data?.upcoming_runs.map((r) => r.id)) || []);
   const activeFilterCount = Object.values(filters).filter(
     (v) => v !== undefined,
   ).length;
@@ -96,6 +101,7 @@ export default function ActivityScreen() {
             onRefresh={() => {
               void refetch();
               void feed.refetch();
+              void nearbyRuns.refetch();
             }}
             tintColor={t.colors.accent}
           />
@@ -156,6 +162,7 @@ export default function ActivityScreen() {
                 />
               )
             ) : null}
+            <NearbyRuns runs={nearbyRuns.data?.runs ?? []} excludeIds={feedRunIds} />
           </>
         }
         ListEmptyComponent={

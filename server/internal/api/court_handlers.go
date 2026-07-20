@@ -64,6 +64,9 @@ type courtSummary struct {
 	Access  *string `json:"access"`
 	RimType *string `json:"rim_type"`
 	NetType *string `json:"net_type"`
+
+	// Earliest non-canceled run in the next 24h (phase 17 pin badge).
+	NextRunAt *time.Time `json:"next_run_at"`
 }
 
 type latestReport struct {
@@ -77,6 +80,16 @@ func newLatestReport(playerCount *int16, runQuality *string, createdAt time.Time
 		return nil
 	}
 	return &latestReport{PlayerCount: playerCount, RunQuality: runQuality, CreatedAt: createdAt}
+}
+
+// nextRunPtr undoes the SQL epoch sentinel: sqlc can't see that the lateral
+// join makes next_run_at nullable, so the query coalesces to 'epoch' and the
+// payload maps that back to null (same trick as latest_report_at).
+func nextRunPtr(t time.Time) *time.Time {
+	if t.Unix() <= 0 {
+		return nil
+	}
+	return &t
 }
 
 // optBool returns a *bool for "true"/"false" query values, nil when absent/invalid.
@@ -207,6 +220,7 @@ func (s *Server) handleListCourts(w http.ResponseWriter, r *http.Request) {
 			LatestReport:  newLatestReport(c.LatestPlayerCount, c.LatestRunQuality, c.LatestReportAt),
 			DrinkingWater: c.DrinkingWater, Toilets: c.Toilets, Parking: c.Parking, Fenced: c.Fenced,
 			Covered: c.Covered, Fee: c.Fee, Access: c.Access, RimType: c.RimType, NetType: c.NetType,
+			NextRunAt: nextRunPtr(c.NextRunAt),
 		})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"courts": out, "seeding": seeding})
@@ -263,6 +277,7 @@ func (s *Server) listCourtsInBBox(w http.ResponseWriter, r *http.Request, bbox s
 			LatestReport:  newLatestReport(c.LatestPlayerCount, c.LatestRunQuality, c.LatestReportAt),
 			DrinkingWater: c.DrinkingWater, Toilets: c.Toilets, Parking: c.Parking, Fenced: c.Fenced,
 			Covered: c.Covered, Fee: c.Fee, Access: c.Access, RimType: c.RimType, NetType: c.NetType,
+			NextRunAt: nextRunPtr(c.NextRunAt),
 		})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"courts": out, "seeding": seeding})
