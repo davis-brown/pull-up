@@ -42,6 +42,10 @@ comes from geo-verified check-ins and crowd reports.
   background-location disclosure screen before enabling it
 - Discover/Activity feed — nearby courts ranked by liveness then distance,
   a "friends here" strip, and upcoming runs from people you follow
+- Your-window alerts — when a favorite court's live headcount crosses the
+  threshold during one of your availability windows, you get a push
+  ("Now at Rucker Park: 5 playing"); once per court per day, timezone-aware,
+  optional (Profile settings → Court alerts)
 
 **Planned runs (sessions)**
 - Schedule a run at a court (quick-pick day/time chips + optional note)

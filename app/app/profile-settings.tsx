@@ -12,6 +12,7 @@ import { Avatar } from "@/components/Avatar";
 import { Button, Card, Chip, ErrorText, Field, FullScreenLoader } from "@/components/ui";
 import { SignInScreenCta } from "@/components/SignInCta";
 import { api } from "@/lib/api";
+import { deviceTimezone } from "@/lib/push-registration";
 import { useAuth } from "@/lib/auth-context";
 import { getErrorMessage } from "@/lib/errors";
 import {
@@ -107,6 +108,24 @@ function ProfileSettingsContent() {
       await refreshUser();
     } catch (e) {
       setProfileError(getErrorMessage(e, "Could not update privacy."));
+    }
+  };
+
+  const toggleWindowAlerts = async (next: boolean) => {
+    setProfileError(null);
+    try {
+      // Turning alerts on re-reports the device timezone: users who
+      // registered their push token before phase 16 have none on file.
+      await api<User>("/me", {
+        method: "PATCH",
+        body: JSON.stringify({
+          window_alerts_enabled: next,
+          ...(next ? { timezone: deviceTimezone() } : {}),
+        }),
+      });
+      await refreshUser();
+    } catch (e) {
+      setProfileError(e instanceof Error ? e.message : "Could not update alerts.");
     }
   };
 
@@ -377,6 +396,25 @@ function ProfileSettingsContent() {
           </View>
           <Text style={[t.type.bodyMedium, { color: user?.is_private ? t.colors.accent : t.colors.textMuted }]}>
             {user?.is_private ? "On" : "Off"}
+          </Text>
+        </Pressable>
+        <Pressable
+          onPress={() => void toggleWindowAlerts(!(user?.window_alerts_enabled ?? true))}
+          style={[styles.privacyRow, { borderTopColor: t.colors.border }]}
+        >
+          <View style={{ flex: 1 }}>
+            <Text style={[t.type.bodyMedium, { color: t.colors.textPrimary }]}>Court alerts</Text>
+            <Text style={[t.type.caption, { color: t.colors.textSecondary }]}>
+              Get pinged when a favorite court has a run going during one of your windows.
+            </Text>
+          </View>
+          <Text
+            style={[
+              t.type.bodyMedium,
+              { color: (user?.window_alerts_enabled ?? true) ? t.colors.accent : t.colors.textMuted },
+            ]}
+          >
+            {(user?.window_alerts_enabled ?? true) ? "On" : "Off"}
           </Text>
         </Pressable>
       </Card>
