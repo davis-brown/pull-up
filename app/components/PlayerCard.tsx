@@ -46,6 +46,11 @@ export function PlayerCard({
   const courts = stats?.courts ?? 0;
   const weekStreak = stats?.week_streak ?? 0;
   const badgeById = new Map((stats?.badges ?? []).map((b) => [b.id, b.earned]));
+  // W-L is shown as a plain fact, never as a win rate: recording is
+  // voluntary, so a rate would just measure who logs their wins.
+  const wins = stats?.wins ?? 0;
+  const losses = stats?.losses ?? 0;
+  const record = wins + losses > 0 ? `${wins}-${losses}` : null;
   const homeCourts = stats?.home_courts ?? [];
 
   return (
@@ -103,6 +108,12 @@ export function PlayerCard({
       </View>
 
       <LevelBar stats={stats} />
+
+      {record ? (
+        <Text style={[t.type.caption, styles.record, { color: t.colors.textSecondary }]}>
+          {record} in recorded games
+        </Text>
+      ) : null}
 
       {user.style_tags.length > 0 ? (
         <View style={styles.section}>
@@ -249,6 +260,7 @@ function StatColumn({ value, label, accent }: { value: number; label: string; ac
 }
 
 const styles = StyleSheet.create({
+  record: { paddingHorizontal: 16, paddingBottom: 12, marginTop: -6 },
   card: {
     overflow: "hidden",
     marginBottom: 16,

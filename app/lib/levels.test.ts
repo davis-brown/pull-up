@@ -13,6 +13,8 @@ function stats(overrides: Partial<MeStats>): MeStats {
     xp: 0,
     xp_into_level: 0,
     xp_for_next_level: 50,
+    wins: 0,
+    losses: 0,
     ...overrides,
   };
 }

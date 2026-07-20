@@ -64,6 +64,17 @@ comes from geo-verified check-ins and crowd reports.
 - Per-court message board to coordinate with the regulars at that court
   (moderated, same flagging path as everything else)
 
+**Games & scores**
+- Record a pickup game from the players checked in at the court — two ad-hoc
+  sides, who won, and an optional score
+- A result is a claim about other people, so it counts only when the
+  *losing* side confirms it: unconfirmed games are visible to nobody but
+  their participants, earn no XP, and are swept after 48h rather than
+  arbitrated. Winners and the recorder can't confirm their own result
+- Confirmed games give every participant XP and feed a W–L record on the
+  player card. Win *rate* is deliberately never gamified — recording is
+  voluntary, so rewarding it would only reward logging your wins
+
 **Levels & XP**
 - Players earn XP for showing up — checking in, turning an RSVP into an
   actual appearance, planning runs that draw a crowd, adding courts that get
