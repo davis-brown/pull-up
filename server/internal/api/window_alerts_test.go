@@ -49,12 +49,17 @@ type pushSink struct {
 	bodies []string
 }
 
+// windowAlertPhrase is the copy unique to window-alert pushes: every push to
+// this sink also carries the recipient token in "to", so matching must use
+// the message body's phrasing, never a substring a token could contain.
+const windowAlertPhrase = "A run is on during your"
+
 func (p *pushSink) windowAlertCount() int {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	n := 0
 	for _, b := range p.bodies {
-		if strings.Contains(b, "window") {
+		if strings.Contains(b, windowAlertPhrase) {
 			n++
 		}
 	}
@@ -87,7 +92,7 @@ func TestWindowAlertCrossingCooldownAndToggle(t *testing.T) {
 	}
 	resp.Body.Close()
 	resp = doJSON(t, ts, http.MethodPost, "/me/push-token", favoriter.AccessToken, map[string]string{
-		"token": "ExponentPushToken[window-alert-test]", "timezone": zone,
+		"token": "ExponentPushToken[favoriter-device]", "timezone": zone,
 	})
 	if resp.StatusCode != http.StatusNoContent {
 		t.Fatalf("push token: status %d", resp.StatusCode)
@@ -159,7 +164,7 @@ func TestWindowAlertCrossingCooldownAndToggle(t *testing.T) {
 	sink.mu.Lock()
 	var alertBody string
 	for _, b := range sink.bodies {
-		if strings.Contains(b, "window") {
+		if strings.Contains(b, windowAlertPhrase) {
 			alertBody = b
 		}
 	}
