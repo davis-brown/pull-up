@@ -116,7 +116,7 @@ function ProfileContent() {
       </View>
       <ErrorText message={shareError} />
       <Card>
-        <Overline>Your circle · last {circleBoard?.window_days ?? 30} days</Overline>
+        <Overline>Your circle · {circleBoard?.season.label ?? "this season"}</Overline>
         <View style={{ marginTop: t.spacing.sm }}>
           <Leaderboard
             data={circleBoard}

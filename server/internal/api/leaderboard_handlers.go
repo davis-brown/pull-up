@@ -2,7 +2,6 @@ package api
 
 import (
 	"net/http"
-	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -11,10 +10,6 @@ import (
 )
 
 const (
-	// leaderboardWindowDays is the rolling window both boards rank over.
-	// Matches the XP breakdown's window so "last 30 days" means one thing
-	// across the whole profile.
-	leaderboardWindowDays = 30
 	// leaderboardMaxEntries bounds the response. A pickup court's board is
 	// interesting at the top; past a screenful it is a directory.
 	leaderboardMaxEntries = 25
@@ -36,9 +31,12 @@ type leaderboardEntry struct {
 }
 
 type leaderboardResponse struct {
-	Metric     string             `json:"metric"`
-	WindowDays int                `json:"window_days"`
-	Entries    []leaderboardEntry `json:"entries"`
+	Metric string `json:"metric"`
+	// Both boards rank over the current SEASON rather than a rolling
+	// window (phase 22b). A rolling window never ends, so standing just
+	// drifts; a season closes, which is what makes a board worth topping.
+	Season  seasonInfo         `json:"season"`
+	Entries []leaderboardEntry `json:"entries"`
 	// ViewerRank is the viewer's own position, or null when they do not
 	// appear. On a court board that means they have not checked in here
 	// during the window; it is also null when they rank past the returned
@@ -55,9 +53,10 @@ func (s *Server) handleCourtLeaderboard(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	viewer := userID(r)
+	season := currentSeason()
 	rows, err := s.store.Queries.CourtLeaderboard(r.Context(), gen.CourtLeaderboardParams{
 		CourtID:    courtID,
-		Since:      leaderboardSince(),
+		Since:      season.StartedAt,
 		ViewerID:   viewer,
 		MaxEntries: leaderboardMaxEntries,
 	})
@@ -78,7 +77,7 @@ func (s *Server) handleCourtLeaderboard(w http.ResponseWriter, r *http.Request) 
 	}
 	writeJSON(w, http.StatusOK, leaderboardResponse{
 		Metric:     "check_ins",
-		WindowDays: leaderboardWindowDays,
+		Season:     season,
 		Entries:    entries,
 		ViewerRank: viewerRank(entries, viewer),
 	})
@@ -87,8 +86,9 @@ func (s *Server) handleCourtLeaderboard(w http.ResponseWriter, r *http.Request) 
 // handleCircleLeaderboard ranks the viewer and the people they follow by XP.
 func (s *Server) handleCircleLeaderboard(w http.ResponseWriter, r *http.Request) {
 	viewer := userID(r)
+	season := currentSeason()
 	rows, err := s.store.Queries.CircleLeaderboard(r.Context(), gen.CircleLeaderboardParams{
-		Since:      leaderboardSince(),
+		Since:      season.StartedAt,
 		ViewerID:   viewer,
 		MaxEntries: leaderboardMaxEntries,
 	})
@@ -109,14 +109,10 @@ func (s *Server) handleCircleLeaderboard(w http.ResponseWriter, r *http.Request)
 	}
 	writeJSON(w, http.StatusOK, leaderboardResponse{
 		Metric:     "xp",
-		WindowDays: leaderboardWindowDays,
+		Season:     season,
 		Entries:    entries,
 		ViewerRank: viewerRank(entries, viewer),
 	})
-}
-
-func leaderboardSince() time.Time {
-	return time.Now().AddDate(0, 0, -leaderboardWindowDays)
 }
 
 func viewerRank(entries []leaderboardEntry, viewer uuid.UUID) *int {
