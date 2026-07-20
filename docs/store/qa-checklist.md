@@ -178,3 +178,90 @@ Requires production builds and the association files live on the real domain
       addresses/photos/amenities (a never-viewed seeded court is not enriched)
 - [ ] With INTERNAL_TASK_SECRET unset, the drain endpoint is disabled (401) and
       the in-process workers still drain on the warm path
+
+## Player profile & court conditions (phases 14–15)
+
+- [ ] Profile settings: set jersey number, position, height, style tags, skill
+      level, and availability windows; each appears on the player card and the
+      public profile, and clearing one removes it
+- [ ] Height outside 120–250 cm can't be saved (the button stays disabled
+      rather than round-tripping to a server error)
+- [ ] Court detail → conditions: tapping a rim/net chip records a confirmation
+      and the freshness line updates; the stored value follows the recent
+      majority, so one wrong tap gets outvoted rather than sticking
+- [ ] Signed out, condition chips are visible but not tappable
+
+## Your-window alerts (phase 16)
+
+Needs two accounts, a physical device with notifications granted, and an
+availability window covering the current hour.
+
+- [ ] With availability set and a favorited court, have 4+ players' worth of
+      party size check in there: exactly ONE push arrives, naming the court,
+      the headcount, and your window
+- [ ] A further check-in at the same court does NOT produce a second push
+      (crossing-only), and no second push arrives that day (20h cooldown)
+- [ ] Being checked in at that court yourself suppresses the alert
+- [ ] Profile settings → Court alerts → Off silences it entirely
+- [ ] The court detail popular-times chart shows accent ticks under the hours
+      inside your windows, with a "Your window" legend
+- [ ] A court with no turnout history shows the honest "no history yet" line
+      rather than an empty chart
+
+## Open-run discovery (phase 17)
+
+- [ ] Signed OUT, with a run planned at a nearby court: the Activity tab shows
+      a "Runs near you" rail with that run; tapping it opens the court with the
+      run accented
+- [ ] Signed in and following the planner, the run appears once — in the feed,
+      not duplicated in the rail
+- [ ] Courts with a run in the next 24h carry a tick on their map pin; the tick
+      reads clearly over busy map tiles at a narrow (≈390px) width
+- [ ] A run more than 24h out does NOT put a tick on the pin
+- [ ] Pull-to-refresh on Activity refreshes the rail with the rest
+
+## Games & scores (phase 18)
+
+Needs two accounts.
+
+- [ ] Both accounts checked in at a court: record a 1v1 from account A. The
+      game does NOT appear in the court's Games list yet
+- [ ] Account A cannot confirm its own result; a third account that wasn't in
+      the game cannot confirm it either
+- [ ] Account B (the losing side) sees the pending prompt and confirms — the
+      game becomes public, both names show, and the score appears if entered
+- [ ] Both players' W–L on the player card updates, and XP goes up for both
+- [ ] Re-confirming does not award XP twice
+- [ ] Recording with yourself left off both sides is rejected
+- [ ] An unconfirmed game left alone is gone after 48h (or after a manual
+      drain with the row's created_at backdated)
+
+## Looking for a run (phase 19)
+
+- [ ] Court detail → "I'm looking to play" → pick a day and window: the bucket
+      appears publicly with your name and skill chip; guests can see it
+- [ ] Tapping it again withdraws you and the count drops
+- [ ] Weekend days only offer weekend windows (and weekdays weekday ones)
+- [ ] With 4 seekers in one bucket, every one of them gets exactly ONE push;
+      a 5th joiner does not re-fire it
+- [ ] Tapping that push opens the plan-a-run screen prefilled to roughly that
+      day and window (correct it if the prefill is a day off near UTC midnight)
+- [ ] Planning a run inside a bucket's window pushes that bucket's other
+      seekers once; a second run in the same window does not re-fire
+
+## XP, levels & streak nudges (phase 20)
+
+- [ ] Player card shows level, tier, and a progress bar; "How you earn XP"
+      lists the sources and the daily cap
+- [ ] A first check-in of the day raises XP; a second check-in at the SAME
+      court within 20h raises it by nothing
+- [ ] Crossing a level threshold fires exactly one level-up push; tapping it
+      opens the profile
+- [ ] A public profile shows the other player's level chip; a private account's
+      level is hidden from non-followers (not shown as "Level 1")
+- [ ] Streak reminder: with a streak alive but no check-in this week, a nudge
+      arrives Thu–Sat evening in the device's own time zone, at most once a
+      week, and names the real streak length
+- [ ] Profile settings → Streak reminders → Off silences it
+- [ ] `POST /internal/drain` response includes `streak_nudges` and
+      `expired_games` counts

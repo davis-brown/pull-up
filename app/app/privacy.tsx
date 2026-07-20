@@ -27,7 +27,7 @@ export default function PrivacyScreen() {
     >
       <Text style={[t.type.title, { color: t.colors.textPrimary }]}>Privacy Policy</Text>
       <Text style={[t.type.caption, { color: t.colors.textMuted, marginTop: 4 }]}>
-        Effective July 15, 2026 · pull-up
+        Effective July 20, 2026 · pull-up
       </Text>
 
       <Section title="What we collect">
@@ -35,8 +35,11 @@ export default function PrivacyScreen() {
           "Nearby courts: when you allow location access, your current coordinates are used transiently to rank nearby courts. They are not retained as location history.\n\n" +
           "Check-ins: when you check in at a court, we store which court, the time, and your reported distance from it. Your exact coordinates are used only to calculate that distance and are discarded.\n\n" +
           "Optional auto check-in: if you turn it on, your device watches for arrivals at nearby courts using low-power region monitoring. The only thing created is a check-in at a known court. It is off by default and can be turned off anytime in your profile.\n\n" +
-          "Content you post: court submissions, photos, crowd reports, chat messages, and planned runs are visible to other users with your display name.\n\n" +
-          "Push token: if you enable notifications, we store a device token so we can deliver them."}
+          "Content you post: court submissions, photos, crowd reports, chat messages, planned runs, court-condition confirmations, and \"looking to play\" posts are visible to other users with your display name.\n\n" +
+          "Profile details you choose to add: jersey number, position, height, playing style, skill level, and the times of week you're usually free. These are optional, shown on your public profile, and editable or removable at any time.\n\n" +
+          "Game results: when someone records a pickup game, it names the players on both sides — so another player can add you to a game, and other people will see it. A recorded game stays private to its participants until someone on the losing side confirms it; unconfirmed games are deleted after 48 hours. Confirmed games are public and count toward your win-loss record.\n\n" +
+          "Activity level: we keep a running count of experience points and a level derived from how often you play, plus the weeks you've checked in. Your level is shown on your public profile (hidden from non-followers if your account is private).\n\n" +
+          "Push token and time zone: if you enable notifications, we store a device token so we can deliver them, and your device's time zone so reminders arrive at a sensible hour where you are. We store the zone name (for example \"America/Chicago\"), not your location."}
       </Section>
 
       <Section title="What we don't do">
@@ -48,7 +51,7 @@ export default function PrivacyScreen() {
       </Section>
 
       <Section title="Deleting your account">
-        {"You can delete your account anytime in Profile → Profile settings → Delete account (in the app or on the web). This permanently removes your account, check-ins, messages, reports, photos, favorites, and push tokens. Courts you submitted remain (they're community data) with your identity removed."}
+        {"You can delete your account anytime in Profile → Profile settings → Delete account (in the app or on the web). This permanently removes your account, check-ins, messages, reports, photos, favorites, push tokens, profile details, experience points, \"looking to play\" posts, and your part in any recorded games. Courts you submitted remain (they're community data) with your identity removed."}
       </Section>
 
       <Section title="Contact">
