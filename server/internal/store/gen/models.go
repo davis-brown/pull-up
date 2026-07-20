@@ -298,6 +298,14 @@ type User struct {
 	PlayNudgesEnabled   bool       `json:"play_nudges_enabled"`
 	LastPlayNudgeAt     *time.Time `json:"last_play_nudge_at"`
 	LevelUpPending      *int32     `json:"level_up_pending"`
+	BadgesSyncedAt      *time.Time `json:"badges_synced_at"`
+}
+
+type UserBadge struct {
+	UserID   uuid.UUID  `json:"user_id"`
+	Slug     string     `json:"slug"`
+	EarnedAt time.Time  `json:"earned_at"`
+	SeenAt   *time.Time `json:"seen_at"`
 }
 
 type WindowAlert struct {

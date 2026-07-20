@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"time"
@@ -25,9 +26,12 @@ const (
 
 // badge is one entry in the /me/stats badges array; unearned badges are
 // included with earned:false so the client can render a locked state.
+// EarnedAt is set once the badge has been observed (phase 21b) and is null
+// for unearned badges and for earned ones not yet recorded.
 type badge struct {
-	ID     string `json:"id"`
-	Earned bool   `json:"earned"`
+	ID       string     `json:"id"`
+	Earned   bool       `json:"earned"`
+	EarnedAt *time.Time `json:"earned_at"`
 }
 
 // statsBadgeInputs is the pure-function input to deriveBadges: every
@@ -53,6 +57,97 @@ func deriveBadges(in statsBadgeInputs) []badge {
 		{ID: "streak_4", Earned: in.WeekStreak >= badgeStreak4Weeks},
 		{ID: "host", Earned: in.SessionsCount >= badgeHostSessions},
 	}
+}
+
+// syncBadgeEarnedAt records the earn date of any badge observed for the
+// first time and returns the slugs the player hasn't been shown yet. It
+// mutates `badges` in place, filling in EarnedAt.
+//
+// Badges stay derived — this only dates them. The subtlety is the BASELINE:
+// every existing player already satisfies several rules, so recording them
+// naively would celebrate six badges they won a month ago. The first call
+// for a player (badges_synced_at IS NULL) therefore records whatever is
+// already earned as ALREADY SEEN and stamps the baseline; only badges
+// earned after that are new. A brand-new player's baseline is empty, so
+// their genuine first badge still gets its moment.
+//
+// This is a write on a read path, which is why it is careful to be a no-op
+// in the common case: with the baseline taken and no new badge earned,
+// there is nothing to insert and it costs one indexed SELECT.
+func (s *Server) syncBadgeEarnedAt(ctx context.Context, uid uuid.UUID, badges []badge) ([]string, error) {
+	stored, err := s.store.Queries.ListUserBadges(ctx, uid)
+	if err != nil {
+		return nil, err
+	}
+	type badgeState struct {
+		earnedAt time.Time
+		seen     bool
+	}
+	known := make(map[string]badgeState, len(stored))
+	for _, row := range stored {
+		known[row.Slug] = badgeState{earnedAt: row.EarnedAt, seen: row.SeenAt != nil}
+	}
+
+	syncedAt, err := s.store.Queries.GetBadgesSyncedAt(ctx, uid)
+	if err != nil {
+		return nil, err
+	}
+	baseline := syncedAt == nil
+
+	unrecorded := make([]string, 0, len(badges))
+	for i := range badges {
+		if !badges[i].Earned {
+			continue
+		}
+		if state, ok := known[badges[i].ID]; ok {
+			earnedAt := state.earnedAt
+			badges[i].EarnedAt = &earnedAt
+			continue
+		}
+		unrecorded = append(unrecorded, badges[i].ID)
+	}
+
+	if len(unrecorded) > 0 {
+		if err := s.store.Queries.RecordUserBadges(ctx, gen.RecordUserBadgesParams{
+			UserID: uid, Slugs: unrecorded, Seen: baseline,
+		}); err != nil {
+			return nil, err
+		}
+	}
+	if baseline {
+		if err := s.store.Queries.MarkBadgesSynced(ctx, uid); err != nil {
+			return nil, err
+		}
+		// Everything recorded in the baseline pass counts as already seen.
+		return []string{}, nil
+	}
+
+	// Unseen = previously recorded but never shown, plus anything just
+	// recorded. Ordered by the fixed badge order so the client celebrates
+	// them predictably rather than in map order.
+	newBadges := make([]string, 0, len(badges))
+	for i := range badges {
+		if !badges[i].Earned {
+			continue
+		}
+		state, ok := known[badges[i].ID]
+		if !ok || !state.seen {
+			newBadges = append(newBadges, badges[i].ID)
+		}
+	}
+	return newBadges, nil
+}
+
+// handleAckBadges clears the unseen mark on every badge a player has, once
+// the app has shown them. Mirrors the level-up ack, and for the same
+// reason: /me/stats is refetched in the background, so a read-clears-it
+// design would spend the moment on a fetch nobody saw.
+func (s *Server) handleAckBadges(w http.ResponseWriter, r *http.Request) {
+	if err := s.store.Queries.MarkBadgesSeen(r.Context(), userID(r)); err != nil {
+		s.internalError(w, "ack badges", err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // mondayWeekStart returns the Monday 00:00 UTC that begins the ISO week
@@ -130,6 +225,9 @@ type meStatsResponse struct {
 	// player hasn't been shown yet (null when there is nothing to celebrate).
 	XPBreakdown    []xpBreakdownEntry `json:"xp_breakdown"`
 	LevelUpPending *int               `json:"level_up_pending"`
+	// Phase 21b: badge slugs earned since the last time the app showed
+	// them. Empty (never null) so the client can iterate unconditionally.
+	NewBadges []string `json:"new_badges"`
 }
 
 // xpBreakdownWindowDays bounds the "what have I earned lately" view. Long
@@ -211,6 +309,12 @@ func (s *Server) handleMeStats(w http.ResponseWriter, r *http.Request) {
 		SessionsCount: int(sessionsCount),
 	})
 
+	newBadges, err := s.syncBadgeEarnedAt(ctx, uid, badges)
+	if err != nil {
+		s.internalError(w, "sync badge earned-at", err)
+		return
+	}
+
 	homeCourtRows, err := s.store.Queries.UserHomeCourts(ctx, uid)
 	if err != nil {
 		s.internalError(w, "user home courts", err)
@@ -275,6 +379,7 @@ func (s *Server) handleMeStats(w http.ResponseWriter, r *http.Request) {
 		Losses:         int(record.Losses),
 		XPBreakdown:    breakdown,
 		LevelUpPending: levelUpPending,
+		NewBadges:      newBadges,
 	})
 }
 
