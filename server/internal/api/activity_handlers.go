@@ -214,6 +214,9 @@ func (s *Server) handleCreateReport(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		req.Note = &trimmed
+		if !s.screenText(w, r, "crowd_report_note", trimmed) {
+			return
+		}
 	}
 	report, err := s.store.Queries.CreateCrowdReport(r.Context(), gen.CreateCrowdReportParams{
 		CourtID: courtID, UserID: userID(r),

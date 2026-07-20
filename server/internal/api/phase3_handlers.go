@@ -81,6 +81,9 @@ func (s *Server) handleCreateSession(w http.ResponseWriter, r *http.Request) {
 			req.Note = nil
 		} else {
 			req.Note = &trimmed
+			if !s.screenText(w, r, "session_note", trimmed) {
+				return
+			}
 		}
 	}
 	court, err := s.store.Queries.GetCourt(r.Context(), courtID)
@@ -334,6 +337,12 @@ func (s *Server) handleCreateMessage(w http.ResponseWriter, r *http.Request) {
 	}
 	if time.Since(lastAt) < chatCooldown {
 		writeError(w, http.StatusTooManyRequests, "slow down — one message every few seconds")
+		return
+	}
+	// Screened after the cooldown check so a flooder can't spend the
+	// classifier budget, and before the write so nothing unsafe is ever
+	// stored, even briefly.
+	if !s.screenText(w, r, "court_message", body) {
 		return
 	}
 	msg, err := s.store.Queries.CreateCourtMessage(r.Context(), gen.CreateCourtMessageParams{
