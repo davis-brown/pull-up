@@ -26,6 +26,9 @@ export interface User {
 export interface MeStatsBadge {
   id: string;
   earned: boolean;
+  // Phase 21b: when the badge was first observed. Null for unearned
+  // badges, and for earned ones recorded before earn dates were tracked.
+  earned_at: string | null;
 }
 
 export interface MeStatsHomeCourt {
@@ -55,6 +58,9 @@ export interface MeStats {
   // nothing to celebrate.
   xp_breakdown: MeStatsXPEntry[];
   level_up_pending: number | null;
+  // Phase 21b: badge ids earned since the app last showed them. Empty
+  // rather than null when there is nothing to celebrate.
+  new_badges: string[];
 }
 
 // One award kind's contribution to recent XP. kind is the raw ledger kind
