@@ -139,7 +139,8 @@ func (s *Server) Routes() http.Handler {
 		r.Get("/courts/{id}/sessions", s.handleListSessions)      // personalizes via optional bearer
 		r.Get("/courts/{id}/run-intents", s.handleListRunIntents) // public: who wants to run where
 		r.Get("/courts/{id}/messages", s.handleListMessages)
-		r.Get("/sessions/nearby", s.handleNearbyRuns) // static must precede /sessions/{id}; personalizes via optional bearer
+		r.Get("/courts/{id}/games", s.handleListCourtGames) // confirmed results only
+		r.Get("/sessions/nearby", s.handleNearbyRuns)       // static must precede /sessions/{id}; personalizes via optional bearer
 		r.Get("/sessions/{id}/attendees", s.handleSessionAttendees)
 		r.Get("/users/{id}", s.handleGetProfile) // public profile; personalizes via optional bearer
 		r.Get("/users/{id}/followers", s.handleListFollowers)
@@ -189,6 +190,9 @@ func (s *Server) Routes() http.Handler {
 			r.Post("/courts/{id}/sessions", s.handleCreateSession)
 			r.Put("/courts/{id}/run-intents", s.handleSetRunIntent)
 			r.Delete("/courts/{id}/run-intents", s.handleWithdrawRunIntent)
+			r.Post("/courts/{id}/games", s.handleRecordGame)
+			r.Post("/games/{id}/confirm", s.handleConfirmGame)
+			r.Get("/me/games/pending", s.handleListPendingGames)
 			r.Post("/courts/{id}/messages", s.handleCreateMessage)
 			r.Delete("/sessions/{id}", s.handleCancelSession)
 			r.Put("/sessions/{id}/rsvp", s.handleRSVP)
