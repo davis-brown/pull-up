@@ -297,6 +297,7 @@ type User struct {
 	Xp                  int32      `json:"xp"`
 	PlayNudgesEnabled   bool       `json:"play_nudges_enabled"`
 	LastPlayNudgeAt     *time.Time `json:"last_play_nudge_at"`
+	LevelUpPending      *int32     `json:"level_up_pending"`
 }
 
 type WindowAlert struct {
