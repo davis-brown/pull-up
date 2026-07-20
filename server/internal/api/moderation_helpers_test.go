@@ -5,7 +5,9 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/davisbrown/pull-up/server/internal/moderation"
 )
@@ -111,4 +113,57 @@ func containsAny(haystack string, needles ...string) bool {
 		}
 	}
 	return false
+}
+
+// A broken classifier fails on every post, so the outage alert must report
+// promptly and then stay quiet — otherwise one bad token burns the Sentry
+// quota restating a single fact.
+func TestOutageThrottle(t *testing.T) {
+	var th outageThrottle
+	base := time.Now()
+	const every = 5 * time.Minute
+
+	if !th.allow(base, every) {
+		t.Fatal("first outage was suppressed; it must report immediately")
+	}
+	if th.allow(base.Add(time.Second), every) {
+		t.Error("a second outage one second later reported again")
+	}
+	if th.allow(base.Add(every-time.Millisecond), every) {
+		t.Error("reported again just inside the interval")
+	}
+	if !th.allow(base.Add(every), every) {
+		t.Error("did not report again once the interval elapsed")
+	}
+	// The window restarts from the last report, not from the first.
+	if th.allow(base.Add(every+time.Second), every) {
+		t.Error("window did not restart from the most recent report")
+	}
+}
+
+// The throttle is shared across goroutines (concurrent posts all fail at
+// once during an outage), so it must not race. Run with -race.
+func TestOutageThrottleIsConcurrencySafe(t *testing.T) {
+	var th outageThrottle
+	now := time.Now()
+	var wg sync.WaitGroup
+	allowed := make(chan bool, 50)
+	for i := 0; i < 50; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			allowed <- th.allow(now, time.Hour)
+		}()
+	}
+	wg.Wait()
+	close(allowed)
+	count := 0
+	for a := range allowed {
+		if a {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Errorf("%d concurrent callers were allowed to report, want exactly 1", count)
+	}
 }
