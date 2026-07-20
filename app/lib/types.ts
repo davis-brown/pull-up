@@ -74,6 +74,22 @@ export interface CourtSummary {
   active_count: number;
   distance_m?: number;
   latest_report: LatestReport | null;
+  /** Earliest non-canceled run in the next 24h — drives the pin's run tick. */
+  next_run_at: string | null;
+}
+
+// A nearby upcoming run from GET /sessions/nearby (phase 17): public
+// discovery for the Activity tab's "Runs near you" rail.
+export interface NearbyRun {
+  id: string;
+  court_id: string;
+  court_name: string;
+  distance_m: number;
+  created_by: string;
+  created_by_name: string;
+  starts_at: string;
+  note: string | null;
+  going_count: number;
 }
 
 export interface CourtDetail {

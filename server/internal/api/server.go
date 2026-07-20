@@ -138,6 +138,7 @@ func (s *Server) Routes() http.Handler {
 		r.Get("/courts/{id}/photos", s.handleListPhotos)
 		r.Get("/courts/{id}/sessions", s.handleListSessions) // personalizes via optional bearer
 		r.Get("/courts/{id}/messages", s.handleListMessages)
+		r.Get("/sessions/nearby", s.handleNearbyRuns) // static must precede /sessions/{id}; personalizes via optional bearer
 		r.Get("/sessions/{id}/attendees", s.handleSessionAttendees)
 		r.Get("/users/{id}", s.handleGetProfile) // public profile; personalizes via optional bearer
 		r.Get("/users/{id}/followers", s.handleListFollowers)

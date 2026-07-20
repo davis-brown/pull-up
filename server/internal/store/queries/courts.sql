@@ -11,7 +11,8 @@ SELECT
     ac.active_count,
     lr.player_count AS latest_player_count,
     lr.run_quality  AS latest_run_quality,
-    coalesce(lr.created_at, 'epoch'::timestamptz) AS latest_report_at
+    coalesce(lr.created_at, 'epoch'::timestamptz) AS latest_report_at,
+    coalesce(nr.next_run_at, 'epoch'::timestamptz) AS next_run_at
 FROM courts c
 LEFT JOIN LATERAL (
     SELECT coalesce(sum(ci.party_size), 0)::int AS active_count
@@ -25,6 +26,15 @@ LEFT JOIN LATERAL (
     ORDER BY cr.created_at DESC
     LIMIT 1
 ) lr ON true
+LEFT JOIN LATERAL (
+    -- Earliest run in the next 24h: drives the map pin's run badge.
+    SELECT s.starts_at AS next_run_at
+    FROM sessions s
+    WHERE s.court_id = c.id AND s.canceled_at IS NULL
+      AND s.starts_at > now() AND s.starts_at < now() + interval '24 hours'
+    ORDER BY s.starts_at
+    LIMIT 1
+) nr ON true
 WHERE c.status <> 'rejected'
   AND c.location && ST_MakeEnvelope(
         sqlc.arg(min_lng)::float8, sqlc.arg(min_lat)::float8,
@@ -57,7 +67,8 @@ SELECT
     ac.active_count,
     lr.player_count AS latest_player_count,
     lr.run_quality  AS latest_run_quality,
-    coalesce(lr.created_at, 'epoch'::timestamptz) AS latest_report_at
+    coalesce(lr.created_at, 'epoch'::timestamptz) AS latest_report_at,
+    coalesce(nr.next_run_at, 'epoch'::timestamptz) AS next_run_at
 FROM courts c
 LEFT JOIN LATERAL (
     SELECT coalesce(sum(ci.party_size), 0)::int AS active_count
@@ -71,6 +82,15 @@ LEFT JOIN LATERAL (
     ORDER BY cr.created_at DESC
     LIMIT 1
 ) lr ON true
+LEFT JOIN LATERAL (
+    -- Earliest run in the next 24h: drives the map pin's run badge.
+    SELECT s.starts_at AS next_run_at
+    FROM sessions s
+    WHERE s.court_id = c.id AND s.canceled_at IS NULL
+      AND s.starts_at > now() AND s.starts_at < now() + interval '24 hours'
+    ORDER BY s.starts_at
+    LIMIT 1
+) nr ON true
 WHERE c.status <> 'rejected'
   AND ST_DWithin(c.location, ST_SetSRID(ST_MakePoint(sqlc.arg(lng)::float8, sqlc.arg(lat)::float8), 4326)::geography, sqlc.arg(radius_m)::float8)
   AND (sqlc.narg('indoor')::bool   IS NULL OR c.indoor = sqlc.narg('indoor'))

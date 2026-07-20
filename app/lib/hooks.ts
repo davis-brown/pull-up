@@ -41,6 +41,7 @@ import type {
   FollowUser,
   FriendPresence,
   MeStats,
+  NearbyRun,
   PhotoStatus,
   Profile,
   RunQuality,
@@ -689,6 +690,22 @@ export function useClearAvatar() {
       void qc.invalidateQueries({ queryKey: ["me"] });
       void qc.invalidateQueries({ queryKey: ["users"] });
     },
+  });
+}
+
+// Upcoming runs at any court near the given point — public discovery, no
+// account needed (phase 17). Same 10km radius as the Activity tab's court
+// list so the two rails describe the same neighborhood.
+export function useNearbyRuns(pos: { lat: number; lng: number } | null) {
+  return useQuery({
+    queryKey: ["runs", "nearby", pos],
+    enabled: pos != null,
+    refetchInterval: 45_000,
+    refetchIntervalInBackground: false,
+    queryFn: () =>
+      api<{ runs: NearbyRun[] }>(
+        `/sessions/nearby?lat=${pos!.lat}&lng=${pos!.lng}&radius_m=10000`,
+      ),
   });
 }
 

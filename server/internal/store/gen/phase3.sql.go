@@ -295,6 +295,93 @@ func (q *Queries) ListCourtMessages(ctx context.Context, arg ListCourtMessagesPa
 	return items, nil
 }
 
+const listNearbyUpcomingSessions = `-- name: ListNearbyUpcomingSessions :many
+SELECT
+    s.id, s.court_id, c.name AS court_name,
+    ST_Distance(c.location, ST_SetSRID(ST_MakePoint($1::float8, $2::float8), 4326)::geography)::float8 AS distance_m,
+    s.created_by, u.display_name AS created_by_name,
+    s.starts_at, s.note,
+    g.going_count
+FROM sessions s
+JOIN courts c ON c.id = s.court_id
+JOIN users u ON u.id = s.created_by
+LEFT JOIN LATERAL (
+    SELECT count(*)::int AS going_count
+    FROM session_rsvps r
+    WHERE r.session_id = s.id AND r.status = 'going'
+) g ON true
+WHERE s.canceled_at IS NULL
+  AND c.status <> 'rejected'
+  AND s.starts_at > now() - interval '2 hours'
+  AND s.starts_at < now() + interval '24 hours'
+  AND ST_DWithin(c.location, ST_SetSRID(ST_MakePoint($1::float8, $2::float8), 4326)::geography, $3::float8)
+  AND NOT EXISTS (
+      SELECT 1 FROM blocked_users b
+      WHERE b.blocker_id = $4 AND b.blocked_id = s.created_by
+  )
+ORDER BY s.starts_at, distance_m
+LIMIT 10
+`
+
+type ListNearbyUpcomingSessionsParams struct {
+	Lng      float64   `json:"lng"`
+	Lat      float64   `json:"lat"`
+	RadiusM  float64   `json:"radius_m"`
+	ViewerID uuid.UUID `json:"viewer_id"`
+}
+
+type ListNearbyUpcomingSessionsRow struct {
+	ID            uuid.UUID `json:"id"`
+	CourtID       uuid.UUID `json:"court_id"`
+	CourtName     string    `json:"court_name"`
+	DistanceM     float64   `json:"distance_m"`
+	CreatedBy     uuid.UUID `json:"created_by"`
+	CreatedByName string    `json:"created_by_name"`
+	StartsAt      time.Time `json:"starts_at"`
+	Note          *string   `json:"note"`
+	GoingCount    int32     `json:"going_count"`
+}
+
+// Phase 17: the Activity tab's "runs near you" rail. Public discovery —
+// viewer_id is uuid.Nil for guests (the blocked filter then matches
+// nothing). Same -2h grace as ListUpcomingSessions so an in-progress run
+// stays visible; capped at 24h out so the rail is about today, not the
+// whole planning horizon.
+func (q *Queries) ListNearbyUpcomingSessions(ctx context.Context, arg ListNearbyUpcomingSessionsParams) ([]ListNearbyUpcomingSessionsRow, error) {
+	rows, err := q.db.Query(ctx, listNearbyUpcomingSessions,
+		arg.Lng,
+		arg.Lat,
+		arg.RadiusM,
+		arg.ViewerID,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListNearbyUpcomingSessionsRow
+	for rows.Next() {
+		var i ListNearbyUpcomingSessionsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.CourtID,
+			&i.CourtName,
+			&i.DistanceM,
+			&i.CreatedBy,
+			&i.CreatedByName,
+			&i.StartsAt,
+			&i.Note,
+			&i.GoingCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSessionAttendees = `-- name: ListSessionAttendees :many
 SELECT r.user_id, u.display_name, r.created_at
 FROM session_rsvps r

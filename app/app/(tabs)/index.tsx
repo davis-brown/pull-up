@@ -136,6 +136,7 @@ export default function MapScreen() {
             ? expectedAt(forecasts[c.id], scrubHour)
             : c.active_count,
         status: c.status,
+        nextRunAt: c.next_run_at,
       })),
     [courts, mode, atNow, forecasts, scrubHour],
   );

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -138,6 +139,44 @@ func (s *Server) handleListSessions(w http.ResponseWriter, r *http.Request) {
 		rows = []gen.ListUpcomingSessionsRow{}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"sessions": rows})
+}
+
+// handleNearbyRuns serves the Activity tab's "runs near you" rail: upcoming
+// sessions at any non-rejected court in the radius, for everyone — a player
+// with zero follows still discovers organized runs (phase 17).
+func (s *Server) handleNearbyRuns(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	lat, errLat := strconv.ParseFloat(q.Get("lat"), 64)
+	lng, errLng := strconv.ParseFloat(q.Get("lng"), 64)
+	if errLat != nil || errLng != nil || !validLatLng(lat, lng) {
+		writeError(w, http.StatusBadRequest, "lat and lng are required")
+		return
+	}
+	radius := 5000.0
+	if v := q.Get("radius_m"); v != "" {
+		parsed, err := strconv.ParseFloat(v, 64)
+		if err != nil || parsed < 1 || parsed > 50000 {
+			writeError(w, http.StatusBadRequest, "radius_m must be between 1 and 50000")
+			return
+		}
+		radius = parsed
+	}
+	viewer := s.optionalUserID(r)
+	if viewer != uuid.Nil {
+		// Blocked-organizer filtering personalizes the list.
+		w.Header().Set("Cache-Control", "no-store")
+	}
+	rows, err := s.store.Queries.ListNearbyUpcomingSessions(r.Context(), gen.ListNearbyUpcomingSessionsParams{
+		Lat: lat, Lng: lng, RadiusM: radius, ViewerID: viewer,
+	})
+	if err != nil {
+		s.internalError(w, "nearby runs", err)
+		return
+	}
+	if rows == nil {
+		rows = []gen.ListNearbyUpcomingSessionsRow{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"runs": rows})
 }
 
 func (s *Server) handleCancelSession(w http.ResponseWriter, r *http.Request) {
