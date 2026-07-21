@@ -6,6 +6,26 @@ import { useTheme } from "@/lib/theme";
 import { CourtPinMarker } from "./pin";
 import { mapStyleURL, type CourtMapProps } from "./types";
 
+// Reports the map's current viewport as a bbox. Shared by the load and
+// move-end handlers so both report the region identically.
+function emitRegion(
+  map: {
+    getBounds: () =>
+      | { getWest: () => number; getSouth: () => number; getEast: () => number; getNorth: () => number }
+      | null;
+  },
+  onRegionChange: CourtMapProps["onRegionChange"],
+): void {
+  const b = map.getBounds();
+  if (!b) return;
+  onRegionChange?.({
+    minLng: b.getWest(),
+    minLat: b.getSouth(),
+    maxLng: b.getEast(),
+    maxLat: b.getNorth(),
+  });
+}
+
 export default function CourtMap({
   courts,
   initialCenter,
@@ -30,16 +50,13 @@ export default function CourtMap({
       style={{ flex: 1, ...style }}
       mapStyle={mapStyleURL(t.scheme)}
       attributionControl={false}
-      onMoveEnd={(evt) => {
-        const b = evt.target.getBounds();
-        if (!b) return;
-        onRegionChange?.({
-          minLng: b.getWest(),
-          minLat: b.getSouth(),
-          maxLng: b.getEast(),
-          maxLat: b.getNorth(),
-        });
-      }}
+      // The map's first render emits no move event, so onMoveEnd alone left
+      // the caller's bbox null until the user happened to pan or zoom —
+      // which disabled the court query and showed a brand-new visitor an
+      // empty map reading "no courts in view". Reporting the region on load
+      // too means the first viewport is queried like any other.
+      onLoad={(evt) => emitRegion(evt.target, onRegionChange)}
+      onMoveEnd={(evt) => emitRegion(evt.target, onRegionChange)}
     >
       {/* OSM attribution must stay visible; the position prop keeps it out
           of whichever corner the host layout occupies. */}
