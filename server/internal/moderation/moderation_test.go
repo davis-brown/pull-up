@@ -49,6 +49,36 @@ func TestParseVerdict(t *testing.T) {
 	}
 }
 
+// Fixtures captured from @cf/meta/llama-guard-3-8b via the Workers AI REST
+// API on 2026-07-20. The exact wire format matters and is not obvious: the
+// model prefixes its answer with blank lines, so a parser that split before
+// trimming would read an empty first line and treat every verdict as safe.
+func TestParseVerdictAgainstRealModelOutput(t *testing.T) {
+	cases := []struct {
+		name     string
+		raw      string
+		wantSafe bool
+		wantCat  string
+	}{
+		{"benign chat", "\n\nsafe", true, ""},
+		{"benign trash talk", "\n\nsafe", true, ""},
+		{"violent threat", "\n\nunsafe\nS1", false, "S1"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := parseVerdict(tc.raw)
+			if got.Safe != tc.wantSafe {
+				t.Fatalf("Safe = %v, want %v for %q", got.Safe, tc.wantSafe, tc.raw)
+			}
+			if tc.wantCat != "" {
+				if len(got.Categories) != 1 || got.Categories[0] != tc.wantCat {
+					t.Errorf("Categories = %v, want [%s]", got.Categories, tc.wantCat)
+				}
+			}
+		})
+	}
+}
+
 func TestDisabledClientPassesEverything(t *testing.T) {
 	var c *Client
 	v, err := c.Check(context.Background(), "anything at all")
