@@ -1,0 +1,66 @@
+#!/usr/bin/env bash
+# Ad-hoc SQL against the project database, with the connection string read
+# from the macOS Keychain rather than passed on the command line.
+#
+#   scripts/dbq "select count(*) from courts"        # dev branch
+#   scripts/dbq --prod "select count(*) from courts" # production (guarded)
+#
+# Why this exists: approving a command that carries a credential inline bakes
+# that credential into the approving tool's config. This wrapper keeps the
+# value in the Keychain, so what gets approved, logged, and transcribed is
+# `scripts/dbq "<sql>"` and nothing else.
+#
+# PRODUCTION GUARD: --prod additionally requires PULL_UP_ALLOW_PROD=1. That
+# is not security — anyone with a shell can set it — it is a speed bump with
+# a specific job: allowlist `Bash(scripts/dbq *)` in your agent permissions
+# and DO NOT allowlist the PULL_UP_ALLOW_PROD form. Routine queries then run
+# unattended against dev, while anything touching production stops for a
+# human approval prompt.
+set -euo pipefail
+
+target=dev
+if [ "${1:-}" = "--prod" ]; then
+  target=prod
+  shift
+fi
+
+if [ $# -lt 1 ] || [ -z "${1:-}" ]; then
+  echo "usage: scripts/dbq [--prod] \"<sql>\"" >&2
+  exit 2
+fi
+
+if [ "$target" = "prod" ] && [ "${PULL_UP_ALLOW_PROD:-}" != "1" ]; then
+  cat >&2 <<'EOF'
+refusing to touch production.
+
+  scripts/dbq --prod requires PULL_UP_ALLOW_PROD=1:
+
+    PULL_UP_ALLOW_PROD=1 scripts/dbq --prod "<sql>"
+
+  Run it against dev first. If you meant production, re-run with the
+  variable set — deliberately, and expect an approval prompt.
+EOF
+  exit 3
+fi
+
+keychain_name="pull-up-db-$target"
+if ! security find-generic-password -s "$keychain_name" >/dev/null 2>&1; then
+  echo "no Keychain entry for $keychain_name" >&2
+  echo "store one with: scripts/secret set $keychain_name" >&2
+  exit 4
+fi
+
+if [ "$target" = "prod" ]; then
+  echo "!! running against PRODUCTION !!" >&2
+fi
+
+# cmd/dbq lives in the server module, so resolve it from the repo root rather
+# than depending on the caller's working directory.
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$repo_root/server"
+
+# The value is read into the child's environment and never printed. Assigning
+# it as a command prefix keeps it out of this shell's exported environment,
+# so it cannot leak into anything run afterwards.
+DATABASE_URL="$(security find-generic-password -s "$keychain_name" -w)" \
+  go run ./cmd/dbq "$1"
