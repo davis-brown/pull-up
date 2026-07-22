@@ -67,6 +67,10 @@ jobs:
           npm ci --prefix deploy/api
       - name: Check app and web Worker types
         run: npm --prefix app run typecheck
+      - name: Lint app
+        # Fails on errors only; the warnings are intentional (RN animation
+        # idioms and React-Compiler-oriented hints, see eslint.config.js).
+        run: npm --prefix app run lint
       - name: Test app
         run: npm --prefix app test -- --runInBand
       - name: Export web app

@@ -22,7 +22,7 @@ export default function RegisterScreen() {
     setBusy(true);
     try {
       const normalizedEmail = email.trim().toLowerCase();
-      const result = await signUp(normalizedEmail, password, displayName.trim());
+      await signUp(normalizedEmail, password, displayName.trim());
       router.replace({
         pathname: "/verify-email",
         params: {
