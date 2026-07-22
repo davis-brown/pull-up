@@ -57,10 +57,6 @@ export async function cancelPushTokenAssociation(
   return { token, commit };
 }
 
-export async function getStoredPushToken(userId: string): Promise<string | null> {
-  return memoryTokens.get(userId) ?? storage.get(tokenKey(userId)).catch(() => null);
-}
-
 export async function registerPushToken(opts?: {
   requestPermission?: boolean;
 }): Promise<void> {

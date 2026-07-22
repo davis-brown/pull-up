@@ -269,11 +269,6 @@ async function storeTokenResponse(token: TokenResponse, epoch: number): Promise<
   if (sessionEpoch !== epoch) throw new SessionChangedError();
 }
 
-export async function clearTokens(): Promise<void> {
-  clearMemorySession();
-  await queueStoredTokenClear();
-}
-
 export async function hasSession(): Promise<boolean> {
   if (isWeb()) {
     await removeLegacyWebTokens();

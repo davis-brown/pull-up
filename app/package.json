@@ -42,9 +42,12 @@
     "@cloudflare/workers-types": "^5.20260708.1",
     "@types/jest": "^30.0.0",
     "@types/react": "~19.2.2",
+    "eslint": "^9.39.5",
+    "eslint-config-expo": "^57.0.0",
     "jest": "^30.4.2",
     "ts-jest": "^29.4.11",
-    "typescript": "~6.0.3"
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.65.0"
   },
   "scripts": {
     "start": "expo start",
@@ -52,6 +55,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.worker.json",
+    "lint": "eslint .",
     "test": "jest",
     "export:web": "expo export --platform web"
   },
