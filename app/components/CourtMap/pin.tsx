@@ -12,10 +12,9 @@ import type { CourtPin } from "./types";
 // unaffected by selection or activity weighting.
 //
 // "now" mode weights pins by expectedCount: a quiet, unselected court shrinks
-// to a small basketball marker; everything else is an orange count pin; the
-// selected pin grows to 52px, gains a pulsing halo, and drops an ink label
-// chip with the court name below it. Sizing is decided by the pure
-// app/lib/pin-size.ts helper.
+// to a dot; everything else is a violet count pin; the selected pin grows to
+// 52px, gains a pulsing halo, and drops an ink label chip with the court name
+// below it. Sizing is decided by the pure app/lib/pin-size.ts helper.
 export function CourtPinMarker({
   pin,
   mode,
@@ -27,7 +26,7 @@ export function CourtPinMarker({
   mode: "now" | "all";
   selected?: boolean;
   /** Desktop web (Task 14): the panel is hovering this court — raise a quiet
-   * marker to a full 36px pin so it stands out on the map. */
+   * dot to a full 36px pin so it stands out on the map. */
   hovered?: boolean;
   onPress?: () => void;
 }) {
@@ -65,20 +64,17 @@ export function CourtPinMarker({
         </Pressable>
       );
     }
-    // A quiet court: a small accent basketball marker. Deliberately smaller
-    // than any count pin so "now" mode's activity hierarchy still reads, but
-    // legible as a court rather than an anonymous dot.
+    // A quiet court (spec 3a): a small 16px dot with a surface ring, kept far
+    // lighter than any count pin so "now" mode's activity hierarchy reads.
     return (
       <Pressable onPress={onPress} hitSlop={12}>
         <View>
           <View
             style={[
-              styles.quietPin,
-              { backgroundColor: t.colors.accent, borderColor: t.colors.surface },
+              styles.quietDot,
+              { backgroundColor: t.colors.quietDot, borderColor: t.colors.surface },
             ]}
-          >
-            <Ionicons name="basketball" size={12} color={t.colors.onAccent} />
-          </View>
+          />
           {pin.nextRunAt ? <RunTick t={t} /> : null}
         </View>
       </Pressable>
@@ -270,13 +266,11 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "700",
   },
-  quietPin: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
+  quietDot: {
+    width: 16,
+    height: 16,
+    borderRadius: 8,
     borderWidth: 2,
-    alignItems: "center",
-    justifyContent: "center",
   },
   pinColumn: {
     alignItems: "center",

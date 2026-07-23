@@ -5,9 +5,10 @@
 // useTheme(), which resolves the light or dark palette from the OS setting
 // automatically.
 //
-// Palette rationale: cool titanium/graphite neutrals with an electric-blue
-// brand accent and machined-metal surfaces (gradient + edge-highlight tokens
-// below); green is reserved exclusively for live activity.
+// Palette rationale (spec 3a–3f, "electric" set): near-white paper and
+// violet-tinted neutrals with an electric-violet brand accent (#5A3FF0) and
+// an electric-lime accent (#C4F52E) reserved for the leveling system. Green
+// is reserved exclusively for live activity.
 import {
   createContext,
   createElement,
@@ -35,6 +36,10 @@ export interface ThemeColors {
   accentSurface: string;
   accentSoft: string;
   onAccent: string;
+  // Electric lime, reserved for the leveling system (XP bars, level badges,
+  // streak accents — spec 3d/3e). Never a general CTA color; that's `accent`.
+  xp: string;
+  onXp: string;
   chipBorder: string;
   quietDot: string;
   live: string;
@@ -57,64 +62,68 @@ export interface ThemeColors {
 }
 
 const light: ThemeColors = {
-  background: "#F2F4F8",
-  surface: "#FBFCFE",
-  surfaceMuted: "#E7EAF0",
-  border: "#DCE1E9",
-  textPrimary: "#0D1117",
-  textSecondary: "#5B6470",
-  textMuted: "#9AA3B1",
-  textFootnote: "#5B6470",
-  accent: "#2E66FF",
-  accentPressed: "#1D4FE0",
-  accentSurface: "#EAF0FF",
-  accentSoft: "#93B0FF",
+  background: "#FAF9FE",
+  surface: "#FFFFFF",
+  surfaceMuted: "#FAF9FE",
+  border: "#E7E5F2",
+  textPrimary: "#161326",
+  textSecondary: "#55536B",
+  textMuted: "#7A7791",
+  textFootnote: "#8A87A0",
+  accent: "#5A3FF0",
+  accentPressed: "#4526C9",
+  accentSurface: "#EEE9FF",
+  accentSoft: "#B9A9FA",
   onAccent: "#FFFFFF",
-  chipBorder: "#CBD2DD",
-  quietDot: "#C2C9D4",
-  live: "#12A150",
-  liveSurface: "#E3F3EB",
+  xp: "#C4F52E",
+  onXp: "#161326",
+  chipBorder: "#DAD7E8",
+  quietDot: "#C4C1D6",
+  live: "#12B981",
+  liveSurface: "#E4F7EF",
   warning: "#8A6404",
   warningSurface: "#FBF3DA",
   warningBorder: "#E8D08C",
   danger: "#B3261E",
-  overlay: "rgba(13, 17, 23, 0.45)",
+  overlay: "rgba(22, 19, 38, 0.45)",
   metalTop: "#FFFFFF",
-  metalBottom: "#E4E8EF",
+  metalBottom: "#F1EFFA",
   metalEdge: "#FFFFFF",
-  accentMetalTop: "#4478FF",
-  accentMetalBottom: "#1D4FE0",
+  accentMetalTop: "#6E52FF",
+  accentMetalBottom: "#4A2CD8",
   sheen: "rgba(255, 255, 255, 0.55)",
 };
 
 const dark: ThemeColors = {
-  background: "#0C0E12",
-  surface: "#171A20",
-  surfaceMuted: "#1F242C",
-  border: "#2A303A",
-  textPrimary: "#EDF0F5",
-  textSecondary: "#C2C9D4",
-  textMuted: "#7C8494",
-  textFootnote: "#5D6472",
-  accent: "#4C82FF",
-  accentPressed: "#2E66FF",
-  accentSurface: "#16233F",
-  accentSoft: "#5B82D9",
+  background: "#161326",
+  surface: "#26233B",
+  surfaceMuted: "#201D33",
+  border: "#3B3752",
+  textPrimary: "#F2F1F9",
+  textSecondary: "#D6D3E6",
+  textMuted: "#84819A",
+  textFootnote: "#6B6884",
+  accent: "#6E52FF",
+  accentPressed: "#5A3FF0",
+  accentSurface: "#2A2450",
+  accentSoft: "#B9A9FA",
   onAccent: "#FFFFFF",
-  chipBorder: "#2A303A",
-  quietDot: "#454C58",
-  live: "#12A150",
-  liveSurface: "#142A20",
+  xp: "#C4F52E",
+  onXp: "#161326",
+  chipBorder: "#3B3752",
+  quietDot: "#4A4763",
+  live: "#12B981",
+  liveSurface: "#143026",
   warning: "#E3B341",
   warningSurface: "#2A2415",
   warningBorder: "#57491F",
   danger: "#F2726A",
   overlay: "rgba(0, 0, 0, 0.6)",
-  metalTop: "#272D37",
-  metalBottom: "#12151A",
-  metalEdge: "rgba(255, 255, 255, 0.16)",
-  accentMetalTop: "#5B8CFF",
-  accentMetalBottom: "#2453D6",
+  metalTop: "#2A2740",
+  metalBottom: "#1B1830",
+  metalEdge: "rgba(255, 255, 255, 0.14)",
+  accentMetalTop: "#6E52FF",
+  accentMetalBottom: "#4A2CD8",
   sheen: "rgba(255, 255, 255, 0.2)",
 };
 
@@ -213,30 +222,30 @@ export const type = {
 // consumed on iOS; elevation is the Android equivalent.
 export const shadows = {
   cta: {
-    shadowColor: "#2E66FF",
+    shadowColor: "#5A3FF0",
     shadowOpacity: 0.35,
     shadowRadius: 16,
     shadowOffset: { width: 0, height: 6 },
     elevation: 6,
   },
-  // Pins mark live activity, so their glow keys to the live green rather
-  // than the brand accent.
+  // Spec 3a: live pins carry the brand violet glow (0 6px 16px
+  // rgba(90,63,240,.45)).
   pin: {
-    shadowColor: "#12A150",
+    shadowColor: "#5A3FF0",
     shadowOpacity: 0.45,
     shadowRadius: 16,
     shadowOffset: { width: 0, height: 6 },
     elevation: 6,
   },
   sheet: {
-    shadowColor: "#0D1117",
+    shadowColor: "#161326",
     shadowOpacity: 0.14,
     shadowRadius: 30,
     shadowOffset: { width: 0, height: -8 },
     elevation: 12,
   },
   chrome: {
-    shadowColor: "#0D1117",
+    shadowColor: "#161326",
     shadowOpacity: 0.12,
     shadowRadius: 16,
     shadowOffset: { width: 0, height: 4 },
