@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -29,10 +30,18 @@ const (
 	userAgent      = "pull-up/0.1 (basketball court finder; github.com/davis-brown/pull-up)"
 	courtesyDelay  = 1200 * time.Millisecond
 	requestTimeout = 15 * time.Second
-	maxPhotos      = 4
+	maxPhotos      = 6
 	// Commons geosearch radius: tight enough that photos are plausibly of
 	// the court or its park, not the block over.
-	photoRadiusM = 120
+	photoRadiusM = 200
+
+	// Mapillary: street-level imagery (CC BY-SA), queried by a bounding box
+	// around the court. Kept to a handful so a busy street doesn't bury the
+	// court's own photos.
+	mapillaryEndpoint    = "https://graph.mapillary.com/images"
+	mapillaryAttribution = "© Mapillary contributors (CC BY-SA)"
+	maxMapillaryPhotos   = 4
+	mapillaryRadiusM     = 150
 )
 
 const idlePoll = 30 * time.Second
@@ -41,17 +50,20 @@ type Enricher struct {
 	queries *gen.Queries
 	log     *slog.Logger
 	client  *http.Client
+	// mapillaryToken enables the Mapillary photo source; empty leaves it off.
+	mapillaryToken string
 	// mu serializes enrichment so the in-process Run loop and a concurrent
 	// /internal/drain call never hit Nominatim/Commons/Overpass at once —
 	// the courtesy delays only space calls within a single serialized run.
 	mu sync.Mutex
 }
 
-func New(queries *gen.Queries, log *slog.Logger) *Enricher {
+func New(queries *gen.Queries, log *slog.Logger, mapillaryToken string) *Enricher {
 	return &Enricher{
-		queries: queries,
-		log:     log,
-		client:  &http.Client{Timeout: requestTimeout},
+		queries:        queries,
+		log:            log,
+		client:         &http.Client{Timeout: requestTimeout},
+		mapillaryToken: mapillaryToken,
 	}
 }
 
@@ -135,6 +147,31 @@ func (e *Enricher) enrichClaimed(ctx context.Context, claim gen.ClaimNextCourtEn
 		}
 	}
 
+	mapillary := 0
+	if e.mapillaryToken != "" {
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(courtesyDelay):
+		}
+		mphotos, err := e.mapillaryPhotos(ctx, claim.Lat, claim.Lng)
+		if err != nil {
+			e.log.Warn("mapillary search", "court", claim.ID, "err", err)
+			succeeded = false
+		} else {
+			mapillary = len(mphotos)
+			for _, p := range mphotos {
+				if err := e.queries.InsertExternalPhoto(ctx, gen.InsertExternalPhotoParams{
+					CourtID: claim.ID, Source: "mapillary", SourceID: p.sourceID,
+					ImageUrl: p.imageURL, PageUrl: p.pageURL, Attribution: p.attribution,
+				}); err != nil {
+					e.log.Error("insert external photo", "court", claim.ID, "err", err)
+					succeeded = false
+				}
+			}
+		}
+	}
+
 	water, toilets, parking, err := e.nearbyAmenities(ctx, claim.Lat, claim.Lng)
 	if err != nil {
 		e.log.Warn("overpass amenities", "court", claim.ID, "err", err)
@@ -155,7 +192,8 @@ func (e *Enricher) enrichClaimed(ctx context.Context, claim gen.ClaimNextCourtEn
 		e.log.Error("complete enrichment", "court", claim.ID, "err", err)
 		return
 	}
-	e.log.Info("enriched court", "court", claim.ID, "needed_address", claim.NeedsAddress, "photos", len(photos))
+	e.log.Info("enriched court", "court", claim.ID, "needed_address", claim.NeedsAddress,
+		"commons_photos", len(photos), "mapillary_photos", mapillary)
 
 	select {
 	case <-ctx.Done():
@@ -176,6 +214,12 @@ func (e *Enricher) getJSON(ctx context.Context, rawURL string, dst any) error {
 		return err
 	}
 	req.Header.Set("User-Agent", userAgent)
+	return e.doJSON(req, dst)
+}
+
+// doJSON executes an already-built request and decodes a JSON body, sharing
+// the status check and response-size cap across all providers.
+func (e *Enricher) doJSON(req *http.Request, dst any) error {
 	resp, err := e.client.Do(req)
 	if err != nil {
 		return err
@@ -303,6 +347,69 @@ func (e *Enricher) commonsPhotos(ctx context.Context, lat, lng float64) ([]commo
 		})
 	}
 	return out, nil
+}
+
+type mapillaryImage struct {
+	sourceID    string
+	imageURL    string
+	pageURL     string
+	attribution *string
+}
+
+type mapillaryResponse struct {
+	Data []struct {
+		ID           string `json:"id"`
+		Thumb1024URL string `json:"thumb_1024_url"`
+	} `json:"data"`
+}
+
+// mapillaryPhotos returns up to maxMapillaryPhotos street-level images within a
+// small bounding box around the court. Requires a configured token.
+func (e *Enricher) mapillaryPhotos(ctx context.Context, lat, lng float64) ([]mapillaryImage, error) {
+	minLng, minLat, maxLng, maxLat := bbox(lat, lng, mapillaryRadiusM)
+	params := url.Values{
+		"fields": {"id,thumb_1024_url"},
+		"bbox":   {fmt.Sprintf("%f,%f,%f,%f", minLng, minLat, maxLng, maxLat)},
+		"limit":  {fmt.Sprintf("%d", maxMapillaryPhotos)},
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, mapillaryEndpoint+"?"+params.Encode(), nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", userAgent)
+	req.Header.Set("Authorization", "OAuth "+e.mapillaryToken)
+
+	var resp mapillaryResponse
+	if err := e.doJSON(req, &resp); err != nil {
+		return nil, err
+	}
+	return parseMapillary(resp), nil
+}
+
+// parseMapillary maps a Graph API response to storable photos, dropping
+// entries missing an id or thumbnail.
+func parseMapillary(resp mapillaryResponse) []mapillaryImage {
+	out := make([]mapillaryImage, 0, len(resp.Data))
+	for _, img := range resp.Data {
+		if img.ID == "" || img.Thumb1024URL == "" {
+			continue
+		}
+		attr := mapillaryAttribution
+		out = append(out, mapillaryImage{
+			sourceID:    img.ID,
+			imageURL:    img.Thumb1024URL,
+			pageURL:     "https://www.mapillary.com/app/?pKey=" + img.ID,
+			attribution: &attr,
+		})
+	}
+	return out
+}
+
+// bbox returns a lon/lat bounding box of roughly radiusM metres around a point.
+func bbox(lat, lng, radiusM float64) (minLng, minLat, maxLng, maxLat float64) {
+	latDelta := radiusM / 111320.0
+	lngDelta := radiusM / (111320.0 * math.Cos(lat*math.Pi/180))
+	return lng - lngDelta, lat - latDelta, lng + lngDelta, lat + latDelta
 }
 
 type overpassElement struct {
