@@ -1,8 +1,9 @@
 import { Camera, Map, Marker, UserLocation } from "@maplibre/maplibre-react-native";
 import { StyleSheet } from "react-native";
 import { useTheme } from "@/lib/theme";
+import { useMapStyle } from "./map-style";
 import { CourtPinMarker } from "./pin";
-import { mapStyleURL, type CourtMapProps } from "./types";
+import { type CourtMapProps } from "./types";
 
 export default function CourtMap({
   courts,
@@ -16,10 +17,11 @@ export default function CourtMap({
   style,
 }: CourtMapProps) {
   const t = useTheme();
+  const mapStyle = useMapStyle(t.scheme);
   return (
     <Map
       style={[styles.map, style]}
-      mapStyle={mapStyleURL(t.scheme)}
+      mapStyle={mapStyle as string}
       onRegionDidChange={(event) => {
         const [west, south, east, north] = event.nativeEvent.bounds;
         onRegionChange?.({

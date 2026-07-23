@@ -1,10 +1,12 @@
 // Web implementation of CourtMap: the native MapLibre module does not run on
 // Expo web, so Metro resolves this file instead (.web.tsx).
 import "maplibre-gl/dist/maplibre-gl.css";
+import type { StyleSpecification } from "maplibre-gl";
 import Map, { AttributionControl, GeolocateControl, Marker } from "react-map-gl/maplibre";
 import { useTheme } from "@/lib/theme";
+import { useMapStyle } from "./map-style";
 import { CourtPinMarker } from "./pin";
-import { mapStyleURL, type CourtMapProps } from "./types";
+import { type CourtMapProps } from "./types";
 
 // Reports the map's current viewport as a bbox. Shared by the load and
 // move-end handlers so both report the region identically.
@@ -40,6 +42,7 @@ export default function CourtMap({
   style,
 }: CourtMapProps) {
   const t = useTheme();
+  const mapStyle = useMapStyle(t.scheme);
   return (
     <Map
       initialViewState={{
@@ -48,7 +51,7 @@ export default function CourtMap({
         zoom: initialZoom,
       }}
       style={{ flex: 1, ...style }}
-      mapStyle={mapStyleURL(t.scheme)}
+      mapStyle={mapStyle as string | StyleSpecification}
       attributionControl={false}
       // The map's first render emits no move event, so onMoveEnd alone left
       // the caller's bbox null until the user happened to pan or zoom —
