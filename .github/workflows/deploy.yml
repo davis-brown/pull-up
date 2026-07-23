@@ -59,8 +59,8 @@ jobs:
             // Optional: absent means the feature stays off, not that the
             // deploy is broken. CLOUDFLARE_AI_TOKEN gates Llama Guard text
             // moderation; without it the API accepts text unscreened.
-            // MAPILLARY_TOKEN gates the enricher's Mapillary photo source;
-            // without it courts still get Wikimedia Commons photos.
+            // MAPILLARY_TOKEN gates the Mapillary photo source in the
+            // enricher; without it courts still get Wikimedia Commons photos.
             const optional = ["CLOUDFLARE_AI_TOKEN", "MAPILLARY_TOKEN"];
             const out = {};
             for (const name of names) {
