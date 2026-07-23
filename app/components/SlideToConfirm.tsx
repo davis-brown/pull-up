@@ -7,6 +7,7 @@ import {
   Platform,
   Pressable,
   StyleSheet,
+  Text,
   type LayoutChangeEvent,
 } from "react-native";
 import { darkTheme } from "@/lib/theme";
@@ -30,10 +31,13 @@ export function SlideToConfirm({
   label,
   onConfirm,
   disabled,
+  xpReward,
 }: {
   label: string;
   onConfirm: () => void;
   disabled?: boolean;
+  /** Spec 3d: a lime "+n XP" reward chip on the right of the track. */
+  xpReward?: number;
 }) {
   const t = darkTheme();
   const [trackWidth, setTrackWidth] = useState(0);
@@ -132,6 +136,21 @@ export function SlideToConfirm({
       >
         {label}
       </Animated.Text>
+      {xpReward != null ? (
+        // Behind the thumb: the thumb slides over it to "collect" the reward.
+        <Animated.View
+          style={[styles.xpChip, { backgroundColor: t.colors.xp, opacity: labelOpacity }]}
+        >
+          <Text
+            style={[
+              styles.xpChipText,
+              { fontFamily: t.fonts.condensedHeavy, color: t.colors.onXp },
+            ]}
+          >
+            +{xpReward} XP
+          </Text>
+        </Animated.View>
+      ) : null}
       <Animated.View
         {...panResponder.panHandlers}
         style={[
@@ -184,5 +203,16 @@ const styles = StyleSheet.create({
     height: "100%",
     alignItems: "center",
     justifyContent: "center",
+  },
+  xpChip: {
+    position: "absolute",
+    right: 16,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  xpChipText: {
+    fontSize: 13,
+    letterSpacing: 0.3,
   },
 });
