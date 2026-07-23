@@ -34,7 +34,7 @@ export function FactsGrid({ court }: { court: CourtDetail }) {
           style={[
             styles.cell,
             {
-              backgroundColor: t.colors.surfaceMuted,
+              backgroundColor: t.colors.background,
               borderRadius: 14,
               borderWidth: 1,
               borderColor: t.colors.border,
