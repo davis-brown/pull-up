@@ -3,6 +3,7 @@ package enrich
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -113,13 +114,19 @@ func TestMapillaryPhotosDataLimitPersists(t *testing.T) {
 	}
 }
 
-// A non-data-limit API error (e.g. auth) must surface, not be swallowed as
-// "zero photos" — the exact failure mode that hid a broken token in prod.
+// A non-data-limit API error (e.g. auth) must surface as a typed
+// *mapillaryAPIError — the enricher pages Sentry only on that type, so this is
+// what keeps the silent-token-failure guard wired.
 func TestMapillaryPhotosApiErrorSurfaces(t *testing.T) {
 	e := serveMapillary(t, func(w http.ResponseWriter, r *http.Request) {
 		io.WriteString(w, `{"error":{"code":190,"message":"invalid token"}}`)
 	})
-	if _, err := e.mapillaryPhotos(context.Background(), 40.75, -73.98); err == nil {
-		t.Fatal("expected the API error to be surfaced")
+	_, err := e.mapillaryPhotos(context.Background(), 40.75, -73.98)
+	var apiErr *mapillaryAPIError
+	if !errors.As(err, &apiErr) {
+		t.Fatalf("expected *mapillaryAPIError, got %v", err)
+	}
+	if apiErr.code != 190 {
+		t.Errorf("code = %d, want 190", apiErr.code)
 	}
 }

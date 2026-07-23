@@ -20,6 +20,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/getsentry/sentry-go"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
@@ -48,6 +49,9 @@ const (
 	// Error code Mapillary returns when a bbox would scan too many images
 	// ("reduce the amount of data"); a smaller box can still succeed.
 	mapillaryDataLimit = 1
+	// Throttle for the "Mapillary is down" alert: a bad token rejects every
+	// court, so paging on each would burn Sentry quota to say one thing.
+	mapillaryOutageInterval = 15 * time.Minute
 )
 
 // Overridable in tests. Mapillary reports failures as an error object inside a
@@ -62,10 +66,60 @@ type Enricher struct {
 	client  *http.Client
 	// mapillaryToken enables the Mapillary photo source; empty leaves it off.
 	mapillaryToken string
+	// mapillaryOutage throttles the Sentry alert for a rejecting Mapillary API.
+	mapillaryOutage throttle
 	// mu serializes enrichment so the in-process Run loop and a concurrent
 	// /internal/drain call never hit Nominatim/Commons/Overpass at once —
 	// the courtesy delays only space calls within a single serialized run.
 	mu sync.Mutex
+}
+
+// throttle rate-limits a repeated alert. The zero value is ready to use and
+// allows the first occurrence immediately.
+type throttle struct {
+	mu   sync.Mutex
+	last time.Time
+}
+
+func (t *throttle) allow(now time.Time, every time.Duration) bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if !t.last.IsZero() && now.Sub(t.last) < every {
+		return false
+	}
+	t.last = now
+	return true
+}
+
+// mapillaryAPIError is an explicit rejection from the Graph API (bad/expired
+// token, quota, bad params) — distinct from a network blip or the data-limit
+// code, so callers can page on a persistent auth/quota problem while staying
+// quiet on transient failures.
+type mapillaryAPIError struct {
+	code    int
+	message string
+}
+
+func (e *mapillaryAPIError) Error() string {
+	return fmt.Sprintf("mapillary api error %d: %s", e.code, e.message)
+}
+
+// reportMapillaryOutage pages when Mapillary is configured but rejecting
+// requests (the same silent-failure class that once left the feature quietly
+// off). Throttled and fingerprinted so repeated rejections group into one
+// Sentry issue. No-op unless SENTRY_DSN was set at startup.
+func (e *Enricher) reportMapillaryOutage(cause error) {
+	if !e.mapillaryOutage.allow(time.Now(), mapillaryOutageInterval) {
+		return
+	}
+	sentry.WithScope(func(scope *sentry.Scope) {
+		scope.SetLevel(sentry.LevelError)
+		scope.SetTag("subsystem", "court-enrichment")
+		scope.SetTag("source", "mapillary")
+		scope.SetContext("mapillary", sentry.Context{"cause": cause.Error()})
+		scope.SetFingerprint([]string{"mapillary-unavailable"})
+		sentry.CaptureMessage("mapillary photo enrichment rejected — check MAPILLARY_TOKEN")
+	})
 }
 
 func New(queries *gen.Queries, log *slog.Logger, mapillaryToken string) *Enricher {
@@ -170,6 +224,13 @@ func (e *Enricher) enrichClaimed(ctx context.Context, claim gen.ClaimNextCourtEn
 			// retries forever re-hitting Nominatim/Commons/Overpass. Commons
 			// still carries the primary photo source.
 			e.log.Warn("mapillary search", "court", claim.ID, "err", err)
+			// A hard API rejection (bad/expired token, quota) is a silent
+			// outage — page on it, throttled. Transient network blips fall
+			// through as a plain warn.
+			var apiErr *mapillaryAPIError
+			if errors.As(err, &apiErr) {
+				e.reportMapillaryOutage(err)
+			}
 		} else {
 			mapillary = len(mphotos)
 			for _, p := range mphotos {
@@ -394,7 +455,7 @@ func (e *Enricher) mapillaryPhotos(ctx context.Context, lat, lng float64) ([]map
 			if resp.Error.Code == mapillaryDataLimit {
 				continue // box still too big; try the smaller one
 			}
-			return nil, fmt.Errorf("mapillary api error %d: %s", resp.Error.Code, resp.Error.Message)
+			return nil, &mapillaryAPIError{code: resp.Error.Code, message: resp.Error.Message}
 		}
 		return parseMapillary(resp), nil
 	}
