@@ -64,7 +64,10 @@ export interface ThemeColors {
 const light: ThemeColors = {
   background: "#FAF9FE",
   surface: "#FFFFFF",
-  surfaceMuted: "#FAF9FE",
+  // A muted gray one step darker than the paper background, so chips, badge
+  // tiles, and inactive track fills read without needing a border (spec's
+  // #ECEAF5 chip/style-tag gray).
+  surfaceMuted: "#ECEAF5",
   border: "#E7E5F2",
   textPrimary: "#161326",
   textSecondary: "#55536B",
