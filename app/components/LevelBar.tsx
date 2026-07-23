@@ -1,3 +1,4 @@
+import { LinearGradient } from "expo-linear-gradient";
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useTheme } from "@/lib/theme";
@@ -44,12 +45,15 @@ export function LevelBar({ stats }: { stats: MeStats | undefined }) {
       <View
         style={[styles.track, { backgroundColor: t.colors.surfaceMuted, borderRadius: t.radius.full }]}
       >
-        <View
+        {/* Spec 3e: the XP fill runs violet → lime left-to-right. */}
+        <LinearGradient
+          colors={[t.colors.accent, t.colors.xp]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 0 }}
           style={[
             styles.fill,
             {
               width: `${Math.round(ratio * 100)}%`,
-              backgroundColor: t.colors.accent,
               borderRadius: t.radius.full,
             },
           ]}
