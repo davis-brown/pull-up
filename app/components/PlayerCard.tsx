@@ -45,6 +45,7 @@ export function PlayerCard({
   const games = stats?.games ?? 0;
   const courts = stats?.courts ?? 0;
   const weekStreak = stats?.week_streak ?? 0;
+  const level = stats?.level;
   const badgeById = new Map((stats?.badges ?? []).map((b) => [b.id, b.earned]));
   // W-L is shown as a plain fact, never as a win rate: recording is
   // voluntary, so a rate would just measure who logs their wins.
@@ -69,7 +70,8 @@ export function PlayerCard({
               styles.watermark,
               {
                 fontFamily: dark.fonts.condensedHeavy,
-                color: withAlpha(dark.colors.accent, 0.18),
+                // Spec 3e: the jersey watermark is faint lime, not violet.
+                color: withAlpha(dark.colors.xp, 0.16),
               },
             ]}
             numberOfLines={1}
@@ -78,13 +80,30 @@ export function PlayerCard({
           </Text>
         ) : null}
         <View style={styles.headerRow}>
-          <View style={[styles.avatarRing, { borderColor: dark.colors.accent }]}>
-            <Avatar
-              avatarUrl={user.avatar_url}
-              displayName={user.display_name}
-              seed={user.id}
-              size={64}
-            />
+          {/* Spec 3e: lime level ring + LVL badge. A true conic XP-progress
+              arc needs SVG (not a dep here); the ring reads level identity and
+              the gradient XP bar below carries the actual progress. */}
+          <View style={styles.avatarWrap}>
+            <View style={[styles.avatarRing, { borderColor: dark.colors.xp }]}>
+              <Avatar
+                avatarUrl={user.avatar_url}
+                displayName={user.display_name}
+                seed={user.id}
+                size={64}
+              />
+            </View>
+            {level != null ? (
+              <View style={[styles.levelBadge, { backgroundColor: dark.colors.xp }]}>
+                <Text
+                  style={[
+                    styles.levelBadgeText,
+                    { fontFamily: dark.fonts.condensedHeavy, color: dark.colors.onXp },
+                  ]}
+                >
+                  LVL {level}
+                </Text>
+              </View>
+            ) : null}
           </View>
           <View style={styles.headerText}>
             <Text style={[dark.type.display, { color: dark.colors.textPrimary }]} numberOfLines={1}>
@@ -104,7 +123,7 @@ export function PlayerCard({
         <View style={[styles.divider, { backgroundColor: t.colors.border }]} />
         <StatColumn value={courts} label="COURTS" />
         <View style={[styles.divider, { backgroundColor: t.colors.border }]} />
-        <StatColumn value={weekStreak} label="WK STREAK" accent />
+        <StatColumn value={weekStreak} label="WK STREAK" accent flame={weekStreak > 0} />
       </View>
 
       <LevelBar stats={stats} />
@@ -241,7 +260,17 @@ export function PlayerCard({
   );
 }
 
-function StatColumn({ value, label, accent }: { value: number; label: string; accent?: boolean }) {
+function StatColumn({
+  value,
+  label,
+  accent,
+  flame,
+}: {
+  value: number;
+  label: string;
+  accent?: boolean;
+  flame?: boolean;
+}) {
   const t = useTheme();
   return (
     <View style={styles.statColumn}>
@@ -253,6 +282,7 @@ function StatColumn({ value, label, accent }: { value: number; label: string; ac
         }}
       >
         {value}
+        {flame ? <Text style={styles.flame}>🔥</Text> : null}
       </Text>
       <Text style={[t.type.overline, { color: t.colors.textMuted, marginTop: 2 }]}>{label}</Text>
     </View>
@@ -285,10 +315,27 @@ const styles = StyleSheet.create({
     marginLeft: 16,
     flexShrink: 1,
   },
+  avatarWrap: {
+    alignItems: "center",
+  },
   avatarRing: {
     borderWidth: 3,
     borderRadius: 35,
     padding: 2,
+  },
+  levelBadge: {
+    marginTop: -8,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  levelBadgeText: {
+    fontSize: 12,
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+  },
+  flame: {
+    fontSize: 18,
   },
   statsStrip: {
     flexDirection: "row",
