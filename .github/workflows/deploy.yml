@@ -59,7 +59,9 @@ jobs:
             // Optional: absent means the feature stays off, not that the
             // deploy is broken. CLOUDFLARE_AI_TOKEN gates Llama Guard text
             // moderation; without it the API accepts text unscreened.
-            const optional = ["CLOUDFLARE_AI_TOKEN"];
+            // MAPILLARY_TOKEN gates the enricher's Mapillary photo source;
+            // without it courts still get Wikimedia Commons photos.
+            const optional = ["CLOUDFLARE_AI_TOKEN", "MAPILLARY_TOKEN"];
             const out = {};
             for (const name of names) {
               const value = process.env[name];
@@ -83,6 +85,7 @@ jobs:
           UPLOAD_SIGNING_SECRET: ${{ secrets.UPLOAD_SIGNING_SECRET }}
           INTERNAL_TASK_SECRET: ${{ secrets.INTERNAL_TASK_SECRET }}
           CLOUDFLARE_AI_TOKEN: ${{ secrets.CLOUDFLARE_AI_TOKEN }}
+          MAPILLARY_TOKEN: ${{ secrets.MAPILLARY_TOKEN }}
           DEPLOY_COMMIT: ${{ github.event.workflow_run.head_sha }}
       - name: Wait for container version to match deployed commit
         env:

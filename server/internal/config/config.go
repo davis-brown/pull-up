@@ -41,6 +41,10 @@ type Config struct {
 	// Cloudflare credentials.
 	CloudflareAccountID string
 	CloudflareAIToken   string
+	// MapillaryToken enables the enricher's Mapillary photo source. Optional,
+	// same as CloudflareAIToken: empty leaves Mapillary off (Commons still
+	// runs), so local dev and CI need no Mapillary credential.
+	MapillaryToken string
 	// Per-IP rate limits (requests/minute). 0 disables the limiter.
 	RateLimitAuthPerMin      int
 	RateLimitWritePerMin     int
@@ -77,6 +81,7 @@ func Load() (*Config, error) {
 		SentryDSN:                os.Getenv("SENTRY_DSN"),
 		CloudflareAccountID:      os.Getenv("CLOUDFLARE_ACCOUNT_ID"),
 		CloudflareAIToken:        os.Getenv("CLOUDFLARE_AI_TOKEN"),
+		MapillaryToken:           os.Getenv("MAPILLARY_TOKEN"),
 		RateLimitAuthPerMin:      getenvInt("RATE_LIMIT_AUTH_PER_MIN", 10),
 		RateLimitWritePerMin:     getenvInt("RATE_LIMIT_WRITE_PER_MIN", 60),
 		RateLimitDiscoveryPerMin: getenvInt("RATE_LIMIT_DISCOVERY_PER_MIN", 120),

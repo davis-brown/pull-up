@@ -355,8 +355,8 @@ export default function CourtDetailScreen() {
                 </ScrollView>
                 {externalPhotos.length > 0 && (
                   <Text style={[t.type.caption, styles.gap, { color: t.colors.textMuted }]}>
-                    Some photos are from nearby on Wikimedia Commons — tap one for its source
-                    and license.
+                    Some photos are from nearby public sources (Wikimedia Commons, Mapillary) —
+                    tap one for its source and license.
                   </Text>
                 )}
                 <ErrorText message={photoError ?? photoQueryError?.message ?? null} />
