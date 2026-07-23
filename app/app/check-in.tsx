@@ -20,6 +20,11 @@ import { darkTheme } from "@/lib/theme";
 const PLUS_OPTIONS = [0, 1, 2, 3];
 const MAX_AVATARS = 3;
 const SUCCESS_DISMISS_MS = 800;
+// Base check-in award, mirroring XP_SOURCES ("Check in at a court", +10) in
+// lib/levels.ts. Shown as the slide control's reward chip. Deliberately the
+// base, not the first-of-day +15: a repeat check-in can earn less, so this
+// never over-promises on the common path.
+const CHECK_IN_XP = 10;
 
 // Full-screen dark slide-to-check-in modal (spec 3d). Always dark, so it
 // resolves theme locally via darkTheme() instead of useTheme() — the
@@ -264,6 +269,7 @@ function CheckInContent({ courtId, via }: { courtId: string; via?: "gps" }) {
         <SlideToConfirm
           key={attempt}
           label="SLIDE TO CHECK IN"
+          xpReward={CHECK_IN_XP}
           onConfirm={handleConfirm}
           disabled={confirming || success}
         />
