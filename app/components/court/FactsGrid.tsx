@@ -33,7 +33,12 @@ export function FactsGrid({ court }: { court: CourtDetail }) {
           key={fact.label}
           style={[
             styles.cell,
-            { backgroundColor: t.colors.background, borderRadius: 14 },
+            {
+              backgroundColor: t.colors.surfaceMuted,
+              borderRadius: 14,
+              borderWidth: 1,
+              borderColor: t.colors.border,
+            },
           ]}
         >
           <Overline>{fact.label}</Overline>
