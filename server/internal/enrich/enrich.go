@@ -38,11 +38,21 @@ const (
 	// Mapillary: street-level imagery (CC BY-SA), queried by a bounding box
 	// around the court. Kept to a handful so a busy street doesn't bury the
 	// court's own photos.
-	mapillaryEndpoint    = "https://graph.mapillary.com/images"
 	mapillaryAttribution = "© Mapillary contributors (CC BY-SA)"
 	maxMapillaryPhotos   = 4
-	mapillaryRadiusM     = 150
+	// Half-width of the query box. bbox() spans ±this, so ~80m yields a ~160m
+	// box — the largest that stays under Mapillary's per-query data limit even
+	// in the densest cities (a 300m box is refused there). Sparser areas just
+	// find fewer images in the smaller box.
+	mapillaryRadiusM = 80
+	// Error code Mapillary returns when a bbox would scan too many images
+	// ("reduce the amount of data"); a smaller box can still succeed.
+	mapillaryDataLimit = 1
 )
+
+// Overridable in tests. Mapillary reports failures as an error object inside a
+// 200 body, so the response must be inspected explicitly.
+var mapillaryBaseURL = "https://graph.mapillary.com/images"
 
 const idlePoll = 30 * time.Second
 
@@ -156,8 +166,10 @@ func (e *Enricher) enrichClaimed(ctx context.Context, claim gen.ClaimNextCourtEn
 		}
 		mphotos, err := e.mapillaryPhotos(ctx, claim.Lat, claim.Lng)
 		if err != nil {
+			// Best-effort: a Mapillary failure must not fail the court, or it
+			// retries forever re-hitting Nominatim/Commons/Overpass. Commons
+			// still carries the primary photo source.
 			e.log.Warn("mapillary search", "court", claim.ID, "err", err)
-			succeeded = false
 		} else {
 			mapillary = len(mphotos)
 			for _, p := range mphotos {
@@ -361,29 +373,54 @@ type mapillaryResponse struct {
 		ID           string `json:"id"`
 		Thumb1024URL string `json:"thumb_1024_url"`
 	} `json:"data"`
+	Error *struct {
+		Code    int    `json:"code"`
+		Message string `json:"message"`
+	} `json:"error"`
 }
 
-// mapillaryPhotos returns up to maxMapillaryPhotos street-level images within a
-// small bounding box around the court. Requires a configured token.
+// mapillaryPhotos returns up to maxMapillaryPhotos street-level images near the
+// court. Requires a configured token. Dense cities exceed Mapillary's per-query
+// data limit at the full radius, so it shrinks the box and retries once; if the
+// smaller box is still refused it returns no photos rather than an error, since
+// retrying will not help.
 func (e *Enricher) mapillaryPhotos(ctx context.Context, lat, lng float64) ([]mapillaryImage, error) {
-	minLng, minLat, maxLng, maxLat := bbox(lat, lng, mapillaryRadiusM)
+	for _, r := range []float64{mapillaryRadiusM, mapillaryRadiusM / 2} {
+		resp, err := e.mapillaryQuery(ctx, lat, lng, r)
+		if err != nil {
+			return nil, err
+		}
+		if resp.Error != nil {
+			if resp.Error.Code == mapillaryDataLimit {
+				continue // box still too big; try the smaller one
+			}
+			return nil, fmt.Errorf("mapillary api error %d: %s", resp.Error.Code, resp.Error.Message)
+		}
+		return parseMapillary(resp), nil
+	}
+	return nil, nil
+}
+
+// mapillaryQuery performs one bounding-box image search of the given half-width.
+func (e *Enricher) mapillaryQuery(ctx context.Context, lat, lng, radiusM float64) (mapillaryResponse, error) {
+	minLng, minLat, maxLng, maxLat := bbox(lat, lng, radiusM)
 	params := url.Values{
 		"fields": {"id,thumb_1024_url"},
 		"bbox":   {fmt.Sprintf("%f,%f,%f,%f", minLng, minLat, maxLng, maxLat)},
 		"limit":  {fmt.Sprintf("%d", maxMapillaryPhotos)},
 	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, mapillaryEndpoint+"?"+params.Encode(), nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, mapillaryBaseURL+"?"+params.Encode(), nil)
 	if err != nil {
-		return nil, err
+		return mapillaryResponse{}, err
 	}
 	req.Header.Set("User-Agent", userAgent)
 	req.Header.Set("Authorization", "OAuth "+e.mapillaryToken)
 
 	var resp mapillaryResponse
 	if err := e.doJSON(req, &resp); err != nil {
-		return nil, err
+		return mapillaryResponse{}, err
 	}
-	return parseMapillary(resp), nil
+	return resp, nil
 }
 
 // parseMapillary maps a Graph API response to storable photos, dropping
