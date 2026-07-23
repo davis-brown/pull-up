@@ -80,7 +80,7 @@ func main() {
 
 	var en *enrich.Enricher
 	if cfg.Enrich {
-		en = enrich.New(st.Queries, log)
+		en = enrich.New(st.Queries, log, cfg.MapillaryToken)
 		go en.Run(ctx)
 		log.Info("court enrichment enabled")
 	}
