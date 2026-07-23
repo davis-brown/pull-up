@@ -93,7 +93,7 @@ export function PopularTimes({
             ? t.colors.accent
             : isBusy
               ? t.colors.accentSoft
-              : t.colors.surfaceMuted;
+              : t.colors.border;
           return (
             <View key={h} style={styles.barCol}>
               <View
