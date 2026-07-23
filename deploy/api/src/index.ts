@@ -22,6 +22,9 @@ interface OptionalBindings {
   // accepts text unscreened rather than failing closed.
   CLOUDFLARE_ACCOUNT_ID?: string;
   CLOUDFLARE_AI_TOKEN?: string;
+  // Enables the enricher's Mapillary photo source; empty leaves it off and
+  // courts still get Wikimedia Commons photos.
+  MAPILLARY_TOKEN?: string;
   // Set per-deploy via `wrangler deploy --var DEPLOY_COMMIT:<sha>` so the
   // container can report which commit it is running.
   DEPLOY_COMMIT?: string;
@@ -69,6 +72,7 @@ export class ApiContainer extends Container<RuntimeEnv> {
       SENTRY_DSN: env.SENTRY_DSN ?? "",
       CLOUDFLARE_ACCOUNT_ID: env.CLOUDFLARE_ACCOUNT_ID ?? "",
       CLOUDFLARE_AI_TOKEN: env.CLOUDFLARE_AI_TOKEN ?? "",
+      MAPILLARY_TOKEN: env.MAPILLARY_TOKEN ?? "",
       TRUST_CF_CONNECTING_IP: "true",
       PORT: "8080",
       COMMIT: env.DEPLOY_COMMIT ?? "",
