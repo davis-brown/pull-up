@@ -33,9 +33,13 @@ WHERE id = sqlc.arg('id');
 -- name: ListExternalPhotos :many
 SELECT id, source, source_id, image_url, page_url, attribution, created_at
 FROM external_photos
-WHERE court_id = $1
+WHERE court_id = $1 AND status = 'visible'
 ORDER BY created_at
 LIMIT 8;
+
+-- name: SetExternalPhotoStatus :execrows
+UPDATE external_photos SET status = $2
+WHERE id = $1;
 
 -- name: RequestEnrichment :exec
 -- Durable, lazy: mark a viewed court for enrichment (once) if not already done.
