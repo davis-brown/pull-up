@@ -398,4 +398,39 @@ func (s *Server) handleAdminSetPhotoStatus(w http.ResponseWriter, r *http.Reques
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// handleAdminSetExternalPhotoStatus hides or restores an auto-fetched
+// external photo (Commons/Mapillary). Unlike user photos there is nothing to
+// delete in R2 — the image is hotlinked — so 'hidden' simply excludes it from
+// ListExternalPhotos; the row is kept so re-enrichment's ON CONFLICT DO
+// NOTHING can't silently resurrect a photo an admin already hid.
+func (s *Server) handleAdminSetExternalPhotoStatus(w http.ResponseWriter, r *http.Request) {
+	photoID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "invalid photo id")
+		return
+	}
+	var req setStatusRequest
+	if !readJSON(w, r, &req) {
+		return
+	}
+	switch req.Status {
+	case "visible", "hidden":
+	default:
+		writeError(w, http.StatusBadRequest, "status must be visible or hidden")
+		return
+	}
+	n, err := s.store.Queries.SetExternalPhotoStatus(r.Context(), gen.SetExternalPhotoStatusParams{
+		ID: photoID, Status: req.Status,
+	})
+	if err != nil {
+		s.internalError(w, "set external photo status", err)
+		return
+	}
+	if n == 0 {
+		writeError(w, http.StatusNotFound, "external photo not found")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func ptr[T any](v T) *T { return &v }

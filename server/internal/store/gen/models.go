@@ -146,6 +146,7 @@ type ExternalPhoto struct {
 	PageUrl     string    `json:"page_url"`
 	Attribution *string   `json:"attribution"`
 	CreatedAt   time.Time `json:"created_at"`
+	Status      string    `json:"status"`
 }
 
 type Favorite struct {

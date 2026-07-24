@@ -178,6 +178,90 @@ func TestAdminFlagAndModerationFlow(t *testing.T) {
 	}
 }
 
+// External photos are inserted only by the enricher (which hits live
+// services), so this seeds one through the store and exercises the admin
+// hide → excluded-from-listing path directly.
+func TestAdminHideExternalPhoto(t *testing.T) {
+	ts, st := newTestServer(t)
+	admin := registerUser(t, ts, "extadmin@test.local", "ExtAdmin")
+	bootstrapAdmin(t, st, admin.User.ID)
+	owner := registerUser(t, ts, "extowner@test.local", "ExtOwner")
+
+	court := createTestCourt(t, ts, owner.AccessToken, "Photo Court", ruckerLat, ruckerLng)
+	courtID, err := uuid.Parse(court.ID)
+	if err != nil {
+		t.Fatalf("parse court id: %v", err)
+	}
+	if err := st.Queries.InsertExternalPhoto(t.Context(), gen.InsertExternalPhotoParams{
+		CourtID:  courtID,
+		Source:   "mapillary",
+		SourceID: "test-ext-1",
+		ImageUrl: "https://example.test/ext-1.jpg",
+		PageUrl:  "https://example.test/ext-1",
+	}); err != nil {
+		t.Fatalf("seed external photo: %v", err)
+	}
+
+	extIDs := func() []string {
+		resp := doJSON(t, ts, http.MethodGet, "/courts/"+court.ID+"/photos", "", nil)
+		body := decodeJSON[struct {
+			External []struct {
+				ID string `json:"id"`
+			} `json:"external"`
+		}](t, resp)
+		ids := make([]string, len(body.External))
+		for i, e := range body.External {
+			ids[i] = e.ID
+		}
+		return ids
+	}
+
+	ids := extIDs()
+	if len(ids) != 1 {
+		t.Fatalf("external photos before hide = %v, want one", ids)
+	}
+	photoID := ids[0]
+
+	// A non-admin cannot hide it.
+	resp := doJSON(t, ts, http.MethodPost, "/admin/external-photos/"+photoID+"/status", owner.AccessToken, map[string]string{
+		"status": "hidden",
+	})
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("non-admin hide: status %d, want 403", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	// Invalid status is rejected.
+	resp = doJSON(t, ts, http.MethodPost, "/admin/external-photos/"+photoID+"/status", admin.AccessToken, map[string]string{
+		"status": "removed",
+	})
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("invalid status: status %d, want 400", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	// Admin hides it; it drops out of the listing.
+	resp = doJSON(t, ts, http.MethodPost, "/admin/external-photos/"+photoID+"/status", admin.AccessToken, map[string]string{
+		"status": "hidden",
+	})
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("hide external photo: status %d", resp.StatusCode)
+	}
+	resp.Body.Close()
+	if ids := extIDs(); len(ids) != 0 {
+		t.Fatalf("hidden external photo still listed: %v", ids)
+	}
+
+	// Unknown id is a 404.
+	resp = doJSON(t, ts, http.MethodPost, "/admin/external-photos/"+uuid.NewString()+"/status", admin.AccessToken, map[string]string{
+		"status": "hidden",
+	})
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("unknown external photo: status %d, want 404", resp.StatusCode)
+	}
+	resp.Body.Close()
+}
+
 func TestAdminPromoteDemoteAndLastAdminGuard(t *testing.T) {
 	ts, st := newTestServer(t)
 	first := registerUser(t, ts, "firstadmin@test.local", "FirstAdmin")
