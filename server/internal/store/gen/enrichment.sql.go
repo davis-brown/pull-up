@@ -112,7 +112,7 @@ func (q *Queries) InsertExternalPhoto(ctx context.Context, arg InsertExternalPho
 const listExternalPhotos = `-- name: ListExternalPhotos :many
 SELECT id, source, source_id, image_url, page_url, attribution, created_at
 FROM external_photos
-WHERE court_id = $1
+WHERE court_id = $1 AND status = 'visible'
 ORDER BY created_at
 LIMIT 8
 `
@@ -218,4 +218,22 @@ func (q *Queries) SetCourtAmenitiesIfNull(ctx context.Context, arg SetCourtAmeni
 		arg.ID,
 	)
 	return err
+}
+
+const setExternalPhotoStatus = `-- name: SetExternalPhotoStatus :execrows
+UPDATE external_photos SET status = $2
+WHERE id = $1
+`
+
+type SetExternalPhotoStatusParams struct {
+	ID     uuid.UUID `json:"id"`
+	Status string    `json:"status"`
+}
+
+func (q *Queries) SetExternalPhotoStatus(ctx context.Context, arg SetExternalPhotoStatusParams) (int64, error) {
+	result, err := q.db.Exec(ctx, setExternalPhotoStatus, arg.ID, arg.Status)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }

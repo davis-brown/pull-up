@@ -215,6 +215,7 @@ func (s *Server) Routes() http.Handler {
 				r.Post("/admin/flags/{id}/resolve", s.handleResolveFlag)
 				r.Post("/admin/courts/{id}/status", s.handleAdminSetCourtStatus)
 				r.Post("/admin/photos/{id}/status", s.handleAdminSetPhotoStatus)
+				r.Post("/admin/external-photos/{id}/status", s.handleAdminSetExternalPhotoStatus)
 				r.Post("/admin/messages/{id}/status", s.handleAdminSetMessageStatus)
 				r.Get("/admin/users", s.handleAdminSearchUsers)
 				r.Post("/admin/users/{id}/admin", s.handleAdminSetUserAdmin)
