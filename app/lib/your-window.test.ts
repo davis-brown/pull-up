@@ -15,7 +15,7 @@ const saturday = new Date(2026, 6, 18, 12, 0);
 function forecastWith(hours: Record<number, number>, hasHistory = true): CourtForecast {
   const arr = Array(24).fill(0);
   for (const [h, v] of Object.entries(hours)) arr[Number(h)] = v;
-  return { court_id: "court-1", hours: arr, has_history: hasHistory, sessions: [] };
+  return { court_id: "court-1", hours: arr, has_history: hasHistory, weeks: 8, sessions: [] };
 }
 
 describe("WINDOW_SPANS", () => {

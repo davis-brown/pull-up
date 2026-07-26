@@ -13,7 +13,22 @@ export interface CourtForecast {
   court_id: string;
   hours: number[];
   has_history: boolean;
+  // Distinct weeks of check-in history behind the averages (0-8): a
+  // confidence signal used to caveat a forecast built on thin data.
+  weeks: number;
   sessions: ForecastSession[];
+}
+
+// Below this many weeks of history, the forecast is shown with a caveat so a
+// thin sample doesn't read as authoritative. Half the 8-week trailing window.
+export const CONFIDENCE_WEEKS = 4;
+
+// A low-confidence caption ("Based on 2 weeks of check-ins"), or null when the
+// forecast has no history or enough weeks to stand on its own.
+export function lowConfidenceLabel(f: CourtForecast | undefined): string | null {
+  if (!f || !f.has_history || f.weeks >= CONFIDENCE_WEEKS) return null;
+  const w = Math.max(1, f.weeks);
+  return `Based on ${w} week${w === 1 ? "" : "s"} of check-ins`;
 }
 
 // Expected turnout at a given hour: the historical/baseline hourly count

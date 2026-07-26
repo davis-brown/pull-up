@@ -1,6 +1,6 @@
 import { StyleSheet, Text, View } from "react-native";
 import { Overline } from "@/components/ui";
-import { busiestWindow, type CourtForecast } from "@/lib/forecast";
+import { busiestWindow, lowConfidenceLabel, type CourtForecast } from "@/lib/forecast";
 import { useTheme } from "@/lib/theme";
 import { yourWindowHours } from "@/lib/your-window";
 
@@ -59,6 +59,7 @@ export function PopularTimes({
   const hours = forecast.hours;
   const peak = Math.max(...hours, 0);
   const win = busiestWindow(hours);
+  const confidence = lowConfidenceLabel(forecast);
   const mine = yourWindowHours(availability, new Date());
 
   const bars: number[] = [];
@@ -72,6 +73,11 @@ export function PopularTimes({
         {win ? (
           <Text style={[t.type.caption, styles.caption, { color: t.colors.textSecondary }]}>
             busiest {windowLabel(win)}
+          </Text>
+        ) : null}
+        {confidence ? (
+          <Text style={[t.type.caption, { color: t.colors.textMuted, marginTop: 2 }]}>
+            {confidence}
           </Text>
         ) : null}
         {anyMine ? (

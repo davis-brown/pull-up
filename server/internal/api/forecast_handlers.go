@@ -37,11 +37,14 @@ type forecastSession struct {
 
 // courtForecast is the per-court forecast payload: average concurrent
 // headcount per local hour today (over the trailing 8 weeks), plus today's
-// scheduled sessions.
+// scheduled sessions. Weeks is how many distinct weeks of check-in history
+// back the averages (0-8) — a confidence signal the client uses to caveat a
+// forecast built on thin data.
 type courtForecast struct {
 	CourtID    uuid.UUID         `json:"court_id"`
 	Hours      [24]int           `json:"hours"`
 	HasHistory bool              `json:"has_history"`
+	Weeks      int               `json:"weeks"`
 	Sessions   []forecastSession `json:"sessions"`
 }
 
@@ -165,6 +168,7 @@ func buildForecasts(
 		}
 		cf.Hours[hour] = averageHeads(row.TotalHeads, weeksByCourt[row.CourtID])
 		cf.HasHistory = true
+		cf.Weeks = weeksByCourt[row.CourtID]
 	}
 	for _, row := range sessionRows {
 		cf, found := byCourt[row.CourtID]
