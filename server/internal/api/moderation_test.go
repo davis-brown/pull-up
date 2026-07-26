@@ -192,10 +192,11 @@ func TestAdminHideExternalPhoto(t *testing.T) {
 	if err != nil {
 		t.Fatalf("parse court id: %v", err)
 	}
+	const sourceID = "778899"
 	if err := st.Queries.InsertExternalPhoto(t.Context(), gen.InsertExternalPhotoParams{
 		CourtID:  courtID,
 		Source:   "mapillary",
-		SourceID: "test-ext-1",
+		SourceID: sourceID,
 		ImageUrl: "https://example.test/ext-1.jpg",
 		PageUrl:  "https://example.test/ext-1",
 	}); err != nil {
@@ -250,6 +251,23 @@ func TestAdminHideExternalPhoto(t *testing.T) {
 	resp.Body.Close()
 	if ids := extIDs(); len(ids) != 0 {
 		t.Fatalf("hidden external photo still listed: %v", ids)
+	}
+
+	// Hiding enqueues the cached R2 object for deletion so its bytes are
+	// reclaimed on the next cron drain.
+	keys, err := st.Queries.ClaimObjectDeletions(t.Context(), 10)
+	if err != nil {
+		t.Fatalf("claim object deletions: %v", err)
+	}
+	wantKey := "ext/mapillary/" + sourceID
+	found := false
+	for _, k := range keys {
+		if k == wantKey {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("deletion queue = %v, want to contain %q", keys, wantKey)
 	}
 
 	// Unknown id is a 404.

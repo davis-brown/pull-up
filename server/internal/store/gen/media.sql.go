@@ -193,6 +193,21 @@ func (q *Queries) MarkCourtPhotoUploaded(ctx context.Context, storageKey string)
 	return result.RowsAffected(), nil
 }
 
+const scheduleObjectDeletion = `-- name: ScheduleObjectDeletion :exec
+INSERT INTO object_deletion_queue (storage_key, requested_at)
+VALUES ($1, now())
+ON CONFLICT (storage_key) DO NOTHING
+`
+
+// Enqueue an object for prompt R2 deletion, reclaimed on the next cron drain.
+// Unlike ScheduleUploadedObjectCleanup's 1-hour grace (which guards a freshly
+// uploaded object from its own cleanup), this is for bytes that are already
+// stale — e.g. a hidden external photo's cached thumbnail.
+func (q *Queries) ScheduleObjectDeletion(ctx context.Context, storageKey string) error {
+	_, err := q.db.Exec(ctx, scheduleObjectDeletion, storageKey)
+	return err
+}
+
 const scheduleUploadedObjectCleanup = `-- name: ScheduleUploadedObjectCleanup :exec
 INSERT INTO object_deletion_queue (storage_key, requested_at)
 VALUES ($1, now() + interval '1 hour')
