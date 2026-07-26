@@ -1,9 +1,13 @@
 DATABASE_URL ?= postgres://pullup:pullup@localhost:5432/pullup?sslmode=disable
+# Scratch database for the DB-backed tests. Deliberately NOT the dev DB
+# ($DATABASE_URL / pullup): the tests TRUNCATE tables between cases, so they
+# must run against a throwaway database. Mirrors CI (see .github/workflows/ci.yml).
+TEST_DATABASE_URL ?= postgres://pullup:pullup@localhost:5432/pullup_test?sslmode=disable
 DEV_JWT_SECRET := local-development-jwt-secret-0000000000000001
 DEV_UPLOAD_SECRET := local-development-upload-secret-00000000001
 DEV_INTERNAL_SECRET := local-development-internal-secret-0000000001
 
-.PHONY: dev db-up db-down api test test-app vet generate seed-osm app app-web typecheck
+.PHONY: dev db-up db-down api test test-int test-app vet generate seed-osm app app-web typecheck
 
 ## Backend ---------------------------------------------------------------
 
@@ -23,10 +27,22 @@ api:
 
 dev: db-up api
 
-# DB-backed tests (store queries + HTTP API) skip unless TEST_DATABASE_URL
-# points at a scratch Postgres with PostGIS.
+# Fast path: unit tests only. The DB-backed store/API integration tests skip
+# themselves unless TEST_DATABASE_URL is set (see `make test-int`).
 test:
 	cd server && go test ./...
+
+# Full path: run everything, including the PostGIS integration tests, against a
+# local scratch database in the compose Postgres. The test harness applies
+# migrations and truncates between cases, so this just needs the database to
+# exist. Requires Docker; `make test` covers the rest without it.
+test-int: db-up
+	@echo "waiting for postgres to accept connections..."
+	@until docker compose exec -T db pg_isready -U pullup >/dev/null 2>&1; do sleep 1; done
+	@docker compose exec -T db psql -U pullup -d pullup -tc \
+		"SELECT 1 FROM pg_database WHERE datname = 'pullup_test'" | grep -q 1 || \
+		docker compose exec -T db psql -U pullup -d pullup -c "CREATE DATABASE pullup_test"
+	cd server && TEST_DATABASE_URL="$(TEST_DATABASE_URL)" go test ./...
 
 test-app:
 	cd app && npm test
