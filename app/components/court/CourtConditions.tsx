@@ -1,10 +1,16 @@
 // Player-confirmed court conditions: each fact shows tap-to-confirm value
 // chips and a freshness line. The selected chip is the court's stored value,
 // which follows the recent-confirmation majority server-side.
-import { StyleSheet, Text, View } from "react-native";
+//
+// Core playing facts (rims/nets/surface/hoops/lights) are always shown. The
+// amenity/policy facts are shown only when the court already has a value or a
+// confirmation for them; the still-empty ones tuck behind "add more details"
+// so the section stays short without ever hiding known information.
+import { useState } from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Chip, ErrorText, Overline } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
-import { COURT_FACTS, courtFactValue, freshnessLine } from "@/lib/court-facts";
+import { CORE_FACTS, COURT_FACTS, courtFactValue, freshnessLine } from "@/lib/court-facts";
 import { useConfirmCourtFact, useCourtFacts } from "@/lib/hooks";
 import { useTheme } from "@/lib/theme";
 import type { CourtDetail } from "@/lib/types";
@@ -15,6 +21,14 @@ export function CourtConditions({ court }: { court: CourtDetail }) {
   const { data: facts } = useCourtFacts(court.id);
   const confirm = useConfirmCourtFact(court.id);
   const byFact = new Map((facts ?? []).map((f) => [f.fact, f]));
+  const [expanded, setExpanded] = useState(false);
+
+  const isKnown = (fact: string) =>
+    courtFactValue(court, fact) != null || (byFact.get(fact)?.confirmations ?? 0) > 0;
+
+  const alwaysShown = COURT_FACTS.filter((d) => CORE_FACTS.has(d.fact) || isKnown(d.fact));
+  const hidden = COURT_FACTS.filter((d) => !CORE_FACTS.has(d.fact) && !isKnown(d.fact));
+  const shown = expanded ? [...alwaysShown, ...hidden] : alwaysShown;
 
   return (
     <View>
@@ -23,7 +37,7 @@ export function CourtConditions({ court }: { court: CourtDetail }) {
           ? "Been here? Tap what's true today — the court page stays current when players confirm."
           : "Confirmed by players at the court."}
       </Text>
-      {COURT_FACTS.map((def) => {
+      {shown.map((def) => {
         const current = courtFactValue(court, def.fact);
         const fresh = freshnessLine(byFact.get(def.fact));
         return (
@@ -50,6 +64,22 @@ export function CourtConditions({ court }: { court: CourtDetail }) {
           </View>
         );
       })}
+      {hidden.length > 0 ? (
+        <Pressable
+          onPress={() => setExpanded((v) => !v)}
+          accessibilityRole="button"
+          accessibilityState={{ expanded }}
+          accessibilityLabel={
+            expanded ? "Show fewer court details" : `Add more court details, ${hidden.length} available`
+          }
+          hitSlop={8}
+          style={styles.moreRow}
+        >
+          <Text style={[t.type.caption, { color: t.colors.accent }]}>
+            {expanded ? "Show less" : `Add more details (${hidden.length})`}
+          </Text>
+        </Pressable>
+      ) : null}
       <ErrorText message={confirm.error instanceof Error ? confirm.error.message : null} />
     </View>
   );
@@ -63,5 +93,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap",
     marginBottom: -8,
+  },
+  moreRow: {
+    paddingVertical: 6,
+    marginBottom: 6,
   },
 });
