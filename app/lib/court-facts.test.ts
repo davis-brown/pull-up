@@ -1,4 +1,4 @@
-import { COURT_FACTS, courtFactValue, freshnessLine } from "./court-facts";
+import { CORE_FACTS, COURT_FACTS, courtFactValue, freshnessLine } from "./court-facts";
 import type { CourtDetail, CourtFact } from "./types";
 
 const court = {
@@ -6,8 +6,14 @@ const court = {
   net_type: null,
   lighting: true,
   surface: "asphalt",
+  hoop_count: 4,
+  covered: false,
+  fenced: null,
   drinking_water: false,
   toilets: null,
+  parking: true,
+  access: "private",
+  fee: null,
 } as CourtDetail;
 
 describe("courtFactValue", () => {
@@ -18,6 +24,17 @@ describe("courtFactValue", () => {
     expect(courtFactValue(court, "drinking_water")).toBe("no");
     expect(courtFactValue(court, "toilets")).toBeNull();
     expect(courtFactValue(court, "surface")).toBe("asphalt");
+  });
+
+  it("maps the newly confirmable attributes", () => {
+    // hoop_count is a count rendered as its bucket key.
+    expect(courtFactValue(court, "hoop_count")).toBe("4");
+    expect(courtFactValue({ ...court, hoop_count: null } as CourtDetail, "hoop_count")).toBeNull();
+    expect(courtFactValue(court, "covered")).toBe("no");
+    expect(courtFactValue(court, "fenced")).toBeNull();
+    expect(courtFactValue(court, "parking")).toBe("yes");
+    expect(courtFactValue(court, "access")).toBe("private");
+    expect(courtFactValue(court, "fee")).toBeNull();
   });
 });
 
@@ -43,6 +60,13 @@ describe("COURT_FACTS", () => {
     for (const def of COURT_FACTS) {
       expect(courtFactValue(court, def.fact)).not.toBe(undefined);
       expect(def.values.length).toBeGreaterThan(1);
+    }
+  });
+
+  it("only marks real facts as core", () => {
+    const known = new Set(COURT_FACTS.map((d) => d.fact));
+    for (const fact of CORE_FACTS) {
+      expect(known.has(fact)).toBe(true);
     }
   });
 });
