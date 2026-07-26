@@ -995,3 +995,61 @@ func TestEnrichmentQueue(t *testing.T) {
 		t.Error("completed court should not be re-claimable")
 	}
 }
+
+func TestSetCourtAttributesIfNull(t *testing.T) {
+	st := testStore(t)
+	ctx := context.Background()
+	uid := createUser(t, st, "attrs@test.local")
+
+	// A court that already knows its surface but nothing else.
+	existing := "asphalt"
+	c, err := st.Queries.CreateCourt(ctx, gen.CreateCourtParams{
+		Name: "Attr Court", Lng: ruckerLng, Lat: ruckerLat,
+		Surface: &existing, Indoor: false, IsPublic: true, SubmittedBy: &uid,
+	})
+	if err != nil {
+		t.Fatalf("create court: %v", err)
+	}
+
+	newSurface := "concrete"
+	lit := true
+	var hoops int16 = 4
+	indoor := true
+	if err := st.Queries.SetCourtAttributesIfNull(ctx, gen.SetCourtAttributesIfNullParams{
+		ID:        c.ID,
+		Surface:   &newSurface, // must NOT clobber the existing 'asphalt'
+		Lighting:  &lit,        // fills a null
+		HoopCount: &hoops,      // fills a null
+		Indoor:    &indoor,     // additive: false -> true
+	}); err != nil {
+		t.Fatalf("set attributes: %v", err)
+	}
+
+	got, err := st.Queries.GetCourt(ctx, c.ID)
+	if err != nil {
+		t.Fatalf("get court: %v", err)
+	}
+	if got.Surface == nil || *got.Surface != "asphalt" {
+		t.Errorf("surface = %v, want asphalt (not clobbered)", got.Surface)
+	}
+	if got.Lighting == nil || !*got.Lighting {
+		t.Errorf("lighting = %v, want true (filled)", got.Lighting)
+	}
+	if got.HoopCount == nil || *got.HoopCount != 4 {
+		t.Errorf("hoop_count = %v, want 4 (filled)", got.HoopCount)
+	}
+	if !got.Indoor {
+		t.Error("indoor = false, want true (additive)")
+	}
+
+	// A second pass that would turn indoor back off must not: indoor is additive.
+	off := false
+	if err := st.Queries.SetCourtAttributesIfNull(ctx, gen.SetCourtAttributesIfNullParams{
+		ID: c.ID, Indoor: &off,
+	}); err != nil {
+		t.Fatalf("second set: %v", err)
+	}
+	if got, _ := st.Queries.GetCourt(ctx, c.ID); !got.Indoor {
+		t.Error("indoor flipped back to false; must stay true")
+	}
+}
