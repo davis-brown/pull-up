@@ -87,10 +87,14 @@ describe("courtImageUrl", () => {
       "https://api.example.com/photos/k1",
     );
   });
-  it("falls back to an external photo, then the provided fallback url", () => {
+  it("falls back to an external photo via the cached route, then the provided fallback url", () => {
     expect(
-      courtImageUrl(cfg, { photos: [], external: [{ image_url: "https://ex/e.jpg" }] }, fallback),
-    ).toBe("https://ex/e.jpg");
+      courtImageUrl(
+        cfg,
+        { photos: [], external: [{ source: "mapillary", source_id: "42" }] },
+        fallback,
+      ),
+    ).toBe("https://api.example.com/photos-ext/mapillary/42");
     expect(courtImageUrl(cfg, { photos: [], external: [] }, fallback)).toBe(fallback);
   });
 });

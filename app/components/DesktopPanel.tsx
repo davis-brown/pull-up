@@ -6,7 +6,7 @@ import { RunRow } from "@/components/court/RunRow";
 import { useSignInDetour } from "@/components/SignInCta";
 import { Button, ErrorText, Overline } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
-import { photoURL, useCourt, useCourtPhotos, useCourtSessions, useRSVP } from "@/lib/hooks";
+import { externalPhotoURL, photoURL, useCourt, useCourtPhotos, useCourtSessions, useRSVP } from "@/lib/hooks";
 import { safePathSegment } from "@/lib/routes";
 import { useTheme } from "@/lib/theme";
 import type { CourtDetail, CourtSummary, SessionSummary } from "@/lib/types";
@@ -160,7 +160,7 @@ function DetailLevel({
   const photoUri = photo
     ? photoURL(photo.storage_key)
     : externalPhoto
-      ? externalPhoto.image_url
+      ? externalPhotoURL(externalPhoto.source, externalPhoto.source_id)
       : null;
 
   const liveCount = court?.active_count ?? 0;

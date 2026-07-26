@@ -7,6 +7,7 @@ import {
 } from "@tanstack/react-query";
 import {
   api,
+  externalPhotoURLFromAPIBase,
   fetchWithTimeout,
   photoURLFromAPIBase,
   resolveApiURL,
@@ -55,6 +56,12 @@ import type {
 
 export function photoURL(storageKey: string): string {
   return photoURLFromAPIBase(resolveApiURL("/").replace(/\/+$/, ""), storageKey);
+}
+
+// Cached URL for an auto-fetched Commons/Mapillary photo. Prefer this over the
+// row's image_url, which for Mapillary is a signed URL that expires.
+export function externalPhotoURL(source: string, sourceId: string): string {
+  return externalPhotoURLFromAPIBase(resolveApiURL("/").replace(/\/+$/, ""), source, sourceId);
 }
 
 const idSegment = safePathSegment;

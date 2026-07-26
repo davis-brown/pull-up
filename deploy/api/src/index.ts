@@ -3,8 +3,10 @@ import { Container, getContainer } from "@cloudflare/containers";
 import {
   MAX_PHOTO_BYTES,
   hasJpegMagic,
+  isAllowedExternalKey,
   isAllowedPhotoKey,
   isJpegContentType,
+  parseExternalKey,
   readUploadCredentials,
   timingSafeEqualStrings,
   verifyUploadSignature,
@@ -34,6 +36,23 @@ type RuntimeEnv = Env & OptionalBindings;
 
 const PHOTO_PREFIX = "/photos/";
 const UPLOAD_PREFIX = "/photos/upload/";
+// Auto-fetched Commons/Mapillary photos, cached read-through into R2 (see
+// handleExternalPhotoRead). Distinct prefix from /photos/ — user photos are
+// private and re-authorized on every read; these are openly licensed, public,
+// and cacheable.
+const EXTERNAL_PHOTO_PREFIX = "/photos-ext/";
+// Upstream thumbnails are small; anything larger is not the image we expect.
+const MAX_EXTERNAL_PHOTO_BYTES = 8 * 1024 * 1024;
+// Openly-licensed images are stable, so let the edge and clients cache hard.
+const EXTERNAL_PHOTO_CACHE = "public, max-age=86400";
+// Content types Commons/Mapillary serve; served back verbatim under nosniff.
+const EXTERNAL_PHOTO_TYPES = new Set([
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+  "image/avif",
+]);
 const INTERNAL_PREFIX = "/api/v1/internal";
 const DENY_ALL_CORS_ORIGIN = "https://cors.invalid";
 const MAX_INTERNAL_JSON_BYTES = 256 * 1024;
@@ -589,6 +608,178 @@ async function handlePhotos(request: Request, env: RuntimeEnv, url: URL): Promis
   });
 }
 
+async function handleExternalPhotos(request: Request, env: RuntimeEnv, url: URL): Promise<Response> {
+  const key = url.pathname.slice(EXTERNAL_PHOTO_PREFIX.length);
+  if (!isAllowedExternalKey(key)) {
+    return photoError(request, env, 404, "not found");
+  }
+  if (request.method === "OPTIONS") return handlePhotoOptions(request, env);
+  if (request.method === "GET" || request.method === "HEAD") {
+    return handleExternalPhotoRead(request, env, key);
+  }
+  return photoError(request, env, 405, "method not allowed", { Allow: "GET, HEAD, OPTIONS" });
+}
+
+// handleExternalPhotoRead serves an auto-fetched Commons/Mapillary photo from
+// R2, filling the cache from the upstream URL on the first read. Filling from
+// upstream (rather than storing the URL at enrichment time) matters because
+// Mapillary thumbnails are signed URLs that expire hours after enrichment; the
+// first court view lands while the URL is still fresh and pins the bytes in R2.
+// Visibility is re-checked with the container on every read, so an admin hiding
+// a photo takes effect immediately regardless of what R2 already cached.
+async function handleExternalPhotoRead(
+  request: Request,
+  env: RuntimeEnv,
+  key: string,
+): Promise<Response> {
+  const colo = request.cf?.colo ?? "unknown";
+  const client = `${colo}:${request.headers.get("CF-Connecting-IP") ?? "unknown"}`;
+  if (!trackPhotoRead(`${colo}:${key}`).allowed || overPhotoMissBudget(client)) {
+    return photoError(request, env, 429, "too many photo reads");
+  }
+
+  const parsed = parseExternalKey(key);
+  if (!parsed) return photoError(request, env, 404, "not found");
+
+  let imageUrl: string | null;
+  try {
+    imageUrl = await resolveExternalPhoto(env, parsed.source, parsed.sourceId);
+  } catch (error) {
+    console.error(JSON.stringify({
+      message: "external photo resolve failed",
+      error: error instanceof Error ? error.message : String(error),
+      key,
+    }));
+    return photoError(request, env, 503, "external photo resolution unavailable");
+  }
+  if (imageUrl === null) {
+    trackPhotoMiss(client);
+    return photoError(request, env, 404, "not found");
+  }
+
+  const headOnly = request.method === "HEAD";
+  const cached = headOnly ? await env.PHOTOS.head(key) : await env.PHOTOS.get(key);
+  if (cached) {
+    return serveExternalObject(cached, headOnly, request, env);
+  }
+  return fillExternalPhoto(request, env, key, imageUrl, headOnly);
+}
+
+// resolveExternalPhoto asks the container for a visible external photo's
+// upstream URL. Returns null when the photo is hidden or unknown (HTTP 404),
+// and throws on any transport or backend failure so the caller can 503.
+async function resolveExternalPhoto(
+  env: RuntimeEnv,
+  source: string,
+  sourceId: string,
+): Promise<string | null> {
+  const response = await fetchContainerInternal(
+    env,
+    `${INTERNAL_PREFIX}/external-photo/resolve`,
+    { method: "POST", body: JSON.stringify({ source, source_id: sourceId }) },
+    15_000,
+  );
+  if (response.status === 404) {
+    await response.body?.cancel();
+    return null;
+  }
+  if (!response.ok) {
+    await response.body?.cancel();
+    throw new Error(`external photo resolve returned HTTP ${response.status}`);
+  }
+  const body = await readJsonLimited(response, 8 * 1024);
+  if (!isRecord(body) || typeof body.image_url !== "string" || !isHttpsUrl(body.image_url)) {
+    throw new Error("external photo resolve returned an invalid response");
+  }
+  return body.image_url;
+}
+
+async function fillExternalPhoto(
+  request: Request,
+  env: RuntimeEnv,
+  key: string,
+  imageUrl: string,
+  headOnly: boolean,
+): Promise<Response> {
+  let upstream: Response;
+  try {
+    upstream = await fetch(imageUrl, {
+      method: "GET",
+      headers: { Accept: "image/*" },
+      redirect: "follow",
+      signal: AbortSignal.timeout(15_000),
+    });
+  } catch (error) {
+    console.error(JSON.stringify({
+      message: "external photo upstream fetch failed",
+      error: error instanceof Error ? error.message : String(error),
+      key,
+    }));
+    return photoError(request, env, 502, "external photo unavailable");
+  }
+  if (!upstream.ok) {
+    await upstream.body?.cancel();
+    return photoError(request, env, 502, "external photo unavailable");
+  }
+
+  const contentType = (upstream.headers.get("Content-Type") ?? "").split(";")[0]!.trim().toLowerCase();
+  if (!EXTERNAL_PHOTO_TYPES.has(contentType)) {
+    await upstream.body?.cancel();
+    return photoError(request, env, 502, "external photo has an unexpected type");
+  }
+  const bytes = await upstream.arrayBuffer();
+  if (bytes.byteLength === 0 || bytes.byteLength > MAX_EXTERNAL_PHOTO_BYTES) {
+    return photoError(request, env, 502, "external photo unavailable");
+  }
+
+  await env.PHOTOS.put(key, bytes, {
+    httpMetadata: {
+      contentType,
+      contentDisposition: "inline",
+      cacheControl: EXTERNAL_PHOTO_CACHE,
+    },
+    customMetadata: { validated: contentType, cachedFrom: "external" },
+  });
+
+  const headers = new Headers();
+  headers.set("Content-Type", contentType);
+  headers.set("Content-Disposition", "inline");
+  headers.set("Content-Length", String(bytes.byteLength));
+  headers.set("Cache-Control", EXTERNAL_PHOTO_CACHE);
+  headers.set("Cross-Origin-Resource-Policy", "cross-origin");
+  const body = headOnly ? null : bytes;
+  return withPhotoHeaders(new Response(body, { status: 200, headers }), request, env);
+}
+
+function serveExternalObject(
+  object: R2Object | R2ObjectBody,
+  headOnly: boolean,
+  request: Request,
+  env: RuntimeEnv,
+): Response {
+  const headers = new Headers();
+  object.writeHttpMetadata(headers);
+  headers.set("Content-Type", object.httpMetadata?.contentType ?? "application/octet-stream");
+  headers.set("Content-Disposition", "inline");
+  headers.set("Content-Length", String(object.size));
+  headers.set("ETag", object.httpEtag);
+  headers.set("Last-Modified", object.uploaded.toUTCString());
+  headers.set("Cache-Control", EXTERNAL_PHOTO_CACHE);
+  headers.set("Cross-Origin-Resource-Policy", "cross-origin");
+  const body = !headOnly && "body" in object && object.body instanceof ReadableStream
+    ? object.body
+    : null;
+  return withPhotoHeaders(new Response(body, { status: 200, headers }), request, env);
+}
+
+function isHttpsUrl(value: string): boolean {
+  try {
+    return new URL(value).protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 async function fetchContainerInternal(
   env: RuntimeEnv,
   path: string,
@@ -721,6 +912,9 @@ async function drainObjectDeletionsFully(env: RuntimeEnv): Promise<number> {
 export default {
   async fetch(request: Request, env: RuntimeEnv): Promise<Response> {
     const url = new URL(request.url);
+    if (url.pathname.startsWith(EXTERNAL_PHOTO_PREFIX)) {
+      return handleExternalPhotos(request, env, url);
+    }
     if (url.pathname.startsWith(PHOTO_PREFIX)) {
       return handlePhotos(request, env, url);
     }

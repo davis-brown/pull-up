@@ -21,7 +21,7 @@ interface PreviewData {
   court: { name: string; active_count: number };
   photos: {
     photos: Array<{ storage_key: string }>;
-    external: Array<{ image_url: string }>;
+    external: Array<{ source: string; source_id: string }>;
   };
 }
 
@@ -102,6 +102,7 @@ function isApiProxyPath(pathname: string): boolean {
     pathname.startsWith("/api/") ||
     pathname === "/photos" ||
     pathname.startsWith("/photos/") ||
+    pathname.startsWith("/photos-ext/") ||
     pathname === "/healthz"
   );
 }
@@ -364,10 +365,9 @@ function parsePhotos(value: unknown): PreviewData["photos"] | null {
     .map((storage_key) => ({ storage_key }));
   const external = externalPhotos
     .filter(isRecord)
-    .map((photo) => photo.image_url)
-    .filter((imageUrl): imageUrl is string => isSafeExternalImageUrl(imageUrl))
-    .slice(0, 20)
-    .map((image_url) => ({ image_url }));
+    .map((photo) => ({ source: photo.source, source_id: photo.source_id }))
+    .filter(isSafeExternalRef)
+    .slice(0, 20);
   return { photos, external };
 }
 
@@ -378,11 +378,17 @@ function parsePreviewData(value: unknown): PreviewData | null {
   return court && photos ? { court, photos } : null;
 }
 
-function isSafeExternalImageUrl(value: unknown): value is string {
-  if (typeof value !== "string" || value.length > 2_048) return false;
-  try {
-    return new URL(value).protocol === "https:";
-  } catch {
-    return false;
-  }
+const EXTERNAL_SOURCE_ID = /^[0-9]{1,20}$/;
+
+// External photos are referenced by (source, source_id) so the OG image can use
+// the Worker's cached read-through route instead of the raw upstream URL (which
+// for Mapillary is a signed URL that expires).
+function isSafeExternalRef(
+  ref: { source: unknown; source_id: unknown },
+): ref is { source: "commons" | "mapillary"; source_id: string } {
+  return (
+    (ref.source === "commons" || ref.source === "mapillary") &&
+    typeof ref.source_id === "string" &&
+    EXTERNAL_SOURCE_ID.test(ref.source_id)
+  );
 }

@@ -2,9 +2,15 @@ package api
 
 import (
 	"context"
+	"errors"
 	"net/http"
+	"regexp"
 	"strings"
 	"time"
+
+	"github.com/jackc/pgx/v5"
+
+	"github.com/davisbrown/pull-up/server/internal/store/gen"
 )
 
 func (s *Server) handleInternalVersion(w http.ResponseWriter, r *http.Request) {
@@ -224,4 +230,46 @@ func (s *Server) handleInternalAckObjectDeletions(w http.ResponseWriter, r *http
 func validStorageKey(key string) bool {
 	return key != "" && len(key) <= 500 && !strings.HasPrefix(key, "/") &&
 		!strings.Contains(key, "..") && !strings.ContainsAny(key, "\\\x00")
+}
+
+type resolveExternalPhotoRequest struct {
+	Source   string `json:"source"`
+	SourceID string `json:"source_id"`
+}
+
+// externalSourceID matches the numeric ids both auto-photo sources produce:
+// Commons pageids and Mapillary image ids. Bounding the shape here keeps a
+// caller from probing arbitrary rows and mirrors the Worker's key regex.
+var externalSourceID = regexp.MustCompile(`^[0-9]{1,20}$`)
+
+// handleInternalResolveExternalPhoto backs the Worker's read-through R2 cache
+// for auto-fetched Commons/Mapillary photos: it returns the upstream image URL
+// for a (source, source_id) pair, but only while the row is visible. A hidden
+// or unknown photo returns 404, so admin moderation takes effect on the next
+// read regardless of what the Worker already cached.
+func (s *Server) handleInternalResolveExternalPhoto(w http.ResponseWriter, r *http.Request) {
+	var req resolveExternalPhotoRequest
+	if !readJSON(w, r, &req) {
+		return
+	}
+	if req.Source != "commons" && req.Source != "mapillary" {
+		writeError(w, http.StatusBadRequest, "invalid photo source")
+		return
+	}
+	if !externalSourceID.MatchString(req.SourceID) {
+		writeError(w, http.StatusBadRequest, "invalid photo source id")
+		return
+	}
+	imageURL, err := s.store.Queries.GetVisibleExternalPhotoURL(r.Context(), gen.GetVisibleExternalPhotoURLParams{
+		Source: req.Source, SourceID: req.SourceID,
+	})
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeError(w, http.StatusNotFound, "external photo not found")
+			return
+		}
+		s.internalError(w, "resolve external photo", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"image_url": imageURL})
 }

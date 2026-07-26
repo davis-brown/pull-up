@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import {
   hasJpegMagic,
+  isAllowedExternalKey,
   isAllowedPhotoKey,
   isJpegContentType,
+  parseExternalKey,
   readUploadCredentials,
   timingSafeEqualStrings,
   verifyUploadSignature,
@@ -20,6 +22,30 @@ describe("photo key validation", () => {
     expect(isAllowedPhotoKey(`courts/${COURT_ID}/../${PHOTO_ID}.jpg`)).toBe(false);
     expect(isAllowedPhotoKey(`courts/${COURT_ID}/${PHOTO_ID}.png`)).toBe(false);
     expect(isAllowedPhotoKey(`courts/${COURT_ID.toUpperCase()}/${PHOTO_ID}.jpg`)).toBe(false);
+  });
+});
+
+describe("external photo key validation", () => {
+  it("accepts ext keys for known sources with numeric ids", () => {
+    expect(isAllowedExternalKey("ext/commons/123456")).toBe(true);
+    expect(isAllowedExternalKey("ext/mapillary/987654321")).toBe(true);
+  });
+
+  it("rejects unknown sources, non-numeric ids, and traversal", () => {
+    expect(isAllowedExternalKey("ext/flickr/123")).toBe(false);
+    expect(isAllowedExternalKey("ext/commons/abc")).toBe(false);
+    expect(isAllowedExternalKey("ext/commons/")).toBe(false);
+    expect(isAllowedExternalKey("ext/commons/../123")).toBe(false);
+    expect(isAllowedExternalKey("ext/commons/123/456")).toBe(false);
+    expect(isAllowedExternalKey(`ext/commons/${"9".repeat(21)}`)).toBe(false);
+    expect(isAllowedExternalKey("courts/x/y.jpg")).toBe(false);
+  });
+
+  it("parses a valid ext key and rejects malformed ones", () => {
+    expect(parseExternalKey("ext/mapillary/42")).toEqual({ source: "mapillary", sourceId: "42" });
+    expect(parseExternalKey("ext/commons/7")).toEqual({ source: "commons", sourceId: "7" });
+    expect(parseExternalKey("ext/flickr/7")).toBeNull();
+    expect(parseExternalKey("ext/commons/abc")).toBeNull();
   });
 });
 

@@ -224,7 +224,10 @@ export interface CourtFact {
 
 export interface ExternalPhoto {
   id: string;
-  source: "commons";
+  source: "commons" | "mapillary";
+  source_id: string;
+  // Upstream provider URL. Not rendered directly (Mapillary's is a signed URL
+  // that expires); build the cached URL with externalPhotoURL instead.
   image_url: string;
   page_url: string;
   attribution: string | null;
