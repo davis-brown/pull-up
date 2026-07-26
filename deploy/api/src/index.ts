@@ -828,9 +828,11 @@ function isNonnegativeSafeInteger(value: unknown): value is number {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
 }
 
+// Keys the deletion drain will act on: user photo/avatar keys plus the
+// ext/<source>/<id> cache keys enqueued when an admin hides an external photo.
 function isPhotoKeyArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every(
-    (key) => typeof key === "string" && isAllowedPhotoKey(key),
+    (key) => typeof key === "string" && (isAllowedPhotoKey(key) || isAllowedExternalKey(key)),
   );
 }
 

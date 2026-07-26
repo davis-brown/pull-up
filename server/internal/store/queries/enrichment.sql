@@ -37,9 +37,12 @@ WHERE court_id = $1 AND status = 'visible'
 ORDER BY created_at
 LIMIT 8;
 
--- name: SetExternalPhotoStatus :execrows
+-- name: SetExternalPhotoStatus :one
+-- Returns source/source_id so the caller can reclaim the cached R2 object
+-- (ext/{source}/{source_id}) when hiding. pgx.ErrNoRows means unknown id.
 UPDATE external_photos SET status = $2
-WHERE id = $1;
+WHERE id = $1
+RETURNING source, source_id;
 
 -- name: GetVisibleExternalPhotoURL :one
 -- Resolve a cached external photo's upstream image URL for the Worker's

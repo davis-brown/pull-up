@@ -241,9 +241,10 @@ func (q *Queries) SetCourtAmenitiesIfNull(ctx context.Context, arg SetCourtAmeni
 	return err
 }
 
-const setExternalPhotoStatus = `-- name: SetExternalPhotoStatus :execrows
+const setExternalPhotoStatus = `-- name: SetExternalPhotoStatus :one
 UPDATE external_photos SET status = $2
 WHERE id = $1
+RETURNING source, source_id
 `
 
 type SetExternalPhotoStatusParams struct {
@@ -251,10 +252,16 @@ type SetExternalPhotoStatusParams struct {
 	Status string    `json:"status"`
 }
 
-func (q *Queries) SetExternalPhotoStatus(ctx context.Context, arg SetExternalPhotoStatusParams) (int64, error) {
-	result, err := q.db.Exec(ctx, setExternalPhotoStatus, arg.ID, arg.Status)
-	if err != nil {
-		return 0, err
-	}
-	return result.RowsAffected(), nil
+type SetExternalPhotoStatusRow struct {
+	Source   string `json:"source"`
+	SourceID string `json:"source_id"`
+}
+
+// Returns source/source_id so the caller can reclaim the cached R2 object
+// (ext/{source}/{source_id}) when hiding. pgx.ErrNoRows means unknown id.
+func (q *Queries) SetExternalPhotoStatus(ctx context.Context, arg SetExternalPhotoStatusParams) (SetExternalPhotoStatusRow, error) {
+	row := q.db.QueryRow(ctx, setExternalPhotoStatus, arg.ID, arg.Status)
+	var i SetExternalPhotoStatusRow
+	err := row.Scan(&i.Source, &i.SourceID)
+	return i, err
 }
