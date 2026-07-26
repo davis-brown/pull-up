@@ -102,6 +102,43 @@ func TestCourtFactConfirmations(t *testing.T) {
 		t.Fatalf("court lighting = %v, want true", lit.Lighting)
 	}
 
+	// A hoop_count bucket confirmation parses to the integer column.
+	resp = doJSON(t, ts, http.MethodPost, "/courts/"+court.ID+"/facts", u1.AccessToken, map[string]any{
+		"fact": "hoop_count", "value": "4",
+	})
+	if resp.StatusCode != http.StatusOK {
+		defer resp.Body.Close()
+		t.Fatalf("confirm hoop_count: status %d: %s", resp.StatusCode, readBody(t, resp))
+	}
+	resp.Body.Close()
+	// An off-bucket value is rejected by the allowlist.
+	resp = doJSON(t, ts, http.MethodPost, "/courts/"+court.ID+"/facts", u1.AccessToken, map[string]any{
+		"fact": "hoop_count", "value": "3",
+	})
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("off-bucket hoop_count: status %d, want 400", resp.StatusCode)
+	}
+	resp.Body.Close()
+	// A boolean amenity fact converts to the column type.
+	resp = doJSON(t, ts, http.MethodPost, "/courts/"+court.ID+"/facts", u1.AccessToken, map[string]any{
+		"fact": "covered", "value": "yes",
+	})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("confirm covered: status %d", resp.StatusCode)
+	}
+	resp.Body.Close()
+	resp = doJSON(t, ts, http.MethodGet, "/courts/"+court.ID, "", nil)
+	attrs := decodeJSON[struct {
+		HoopCount *int  `json:"hoop_count"`
+		Covered   *bool `json:"covered"`
+	}](t, resp)
+	if attrs.HoopCount == nil || *attrs.HoopCount != 4 {
+		t.Fatalf("court hoop_count = %v, want 4", attrs.HoopCount)
+	}
+	if attrs.Covered == nil || *attrs.Covered != true {
+		t.Fatalf("court covered = %v, want true", attrs.Covered)
+	}
+
 	// Re-confirming replaces the user's row, not adds to it.
 	resp = doJSON(t, ts, http.MethodPost, "/courts/"+court.ID+"/facts", u1.AccessToken, map[string]any{
 		"fact": "rim_type", "value": "single",

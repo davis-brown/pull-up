@@ -14,6 +14,13 @@ const YES_NO = [
   { key: "no", label: "No" },
 ];
 
+// The core playing facts, always shown in the conditions section. The rest
+// (amenities, policy) only appear when the court already has a value for them
+// or behind the "add more details" toggle, so the list stays scannable.
+export const CORE_FACTS = new Set(["rim_type", "net_type", "surface", "hoop_count", "lighting"]);
+
+// Ordered physical hardware → surface → amenities → policy. Mirrors the
+// server's fact allowlist (server/internal/api/conditions_handlers.go).
 export const COURT_FACTS: CourtFactDef[] = [
   {
     fact: "rim_type",
@@ -32,7 +39,6 @@ export const COURT_FACTS: CourtFactDef[] = [
       { key: "none", label: "Bare rim" },
     ],
   },
-  { fact: "lighting", label: "Lights", values: YES_NO },
   {
     fact: "surface",
     label: "Surface",
@@ -44,8 +50,35 @@ export const COURT_FACTS: CourtFactDef[] = [
       { key: "other", label: "Other" },
     ],
   },
+  {
+    // A count, so it uses discrete buckets — an off-bucket court (e.g. 3 hoops)
+    // matches no chip until players correct it.
+    fact: "hoop_count",
+    label: "Hoops",
+    values: [
+      { key: "1", label: "1" },
+      { key: "2", label: "2" },
+      { key: "4", label: "4" },
+      { key: "6", label: "6" },
+      { key: "8", label: "8+" },
+    ],
+  },
+  { fact: "lighting", label: "Lights", values: YES_NO },
+  { fact: "covered", label: "Covered", values: YES_NO },
+  { fact: "fenced", label: "Fenced", values: YES_NO },
   { fact: "drinking_water", label: "Water", values: YES_NO },
   { fact: "toilets", label: "Restrooms", values: YES_NO },
+  { fact: "parking", label: "Parking", values: YES_NO },
+  {
+    fact: "access",
+    label: "Access",
+    values: [
+      { key: "public", label: "Public" },
+      { key: "private", label: "Private" },
+      { key: "customers", label: "Customers" },
+    ],
+  },
+  { fact: "fee", label: "Fee to play", values: YES_NO },
 ];
 
 const boolValue = (v: boolean | null) => (v == null ? null : v ? "yes" : "no");
@@ -57,14 +90,26 @@ export function courtFactValue(court: CourtDetail, fact: string): string | null 
       return court.rim_type;
     case "net_type":
       return court.net_type;
-    case "lighting":
-      return boolValue(court.lighting);
     case "surface":
       return court.surface;
+    case "hoop_count":
+      return court.hoop_count == null ? null : String(court.hoop_count);
+    case "lighting":
+      return boolValue(court.lighting);
+    case "covered":
+      return boolValue(court.covered);
+    case "fenced":
+      return boolValue(court.fenced);
     case "drinking_water":
       return boolValue(court.drinking_water);
     case "toilets":
       return boolValue(court.toilets);
+    case "parking":
+      return boolValue(court.parking);
+    case "access":
+      return court.access;
+    case "fee":
+      return boolValue(court.fee);
     default:
       return null;
   }

@@ -3,6 +3,7 @@ package api
 import (
 	"errors"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -14,13 +15,21 @@ import (
 
 // courtFacts maps each player-confirmable fact to its allowed values. Facts
 // mirror courts columns; boolean columns use "yes"/"no" in the ledger.
+// hoop_count is a count, so it uses discrete buckets — a court with an
+// off-bucket count (e.g. 3) simply matches no chip until players correct it.
 var courtFacts = map[string][]string{
 	"rim_type":       {"single", "double"},
 	"net_type":       {"chain", "nylon", "none"},
 	"lighting":       {"yes", "no"},
 	"surface":        {"asphalt", "concrete", "hardwood", "rubber", "other"},
+	"hoop_count":     {"1", "2", "4", "6", "8"},
+	"covered":        {"yes", "no"},
+	"fenced":         {"yes", "no"},
 	"drinking_water": {"yes", "no"},
 	"toilets":        {"yes", "no"},
+	"parking":        {"yes", "no"},
+	"access":         {"public", "private", "customers"},
+	"fee":            {"yes", "no"},
 }
 
 func validFactValue(fact, value string) bool {
@@ -146,12 +155,28 @@ func (s *Server) applyFactMajority(r *http.Request, courtID uuid.UUID, fact, val
 		params.NetType = &value
 	case "surface":
 		params.Surface = &value
+	case "access":
+		params.Access = &value
 	case "lighting":
 		params.Lighting = &yes
+	case "covered":
+		params.Covered = &yes
+	case "fenced":
+		params.Fenced = &yes
 	case "drinking_water":
 		params.DrinkingWater = &yes
 	case "toilets":
 		params.Toilets = &yes
+	case "parking":
+		params.Parking = &yes
+	case "fee":
+		params.Fee = &yes
+	case "hoop_count":
+		// value comes from courtFacts' bucket allowlist, so it always parses.
+		if n, err := strconv.Atoi(value); err == nil {
+			h := int16(n)
+			params.HoopCount = &h
+		}
 	}
 	_, err := s.store.Queries.UpdateCourtAttributes(r.Context(), params)
 	return err
