@@ -2,6 +2,7 @@ import {
   busiestWindow,
   expectedAt,
   forecastIdSet,
+  lowConfidenceLabel,
   scrubHours,
   sessionAt,
   type CourtForecast,
@@ -11,6 +12,7 @@ const forecast: CourtForecast = {
   court_id: "court-1",
   hours: Array.from({ length: 24 }, (_, h) => (h === 18 ? 4 : 0)),
   has_history: true,
+  weeks: 8,
   sessions: [
     { session_id: "s1", hour: 18, starts_at: "2026-07-12T18:00:00Z", going: 3 },
     { session_id: "s2", hour: 20, starts_at: "2026-07-12T20:00:00Z", going: 2 },
@@ -41,6 +43,21 @@ describe("expectedAt", () => {
 
   it("returns 0 when forecast is undefined", () => {
     expect(expectedAt(undefined, 12)).toBe(0);
+  });
+});
+
+describe("lowConfidenceLabel", () => {
+  it("caveats a thin forecast and stays quiet on a well-backed or empty one", () => {
+    expect(lowConfidenceLabel({ ...forecast, weeks: 2 })).toBe("Based on 2 weeks of check-ins");
+    expect(lowConfidenceLabel({ ...forecast, weeks: 1 })).toBe("Based on 1 week of check-ins");
+    // Enough weeks to stand on its own → no caveat.
+    expect(lowConfidenceLabel({ ...forecast, weeks: 4 })).toBeNull();
+    expect(lowConfidenceLabel({ ...forecast, weeks: 8 })).toBeNull();
+    // No history, or no forecast at all → nothing to caveat.
+    expect(lowConfidenceLabel({ ...forecast, has_history: false, weeks: 0 })).toBeNull();
+    expect(lowConfidenceLabel(undefined)).toBeNull();
+    // Defensive: has_history but a 0 week count still reads as at least 1.
+    expect(lowConfidenceLabel({ ...forecast, weeks: 0 })).toBe("Based on 1 week of check-ins");
   });
 });
 
