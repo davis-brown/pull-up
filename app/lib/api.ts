@@ -85,6 +85,26 @@ export function photoURLFromAPIBase(baseURL: string, storageKey: string): string
   return photoURL(baseURL, storageKey);
 }
 
+// Auto-fetched Commons/Mapillary photos are served through the Worker's
+// read-through R2 cache, not hotlinked from the provider — the raw image_url
+// (a signed, expiring URL for Mapillary) must never be rendered directly.
+const EXTERNAL_SOURCE_ID_RE = /^[0-9]{1,20}$/;
+
+export function externalPhotoURLFromAPIBase(
+  baseURL: string,
+  source: string,
+  sourceId: string,
+): string {
+  if (source !== "commons" && source !== "mapillary") {
+    throw new Error("Invalid external photo source");
+  }
+  if (!EXTERNAL_SOURCE_ID_RE.test(sourceId)) {
+    throw new Error("Invalid external photo source id");
+  }
+  const origin = baseURL.replace(/\/+$/, "");
+  return `${origin}/photos-ext/${source}/${sourceId}`;
+}
+
 class RequestAbortedError extends Error {
   constructor() {
     super("Request was cancelled");

@@ -126,6 +126,7 @@ func (s *Server) Routes() http.Handler {
 			r.Post("/media/uploaded", s.handleInternalMediaUploaded)
 			r.Post("/media/deletions/claim", s.handleInternalClaimObjectDeletions)
 			r.Post("/media/deletions/ack", s.handleInternalAckObjectDeletions)
+			r.Post("/external-photo/resolve", s.handleInternalResolveExternalPhoto)
 		})
 
 		r.Get("/courts/forecast", s.handleForecast) // must precede /courts/{id} or chi routes "forecast" as an id
