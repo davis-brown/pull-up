@@ -62,16 +62,6 @@ shipped below. Promote items up from Next as this empties.)*
 
 ## Next
 
-### 4. Tap-to-confirm court corrections · *data* · M–L
-Let users confirm or correct a court's `surface`/`hoop_count`/`lighting` through
-aggregated tap input (the conditions model), not free text. Confidence comes
-from agreement across users; nothing needs per-edit review. Closes the loop
-where OSM is wrong or missing.
-
-### 5. Forecast accuracy pass · *liveness* · M
-The busy-time forecast exists; tune it against accumulated check-in/game history,
-attach a confidence signal, and show "typically busy around …" on court detail.
-
 ### 6. Search by name and area · *discovery* · M
 Add text search and area jumps ("courts in <neighborhood>") on top of the
 current map/bbox-only discovery, so a court is findable without already knowing
@@ -118,6 +108,18 @@ enrichment and object-deletion drains, which currently have no dashboard.
   PostGIS, creates a throwaway `pullup_test` database, and runs the full suite
   (the harness applies migrations + truncates between cases). Mirrors CI.
   Shipped 2026-07-26.
+- **Tap-to-confirm corrections** (item 4) — the Phase 14 conditions model
+  (recent-window majority, no per-edit moderation) already covered rim/net/
+  lighting/surface/water/toilets; extended it to covered/fenced/parking/access/
+  fee/hoop_count so the crowd can correct the OSM-backfilled values. Also
+  collapsed the now-longer conditions UI behind "add more details". Shipped
+  2026-07-26.
+- **Forecast confidence** (item 5) — the hourly turnout forecast and its
+  "busiest 5–8 PM" line already existed; the missing piece was a confidence
+  signal. The per-court week count (already computed as the average's divisor)
+  is now surfaced as `weeks`, and `PopularTimes` caveats a thin forecast
+  ("Based on 2 weeks of check-ins"). Game history was intentionally left out —
+  games are win/loss records, not a presence signal. Shipped 2026-07-26.
 
 ## How this doc is maintained
 

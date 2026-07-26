@@ -206,6 +206,9 @@ func TestBuildForecastsAssemblesInIDsOrderWithHistoryAndSessions(t *testing.T) {
 	if !fa.HasHistory {
 		t.Error("court A should have has_history:true")
 	}
+	if fa.Weeks != 8 {
+		t.Errorf("court A weeks = %d, want 8 (the confidence signal)", fa.Weeks)
+	}
 	if fa.Hours[18] != 3 {
 		t.Errorf("court A hours[18] = %d, want 3", fa.Hours[18])
 	}
@@ -229,6 +232,9 @@ func TestBuildForecastsAssemblesInIDsOrderWithHistoryAndSessions(t *testing.T) {
 	fb := got[1]
 	if fb.HasHistory {
 		t.Error("court B should have has_history:false")
+	}
+	if fb.Weeks != 0 {
+		t.Errorf("court B weeks = %d, want 0 (no history)", fb.Weeks)
 	}
 	for h, v := range fb.Hours {
 		if v != 0 {
