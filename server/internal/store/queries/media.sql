@@ -46,6 +46,15 @@ INSERT INTO object_deletion_queue (storage_key, requested_at)
 VALUES ($1, now() + interval '1 hour')
 ON CONFLICT (storage_key) DO NOTHING;
 
+-- name: ScheduleObjectDeletion :exec
+-- Enqueue an object for prompt R2 deletion, reclaimed on the next cron drain.
+-- Unlike ScheduleUploadedObjectCleanup's 1-hour grace (which guards a freshly
+-- uploaded object from its own cleanup), this is for bytes that are already
+-- stale — e.g. a hidden external photo's cached thumbnail.
+INSERT INTO object_deletion_queue (storage_key, requested_at)
+VALUES ($1, now())
+ON CONFLICT (storage_key) DO NOTHING;
+
 -- name: CreatePendingUpload :exec
 INSERT INTO pending_uploads (storage_key, owner_id, purpose)
 VALUES ($1, $2, $3)
