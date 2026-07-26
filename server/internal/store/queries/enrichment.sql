@@ -41,6 +41,14 @@ LIMIT 8;
 UPDATE external_photos SET status = $2
 WHERE id = $1;
 
+-- name: GetVisibleExternalPhotoURL :one
+-- Resolve a cached external photo's upstream image URL for the Worker's
+-- read-through R2 cache. Only visible rows resolve, so hiding a photo makes
+-- every read 404 immediately regardless of what R2 already cached.
+SELECT image_url
+FROM external_photos
+WHERE source = $1 AND source_id = $2 AND status = 'visible';
+
 -- name: RequestEnrichment :exec
 -- Durable, lazy: mark a viewed court for enrichment (once) if not already done.
 UPDATE courts SET enrich_requested_at = now()

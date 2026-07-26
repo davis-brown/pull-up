@@ -3,6 +3,10 @@ export const MAX_UPLOAD_TTL_SECONDS = 15 * 60;
 
 const UUID = "[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}";
 const PHOTO_KEY = new RegExp(`^(?:courts|avatars)/${UUID}/${UUID}\\.jpg$`);
+// Cache key for auto-fetched external photos: ext/<source>/<numeric id>. The id
+// shape matches both Commons pageids and Mapillary image ids and mirrors the
+// container's resolve-endpoint validation.
+const EXTERNAL_KEY = /^ext\/(?:commons|mapillary)\/[0-9]{1,20}$/;
 const AUTHORIZATION = /^PullUp-Upload ([1-9][0-9]{9})\.([0-9a-f]{64})$/i;
 export interface UploadCredentials {
   expiresAt: string;
@@ -11,6 +15,19 @@ export interface UploadCredentials {
 
 export function isAllowedPhotoKey(key: string): boolean {
   return PHOTO_KEY.test(key);
+}
+
+export function isAllowedExternalKey(key: string): boolean {
+  return EXTERNAL_KEY.test(key);
+}
+
+// Parse an ext/<source>/<id> cache key into its parts, or null if malformed.
+export function parseExternalKey(
+  key: string,
+): { source: "commons" | "mapillary"; sourceId: string } | null {
+  if (!isAllowedExternalKey(key)) return null;
+  const [, source, sourceId] = key.split("/");
+  return { source: source as "commons" | "mapillary", sourceId: sourceId! };
 }
 
 export function isJpegContentType(value: string | null): boolean {
