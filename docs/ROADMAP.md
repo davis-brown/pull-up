@@ -54,26 +54,9 @@ So items below don't re-propose shipped work.
 
 Highest-leverage, well-aligned, ready to start.
 
-### 1. Backfill court attributes from OSM during enrichment · *data* · M
-The enricher already queries Overpass for nearby amenities but throws away the
-court's own tags. Read `surface`, `sport`, `hoops`, `lit`, `covered`, `access`,
-`fee`, `opening_hours` from the court node/way and fill the matching null
-columns — never clobbering existing values, exactly like
-`SetCourtAmenitiesIfNull`. This turns the already-present-but-empty schema into
-real data with **zero** added moderation, and unblocks item 2.
-
-### 2. Surface the metadata as filters · *discovery* · M
-Once courts actually carry `lighting`/`covered`/`access`/`fee`, expose them:
-add filters for lit, covered, public-access, and fee-free, plus an **"open now"**
-filter derived from `opening_hours`. Wire a couple into `FilterSheet` presets
-(e.g. a "Lit courts" preset for the night use-case). This is the user-facing
-payoff for item 1.
-
-### 3. Make DB-backed tests runnable locally · *reliability* · S–M
-Every integration test skips without `TEST_DATABASE_URL`, so a solo dev can't
-run them before pushing (the Photos v2 resolve/deletion tests only execute in
-CI). Give `make test-int` a disposable Postgres+PostGIS (docker-compose or an
-ephemeral Neon branch) so the meaningful coverage runs on demand, not blind.
+*(The original Now tier — OSM attribute backfill, metadata filters, and a local
+integration-test path — has shipped or was already present; see Recently
+shipped below. Promote items up from Next as this empties.)*
 
 ---
 
@@ -116,6 +99,25 @@ enrichment and object-deletion drains, which currently have no dashboard.
   work in `app/worker.ts` and refresh the store listing (`docs/store/`).
 
 ---
+
+## Recently shipped
+
+- **OSM attribute backfill** (item 1) — the enricher now reads each OSM-sourced
+  court's own tags (surface, lighting, hoops, covered, access, fee,
+  opening_hours, …) and fills null columns, reusing the ingestion parser and
+  never clobbering. Shipped 2026-07-26.
+- **Metadata filters & display** (item 2) — *already present when the roadmap
+  was written.* Server (`CourtsInBBox`), client (`matchesFilters`), and the
+  `FilterSheet` UI already filter on lit/covered/public/free/fenced/water/
+  toilets/parking/hoops/surface, with quick presets; court detail already shows
+  opening_hours/website/description/access/fee. The only unbuilt piece — a true
+  "open now" filter — was deliberately declined (`court/[id]/index.tsx` notes it
+  is "deliberately not an opening_hours parser"): it can't run in the SQL filter
+  path, needs per-court timezone, and coverage is sparse. Left out on purpose.
+- **Local integration tests** (item 3) — `make test-int` brings up the compose
+  PostGIS, creates a throwaway `pullup_test` database, and runs the full suite
+  (the harness applies migrations + truncates between cases). Mirrors CI.
+  Shipped 2026-07-26.
 
 ## How this doc is maintained
 
