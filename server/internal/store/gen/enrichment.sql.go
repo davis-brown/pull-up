@@ -58,7 +58,9 @@ WHERE id = (
 RETURNING id,
     ST_Y(location::geometry)::float8 AS lat,
     ST_X(location::geometry)::float8 AS lng,
-    (address IS NULL)::bool AS needs_address
+    (address IS NULL)::bool AS needs_address,
+    osm_type,
+    osm_id
 `
 
 type ClaimNextCourtEnrichmentRow struct {
@@ -66,6 +68,8 @@ type ClaimNextCourtEnrichmentRow struct {
 	Lat          float64   `json:"lat"`
 	Lng          float64   `json:"lng"`
 	NeedsAddress bool      `json:"needs_address"`
+	OsmType      *string   `json:"osm_type"`
+	OsmID        *int64    `json:"osm_id"`
 }
 
 // Claim the next requested-but-unenriched court with a retryable lease.
@@ -78,6 +82,8 @@ func (q *Queries) ClaimNextCourtEnrichment(ctx context.Context) (ClaimNextCourtE
 		&i.Lat,
 		&i.Lng,
 		&i.NeedsAddress,
+		&i.OsmType,
+		&i.OsmID,
 	)
 	return i, err
 }
@@ -236,6 +242,60 @@ func (q *Queries) SetCourtAmenitiesIfNull(ctx context.Context, arg SetCourtAmeni
 		arg.DrinkingWater,
 		arg.Toilets,
 		arg.Parking,
+		arg.ID,
+	)
+	return err
+}
+
+const setCourtAttributesIfNull = `-- name: SetCourtAttributesIfNull :exec
+UPDATE courts SET
+    surface       = coalesce(surface, $1),
+    lighting      = coalesce(lighting, $2),
+    hoop_count    = coalesce(hoop_count, $3),
+    covered       = coalesce(covered, $4),
+    access        = coalesce(access, $5),
+    fee           = coalesce(fee, $6),
+    opening_hours = coalesce(opening_hours, $7),
+    fenced        = coalesce(fenced, $8),
+    website       = coalesce(website, $9),
+    description   = coalesce(description, $10),
+    indoor        = indoor OR coalesce($11, false),
+    updated_at    = now()
+WHERE id = $12
+`
+
+type SetCourtAttributesIfNullParams struct {
+	Surface      *string   `json:"surface"`
+	Lighting     *bool     `json:"lighting"`
+	HoopCount    *int16    `json:"hoop_count"`
+	Covered      *bool     `json:"covered"`
+	Access       *string   `json:"access"`
+	Fee          *bool     `json:"fee"`
+	OpeningHours *string   `json:"opening_hours"`
+	Fenced       *bool     `json:"fenced"`
+	Website      *string   `json:"website"`
+	Description  *string   `json:"description"`
+	Indoor       *bool     `json:"indoor"`
+	ID           uuid.UUID `json:"id"`
+}
+
+// Backfill court attributes parsed from the court's own OSM tags, only where
+// still unknown — never clobbering a value a user, crowd edit, or prior OSM
+// ingest already set. indoor is a non-null bool, so it is additive: OSM can
+// turn it on but never flips a court back to outdoor.
+func (q *Queries) SetCourtAttributesIfNull(ctx context.Context, arg SetCourtAttributesIfNullParams) error {
+	_, err := q.db.Exec(ctx, setCourtAttributesIfNull,
+		arg.Surface,
+		arg.Lighting,
+		arg.HoopCount,
+		arg.Covered,
+		arg.Access,
+		arg.Fee,
+		arg.OpeningHours,
+		arg.Fenced,
+		arg.Website,
+		arg.Description,
+		arg.Indoor,
 		arg.ID,
 	)
 	return err
