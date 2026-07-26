@@ -8,6 +8,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"github.com/google/uuid"
+
+	"github.com/davisbrown/pull-up/server/internal/osm"
 )
 
 func TestParseOverpassAmenities(t *testing.T) {
@@ -49,6 +53,43 @@ func TestParseMapillary(t *testing.T) {
 	}
 	if got[0].attribution == nil || *got[0].attribution != mapillaryAttribution {
 		t.Errorf("attribution = %v, want %q", got[0].attribution, mapillaryAttribution)
+	}
+}
+
+func TestAttributeParams(t *testing.T) {
+	id := uuid.New()
+
+	// Nil element and an all-empty element both report "nothing to set" so the
+	// enricher skips a no-op UPDATE.
+	if _, ok := attributeParams(id, nil); ok {
+		t.Error("nil court should report no attributes")
+	}
+	if _, ok := attributeParams(id, &osm.Court{}); ok {
+		t.Error("empty court should report no attributes")
+	}
+
+	surface := "concrete"
+	lit := true
+	var hoops int16 = 3
+	p, ok := attributeParams(id, &osm.Court{
+		Surface: &surface, Lighting: &lit, HoopCount: &hoops, Indoor: true,
+	})
+	if !ok {
+		t.Fatal("court with attributes should report ok")
+	}
+	if p.ID != id || p.Surface == nil || *p.Surface != "concrete" ||
+		p.Lighting == nil || !*p.Lighting || p.HoopCount == nil || *p.HoopCount != 3 {
+		t.Errorf("params mismapped: %+v", p)
+	}
+	// indoor=true is pushed as true (additive).
+	if p.Indoor == nil || !*p.Indoor {
+		t.Errorf("indoor = %v, want true", p.Indoor)
+	}
+
+	// indoor=false is left nil so the SetIfNull query never flips a court back
+	// to outdoor.
+	if p, _ := attributeParams(id, &osm.Court{Surface: &surface, Indoor: false}); p.Indoor != nil {
+		t.Errorf("indoor should stay nil when false, got %v", *p.Indoor)
 	}
 }
 

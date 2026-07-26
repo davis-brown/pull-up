@@ -24,6 +24,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/davisbrown/pull-up/server/internal/osm"
 	"github.com/davisbrown/pull-up/server/internal/store/gen"
 )
 
@@ -57,6 +58,9 @@ const (
 // Overridable in tests. Mapillary reports failures as an error object inside a
 // 200 body, so the response must be inspected explicitly.
 var mapillaryBaseURL = "https://graph.mapillary.com/images"
+
+// Overridable in tests. Overpass endpoint for the per-court attribute backfill.
+var overpassEndpoint = osm.DefaultOverpassEndpoint
 
 const idlePoll = 30 * time.Second
 
@@ -258,6 +262,31 @@ func (e *Enricher) enrichClaimed(ctx context.Context, claim gen.ClaimNextCourtEn
 			succeeded = false
 		}
 	}
+
+	// Backfill court attributes (surface, lighting, hoops, …) from the court's
+	// own OSM tags, for OSM-sourced courts that have an element to look up.
+	// Best-effort like the photo sources: a transient Overpass failure logs but
+	// must not fail the court, or a nice-to-have would trap it in retry.
+	attrsFilled := false
+	if claim.OsmType != nil && claim.OsmID != nil {
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(courtesyDelay):
+		}
+		attrs, err := osm.FetchCourtElement(ctx, overpassEndpoint, *claim.OsmType, *claim.OsmID)
+		if err != nil {
+			e.log.Warn("overpass court attributes", "court", claim.ID, "err", err)
+		} else if params, ok := attributeParams(claim.ID, attrs); ok {
+			if err := e.queries.SetCourtAttributesIfNull(ctx, params); err != nil {
+				e.log.Error("set court attributes", "court", claim.ID, "err", err)
+				succeeded = false
+			} else {
+				attrsFilled = true
+			}
+		}
+	}
+
 	if ctx.Err() != nil || !succeeded {
 		return
 	}
@@ -266,12 +295,43 @@ func (e *Enricher) enrichClaimed(ctx context.Context, claim gen.ClaimNextCourtEn
 		return
 	}
 	e.log.Info("enriched court", "court", claim.ID, "needed_address", claim.NeedsAddress,
-		"commons_photos", len(photos), "mapillary_photos", mapillary)
+		"commons_photos", len(photos), "mapillary_photos", mapillary, "attributes", attrsFilled)
 
 	select {
 	case <-ctx.Done():
 	case <-time.After(courtesyDelay):
 	}
+}
+
+// attributeParams maps a court's parsed OSM tags onto the SetIfNull params,
+// reporting whether any attribute is actually present. When nothing is set it
+// returns ok=false so the caller skips a no-op UPDATE. indoor is only ever
+// pushed as true (additive); a false OSM signal is left for ingest/crowd input.
+func attributeParams(id uuid.UUID, c *osm.Court) (gen.SetCourtAttributesIfNullParams, bool) {
+	if c == nil {
+		return gen.SetCourtAttributesIfNullParams{}, false
+	}
+	p := gen.SetCourtAttributesIfNullParams{
+		ID:           id,
+		Surface:      c.Surface,
+		Lighting:     c.Lighting,
+		HoopCount:    c.HoopCount,
+		Covered:      c.Covered,
+		Access:       c.Access,
+		Fee:          c.Fee,
+		OpeningHours: c.OpeningHours,
+		Fenced:       c.Fenced,
+		Website:      c.Website,
+		Description:  c.Description,
+	}
+	if c.Indoor {
+		t := true
+		p.Indoor = &t
+	}
+	has := p.Surface != nil || p.Lighting != nil || p.HoopCount != nil || p.Covered != nil ||
+		p.Access != nil || p.Fee != nil || p.OpeningHours != nil || p.Fenced != nil ||
+		p.Website != nil || p.Description != nil || p.Indoor != nil
+	return p, has
 }
 
 func boolPtrIfTrue(b bool) *bool {
