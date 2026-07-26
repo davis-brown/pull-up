@@ -155,7 +155,14 @@ make test           # server: unit tests only (DB-backed tests skip without TEST
 make test-app       # app: jest unit tests (lib/api.ts token refresh & auth client)
 
 # Server integration tests (store queries + full HTTP API) need a scratch
-# Postgres with PostGIS — e.g. a second database on the compose instance:
+# Postgres with PostGIS. `make test-int` brings up the compose database,
+# creates a throwaway `pullup_test` database, and runs the full suite against
+# it (the harness applies migrations and truncates between cases). Requires
+# Docker:
+make test-int
+
+# Or point at any PostGIS instance yourself — e.g. a second database on an
+# already-running compose instance:
 TEST_DATABASE_URL=postgres://pullup:pullup@localhost:5432/pullup_test?sslmode=disable \
   make test
 ```
