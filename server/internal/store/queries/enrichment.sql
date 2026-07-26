@@ -72,7 +72,29 @@ WHERE id = (
 RETURNING id,
     ST_Y(location::geometry)::float8 AS lat,
     ST_X(location::geometry)::float8 AS lng,
-    (address IS NULL)::bool AS needs_address;
+    (address IS NULL)::bool AS needs_address,
+    osm_type,
+    osm_id;
+
+-- name: SetCourtAttributesIfNull :exec
+-- Backfill court attributes parsed from the court's own OSM tags, only where
+-- still unknown — never clobbering a value a user, crowd edit, or prior OSM
+-- ingest already set. indoor is a non-null bool, so it is additive: OSM can
+-- turn it on but never flips a court back to outdoor.
+UPDATE courts SET
+    surface       = coalesce(surface, sqlc.narg('surface')),
+    lighting      = coalesce(lighting, sqlc.narg('lighting')),
+    hoop_count    = coalesce(hoop_count, sqlc.narg('hoop_count')),
+    covered       = coalesce(covered, sqlc.narg('covered')),
+    access        = coalesce(access, sqlc.narg('access')),
+    fee           = coalesce(fee, sqlc.narg('fee')),
+    opening_hours = coalesce(opening_hours, sqlc.narg('opening_hours')),
+    fenced        = coalesce(fenced, sqlc.narg('fenced')),
+    website       = coalesce(website, sqlc.narg('website')),
+    description   = coalesce(description, sqlc.narg('description')),
+    indoor        = indoor OR coalesce(sqlc.narg('indoor'), false),
+    updated_at    = now()
+WHERE id = sqlc.arg('id');
 
 -- name: MarkCourtEnrichmentComplete :exec
 UPDATE courts
