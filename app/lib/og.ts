@@ -78,14 +78,19 @@ export function appBannerTag(cfg: OgConfig): string {
   return `<meta name="apple-itunes-app" content="app-id=${cfg.APPLE_APP_STORE_ID}">`;
 }
 
-// Resolves the preview image: first uploaded photo (via the API origin),
-// else the first external (Commons) photo, else the caller-provided fallback.
+// Resolves the preview image: first uploaded photo (via the API origin), else
+// the first external (Commons/Mapillary) photo through the cached read-through
+// route (never the raw image_url — Mapillary's expires), else the fallback.
 export function courtImageUrl(
   cfg: OgConfig,
-  photos: { photos: Array<{ storage_key: string }>; external: Array<{ image_url: string }> },
+  photos: {
+    photos: Array<{ storage_key: string }>;
+    external: Array<{ source: string; source_id: string }>;
+  },
   fallbackUrl: string,
 ): string {
   if (photos.photos[0]) return `${cfg.API_URL}/photos/${photos.photos[0].storage_key}`;
-  if (photos.external[0]) return photos.external[0].image_url;
+  const ext = photos.external[0];
+  if (ext) return `${cfg.API_URL}/photos-ext/${ext.source}/${ext.source_id}`;
   return fallbackUrl;
 }

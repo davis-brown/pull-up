@@ -82,6 +82,27 @@ func (q *Queries) ClaimNextCourtEnrichment(ctx context.Context) (ClaimNextCourtE
 	return i, err
 }
 
+const getVisibleExternalPhotoURL = `-- name: GetVisibleExternalPhotoURL :one
+SELECT image_url
+FROM external_photos
+WHERE source = $1 AND source_id = $2 AND status = 'visible'
+`
+
+type GetVisibleExternalPhotoURLParams struct {
+	Source   string `json:"source"`
+	SourceID string `json:"source_id"`
+}
+
+// Resolve a cached external photo's upstream image URL for the Worker's
+// read-through R2 cache. Only visible rows resolve, so hiding a photo makes
+// every read 404 immediately regardless of what R2 already cached.
+func (q *Queries) GetVisibleExternalPhotoURL(ctx context.Context, arg GetVisibleExternalPhotoURLParams) (string, error) {
+	row := q.db.QueryRow(ctx, getVisibleExternalPhotoURL, arg.Source, arg.SourceID)
+	var image_url string
+	err := row.Scan(&image_url)
+	return image_url, err
+}
+
 const insertExternalPhoto = `-- name: InsertExternalPhoto :exec
 INSERT INTO external_photos (court_id, source, source_id, image_url, page_url, attribution)
 VALUES ($1, $2, $3, $4, $5, $6)

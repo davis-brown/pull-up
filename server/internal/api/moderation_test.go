@@ -262,6 +262,101 @@ func TestAdminHideExternalPhoto(t *testing.T) {
 	resp.Body.Close()
 }
 
+// The Worker's read-through R2 cache resolves a visible external photo's
+// upstream URL through this secret-guarded internal endpoint, and a hidden
+// photo must stop resolving so moderation takes effect on the next read.
+func TestInternalResolveExternalPhoto(t *testing.T) {
+	ts, st := newTestServer(t)
+	owner := registerUser(t, ts, "resolveowner@test.local", "ResolveOwner")
+	admin := registerUser(t, ts, "resolveadmin@test.local", "ResolveAdmin")
+	bootstrapAdmin(t, st, admin.User.ID)
+
+	court := createTestCourt(t, ts, owner.AccessToken, "Resolve Court", ruckerLat, ruckerLng)
+	courtID, err := uuid.Parse(court.ID)
+	if err != nil {
+		t.Fatalf("parse court id: %v", err)
+	}
+	const sourceID = "1234567890"
+	if err := st.Queries.InsertExternalPhoto(t.Context(), gen.InsertExternalPhotoParams{
+		CourtID:  courtID,
+		Source:   "mapillary",
+		SourceID: sourceID,
+		ImageUrl: "https://images.mapillary.test/1234567890.jpg",
+		PageUrl:  "https://www.mapillary.com/app/?pKey=1234567890",
+	}); err != nil {
+		t.Fatalf("seed external photo: %v", err)
+	}
+
+	secret := map[string]string{"X-Internal-Task": "test-internal-secret"}
+	resolve := func(source, id string) *http.Response {
+		return doJSONHeaders(t, ts, http.MethodPost, "/internal/external-photo/resolve", "",
+			map[string]string{"source": source, "source_id": id}, secret)
+	}
+
+	// A visible photo resolves to its upstream URL.
+	resp := resolve("mapillary", sourceID)
+	got := decodeJSON[struct {
+		ImageURL string `json:"image_url"`
+	}](t, resp)
+	if got.ImageURL != "https://images.mapillary.test/1234567890.jpg" {
+		t.Fatalf("resolved image_url = %q, want the seeded URL", got.ImageURL)
+	}
+
+	// Without the internal secret the endpoint is not reachable.
+	resp = doJSON(t, ts, http.MethodPost, "/internal/external-photo/resolve", "",
+		map[string]string{"source": "mapillary", "source_id": sourceID})
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("resolve without secret: status %d, want 404", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	// A bad source or non-numeric id is a 400.
+	for _, bad := range []struct{ source, id string }{
+		{"flickr", sourceID}, {"mapillary", "not-a-number"}, {"mapillary", ""},
+	} {
+		resp = resolve(bad.source, bad.id)
+		if resp.StatusCode != http.StatusBadRequest {
+			t.Fatalf("resolve %+v: status %d, want 400", bad, resp.StatusCode)
+		}
+		resp.Body.Close()
+	}
+
+	// An unknown photo is a 404.
+	resp = resolve("commons", "999")
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("resolve unknown: status %d, want 404", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	// Hide it, then it must stop resolving — the read-through cache will 404
+	// even though it may already hold the bytes.
+	photoID := ""
+	{
+		resp = doJSON(t, ts, http.MethodGet, "/courts/"+court.ID+"/photos", "", nil)
+		body := decodeJSON[struct {
+			External []struct {
+				ID string `json:"id"`
+			} `json:"external"`
+		}](t, resp)
+		if len(body.External) != 1 {
+			t.Fatalf("external photos = %d, want one", len(body.External))
+		}
+		photoID = body.External[0].ID
+	}
+	resp = doJSON(t, ts, http.MethodPost, "/admin/external-photos/"+photoID+"/status", admin.AccessToken,
+		map[string]string{"status": "hidden"})
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("hide external photo: status %d", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	resp = resolve("mapillary", sourceID)
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("resolve after hide: status %d, want 404", resp.StatusCode)
+	}
+	resp.Body.Close()
+}
+
 func TestAdminPromoteDemoteAndLastAdminGuard(t *testing.T) {
 	ts, st := newTestServer(t)
 	first := registerUser(t, ts, "firstadmin@test.local", "FirstAdmin")

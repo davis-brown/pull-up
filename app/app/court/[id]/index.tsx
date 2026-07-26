@@ -35,6 +35,7 @@ import { Leaderboard } from "@/components/Leaderboard";
 import { useAuth } from "@/lib/auth-context";
 import { markPushPrimerDone, pushPrimerDone } from "@/lib/first-run";
 import {
+  externalPhotoURL,
   photoURL,
   useCourt,
   useCourtActivity,
@@ -349,7 +350,7 @@ export default function CourtDetailScreen() {
                       onPress={() => void Linking.openURL(p.page_url)}
                       style={styles.photoWrap}
                     >
-                      <Image source={{ uri: p.image_url }} style={styles.photo} />
+                      <Image source={{ uri: externalPhotoURL(p.source, p.source_id) }} style={styles.photo} />
                     </Pressable>
                   ))}
                 </ScrollView>

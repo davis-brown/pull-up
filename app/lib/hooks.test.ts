@@ -4,7 +4,7 @@ jest.mock("./storage", () => ({
   backgroundStorage: { get: jest.fn(), set: jest.fn(), remove: jest.fn() },
 }));
 
-import { photoURL } from "./api";
+import { externalPhotoURLFromAPIBase, photoURL } from "./api";
 
 describe("photoURL", () => {
   it("builds a court photo URL", () => {
@@ -22,5 +22,25 @@ describe("photoURL", () => {
     expect(() => photoURL("https://api.pullup.app", "avatars/foo/bar.jpg")).toThrow("Invalid photo storage key");
     expect(() => photoURL("https://api.pullup.app", "courts/123/456.png")).toThrow("Invalid photo storage key");
     expect(() => photoURL("https://api.pullup.app", "https://evil.com/courts/123/456.jpg")).toThrow("Invalid photo storage key");
+  });
+});
+
+describe("externalPhotoURLFromAPIBase", () => {
+  it("builds a cached URL for known sources", () => {
+    expect(externalPhotoURLFromAPIBase("https://api.pullup.app", "commons", "12345")).toBe(
+      "https://api.pullup.app/photos-ext/commons/12345",
+    );
+    expect(externalPhotoURLFromAPIBase("https://api.pullup.app/", "mapillary", "42")).toBe(
+      "https://api.pullup.app/photos-ext/mapillary/42",
+    );
+  });
+
+  it("rejects unknown sources and non-numeric ids", () => {
+    expect(() => externalPhotoURLFromAPIBase("https://api.pullup.app", "flickr", "1")).toThrow(
+      "Invalid external photo source",
+    );
+    expect(() => externalPhotoURLFromAPIBase("https://api.pullup.app", "commons", "../secret")).toThrow(
+      "Invalid external photo source id",
+    );
   });
 });
