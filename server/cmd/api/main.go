@@ -25,7 +25,9 @@ var (
 )
 
 func main() {
-	log := slog.New(slog.NewTextHandler(os.Stderr, nil))
+	// Cloudflare Containers preserves stdout/stderr; JSON keeps request and
+	// background-work fields independently queryable in Workers Logs.
+	log := slog.New(slog.NewJSONHandler(os.Stderr, nil))
 
 	// Expose the ldflags-stamped identity to config.Load, but never clobber
 	// values already provided by the environment: the container image is built

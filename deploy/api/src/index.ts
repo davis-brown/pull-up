@@ -1,5 +1,6 @@
 import { Container, getContainer } from "@cloudflare/containers";
 
+import { drainInBatches } from "./background-drain";
 import {
   MAX_PHOTO_BYTES,
   hasJpegMagic,
@@ -901,14 +902,26 @@ async function drainObjectDeletions(env: RuntimeEnv): Promise<number> {
 // the cron interval, bounded so one invocation cannot run away.
 const MAX_DELETION_PASSES = 20;
 
-async function drainObjectDeletionsFully(env: RuntimeEnv): Promise<number> {
-  let total = 0;
-  for (let pass = 0; pass < MAX_DELETION_PASSES; pass += 1) {
-    const claimed = await drainObjectDeletions(env);
-    total += claimed;
-    if (claimed < MAX_DELETION_BATCH) break;
+async function drainObjectDeletionsFully(env: RuntimeEnv) {
+  return drainInBatches(
+    () => drainObjectDeletions(env),
+    MAX_DELETION_BATCH,
+    MAX_DELETION_PASSES,
+  );
+}
+
+type TimedResult<T> =
+  | { status: "fulfilled"; result: T; durationMs: number }
+  | { status: "rejected"; error: unknown; durationMs: number };
+
+async function timed<T>(work: () => Promise<T>): Promise<TimedResult<T>> {
+  const startedAt = Date.now();
+  try {
+    const result = await work();
+    return { status: "fulfilled", result, durationMs: Date.now() - startedAt };
+  } catch (error) {
+    return { status: "rejected", error, durationMs: Date.now() - startedAt };
   }
-  return total;
 }
 
 export default {
@@ -955,34 +968,61 @@ export default {
   },
 
   async scheduled(event: ScheduledController, env: RuntimeEnv): Promise<void> {
-    const [backlog, deletions] = await Promise.allSettled([
-      drainBackendBacklog(env),
-      drainObjectDeletionsFully(env),
+    const [backlog, deletions] = await Promise.all([
+      timed(() => drainBackendBacklog(env)),
+      timed(() => drainObjectDeletionsFully(env)),
     ]);
+
+    const common = {
+      event: "background_drain",
+      trigger: "cron",
+      cron: event.cron,
+      scheduled_time: event.scheduledTime,
+    } as const;
     const errors: string[] = [];
     if (backlog.status === "rejected") {
-      errors.push(`backlog: ${backlog.reason instanceof Error ? backlog.reason.message : String(backlog.reason)}`);
+      const error = backlog.error instanceof Error ? backlog.error.message : String(backlog.error);
+      errors.push(`backlog: ${error}`);
+      console.error({
+        ...common,
+        queue: "court_enrichment",
+        outcome: "error",
+        duration_ms: backlog.durationMs,
+        error,
+      });
+    } else {
+      console.log({
+        ...common,
+        queue: "court_enrichment",
+        outcome: "ok",
+        duration_ms: backlog.durationMs,
+        enrichment_attempts: backlog.result.courts,
+        osm_tiles_attempted: backlog.result.tiles,
+      });
     }
     if (deletions.status === "rejected") {
-      errors.push(`deletions: ${deletions.reason instanceof Error ? deletions.reason.message : String(deletions.reason)}`);
+      const error = deletions.error instanceof Error ? deletions.error.message : String(deletions.error);
+      errors.push(`deletions: ${error}`);
+      console.error({
+        ...common,
+        queue: "object_deletion",
+        outcome: "error",
+        duration_ms: deletions.durationMs,
+        error,
+      });
+    } else {
+      console.log({
+        ...common,
+        queue: "object_deletion",
+        outcome: "ok",
+        duration_ms: deletions.durationMs,
+        objects_deleted: deletions.result.itemsProcessed,
+        claim_passes: deletions.result.claimPasses,
+        saturated: deletions.result.saturated,
+      });
     }
     if (errors.length > 0) {
-      console.error(JSON.stringify({
-        message: "scheduled drain failed",
-        cron: event.cron,
-        scheduledTime: event.scheduledTime,
-        errors,
-      }));
       throw new Error(errors.join("; "));
     }
-
-    console.log(JSON.stringify({
-      message: "scheduled drain completed",
-      cron: event.cron,
-      scheduledTime: event.scheduledTime,
-      tiles: backlog.status === "fulfilled" ? backlog.value.tiles : 0,
-      courts: backlog.status === "fulfilled" ? backlog.value.courts : 0,
-      objectDeletions: deletions.status === "fulfilled" ? deletions.value : 0,
-    }));
   },
 } satisfies ExportedHandler<RuntimeEnv>;
