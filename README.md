@@ -126,6 +126,9 @@ comes from geo-verified check-ins and crowd reports.
   queue (not in-memory), drained on the request warm path and by a
   secret-guarded `/internal/drain` endpoint on a 15-minute Cloudflare Cron
   Trigger, so backlogged imports/enrichment finish even with no traffic
+- Structured Worker/container logs and source-controlled Cloudflare saved-view
+  definitions separate stateless API latency from container invocations and
+  track both background drains (`docs/OBSERVABILITY.md`)
 
 ## Stack
 
