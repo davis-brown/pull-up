@@ -90,9 +90,9 @@ against — take a percentile reading before changing anything.
   `queue`, and `outcome`, with `duration_ms` and the per-queue counters
   queryable as numbers. Two corrections came out of the live check — the
   runbook's invocation-metadata keys were `$cloudflare.*` and are really
-  `$workers.*`, and the three saved views must be created by hand because the
-  deploy token can read the observability queries API but not write it.
-  Shipped 2026-07-27.
+  `$workers.*`, and the three saved views had to be created by hand because
+  the deploy token can read the observability queries API but not write it.
+  All three now exist under Observability → Queries. Shipped 2026-07-27.
 - **Search by name and area** (item 6) — discovery search now combines indexed,
   location-biased court-name matches with submit-only Nominatim area results.
   Selecting a court opens the existing detail flow; selecting an area fits the
