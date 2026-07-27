@@ -148,6 +148,47 @@ func TestCourtsInBBox(t *testing.T) {
 	}
 }
 
+func TestSearchCourtsByName(t *testing.T) {
+	st := testStore(t)
+	ctx := context.Background()
+	uid := createUser(t, st, "court-search@test.local")
+
+	exact := createCourt(t, st, "Rucker Park", ruckerLat, ruckerLng, uid)
+	createCourt(t, st, "Rucker Park Annex", ruckerLat+0.01, ruckerLng, uid)
+	createCourt(t, st, "West Rucker Park Courts", ruckerLat+0.02, ruckerLng, uid)
+	rejected := createCourt(t, st, "Rucker Park Closed", ruckerLat+0.03, ruckerLng, uid)
+	if err := st.Queries.SetCourtStatus(ctx, gen.SetCourtStatusParams{ID: rejected.ID, Status: "rejected"}); err != nil {
+		t.Fatalf("reject court: %v", err)
+	}
+
+	rows, err := st.Queries.SearchCourtsByName(ctx, gen.SearchCourtsByNameParams{
+		Query: "rucker park", BiasLat: float64Ptr(ruckerLat), BiasLng: float64Ptr(ruckerLng),
+	})
+	if err != nil {
+		t.Fatalf("search courts: %v", err)
+	}
+	if len(rows) != 3 {
+		t.Fatalf("rows = %d, want 3", len(rows))
+	}
+	if rows[0].ID != exact.ID {
+		t.Fatalf("first result = %q, want exact match", rows[0].Name)
+	}
+	for _, row := range rows {
+		if row.ID == rejected.ID {
+			t.Fatal("rejected court appeared in search")
+		}
+	}
+	wildcardRows, err := st.Queries.SearchCourtsByName(ctx, gen.SearchCourtsByNameParams{Query: "%_"})
+	if err != nil {
+		t.Fatalf("search wildcard literals: %v", err)
+	}
+	if len(wildcardRows) != 0 {
+		t.Fatalf("wildcard literals matched %d courts", len(wildcardRows))
+	}
+}
+
+func float64Ptr(value float64) *float64 { return &value }
+
 func TestCheckInFlow(t *testing.T) {
 	st := testStore(t)
 	ctx := context.Background()

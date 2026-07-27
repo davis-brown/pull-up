@@ -108,6 +108,34 @@ WHERE c.status <> 'rejected'
 ORDER BY distance_m
 LIMIT 100;
 
+-- name: SearchCourtsByName :many
+SELECT
+    c.id, c.name,
+    ST_Y(c.location::geometry)::float8 AS lat,
+    ST_X(c.location::geometry)::float8 AS lng,
+    c.address,
+    ST_Distance(
+        c.location,
+        ST_SetSRID(ST_MakePoint(
+            coalesce(sqlc.narg('bias_lng')::float8, ST_X(c.location::geometry)::float8),
+            coalesce(sqlc.narg('bias_lat')::float8, ST_Y(c.location::geometry)::float8)
+        ), 4326)::geography
+    )::float8 AS distance_m
+FROM courts c
+WHERE c.status <> 'rejected'
+  AND c.name ILIKE '%' ||
+      replace(replace(replace(sqlc.arg(query)::text, E'\\', E'\\\\'), '%', E'\\%'), '_', E'\\_') ||
+      '%' ESCAPE E'\\'
+ORDER BY
+    lower(c.name) = lower(sqlc.arg(query)::text) DESC,
+    lower(c.name) LIKE
+      lower(replace(replace(replace(sqlc.arg(query)::text, E'\\', E'\\\\'), '%', E'\\%'), '_', E'\\_')) ||
+      '%' ESCAPE E'\\' DESC,
+    CASE WHEN lower(c.name) = 'basketball court' THEN 1 ELSE 0 END,
+    distance_m NULLS LAST,
+    c.name
+LIMIT 12;
+
 -- name: GetCourt :one
 SELECT
     c.id, c.name,

@@ -22,6 +22,10 @@ export interface LatLng {
   lng: number;
 }
 
+export type CameraTarget =
+  | { key: number; kind: "center"; center: LatLng; zoom?: number }
+  | { key: number; kind: "bounds"; bbox: BBox };
+
 // Shared contract between CourtMap.tsx (native, @maplibre/maplibre-react-native)
 // and CourtMap.web.tsx (react-map-gl/maplibre). Everything above this component
 // is platform-agnostic — keep the two implementations honoring the same props.
@@ -29,6 +33,8 @@ export interface CourtMapProps {
   courts: CourtPin[];
   initialCenter: LatLng;
   initialZoom?: number;
+  /** Explicit post-mount camera movement, used by discovery search results. */
+  cameraTarget?: CameraTarget | null;
   /** Fired (debounced by the map's own idle event) when the viewport settles. */
   onRegionChange?: (bbox: BBox) => void;
   onPinPress?: (courtId: string) => void;

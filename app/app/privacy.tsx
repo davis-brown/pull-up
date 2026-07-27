@@ -32,7 +32,8 @@ export default function PrivacyScreen() {
 
       <Section title="What we collect">
         {"Account: your verified email address, display name, and a securely hashed password — or, if you sign in with Google or Apple, the identity those providers share with us.\n\n" +
-          "Nearby courts: when you allow location access, your current coordinates are used transiently to rank nearby courts. They are not retained as location history.\n\n" +
+           "Nearby courts: when you allow location access, your current coordinates are used transiently to rank nearby courts. They are not retained as location history.\n\n" +
+          "Area search: when you submit a neighborhood, city, or other area search, the words you entered and an approximate map-area bias are sent transiently to OpenStreetMap's Nominatim service. We do not attach your account identity or retain a search history.\n\n" +
           "Check-ins: when you check in at a court, we store which court, the time, and your reported distance from it. Your exact coordinates are used only to calculate that distance and are discarded.\n\n" +
           "Optional auto check-in: if you turn it on, your device watches for arrivals at nearby courts using low-power region monitoring. The only thing created is a check-in at a known court. It is off by default and can be turned off anytime in your profile.\n\n" +
           "Content you post: court submissions, photos, crowd reports, chat messages, planned runs, court-condition confirmations, and \"looking to play\" posts are visible to other users with your display name.\n\n" +
@@ -47,7 +48,7 @@ export default function PrivacyScreen() {
       </Section>
 
       <Section title="Services we rely on">
-        {"Hosting, transactional verification email, and photo storage run on Cloudflare; the database is hosted by Neon. Push notifications are delivered through Expo's push service. Court locations come from OpenStreetMap; missing addresses are looked up via the Nominatim geocoding service using the court's coordinates (never your identity). Court photos may be displayed from Wikimedia Commons. If you sign in with Google or Apple, their privacy policies also apply to that sign-in. If the app crashes, a sanitized crash report (device model, OS version, and error stack trace, with request queries and identifiers removed) is sent to Sentry so we can fix the bug."}
+        {"Hosting, transactional verification email, and photo storage run on Cloudflare; the database is hosted by Neon. Push notifications are delivered through Expo's push service. Court locations come from OpenStreetMap; Nominatim looks up missing court addresses and explicit area-search terms (never your identity). Court photos may be displayed from Wikimedia Commons. If you sign in with Google or Apple, their privacy policies also apply to that sign-in. If the app crashes, a sanitized crash report (device model, OS version, and error stack trace, with request queries and identifiers removed) is sent to Sentry so we can fix the bug."}
       </Section>
 
       <Section title="Deleting your account">

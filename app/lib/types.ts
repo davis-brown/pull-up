@@ -159,6 +159,30 @@ export interface CourtSummary {
   next_run_at: string | null;
 }
 
+export interface CourtSearchHit {
+  id: string;
+  name: string;
+  lat: number;
+  lng: number;
+  address: string | null;
+  distance_m?: number;
+}
+
+export interface AreaSearchHit {
+  name: string;
+  lat: number;
+  lng: number;
+  /** [west, south, east, north] */
+  bbox: [number, number, number, number];
+  type: string;
+}
+
+export interface DiscoverySearchResults {
+  courts: CourtSearchHit[];
+  areas: AreaSearchHit[];
+  area_search_unavailable: boolean;
+}
+
 // A single seeker row from GET /courts/{id}/run-intents (phase 19): the
 // app groups these flat rows into buckets via lib/run-intents.ts.
 export interface RunIntentSeeker {

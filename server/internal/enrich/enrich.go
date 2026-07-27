@@ -24,6 +24,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/davisbrown/pull-up/server/internal/geocode"
 	"github.com/davisbrown/pull-up/server/internal/osm"
 	"github.com/davisbrown/pull-up/server/internal/store/gen"
 )
@@ -180,7 +181,7 @@ func (e *Enricher) Run(ctx context.Context) {
 func (e *Enricher) enrichClaimed(ctx context.Context, claim gen.ClaimNextCourtEnrichmentRow) {
 	succeeded := true
 	if claim.NeedsAddress {
-		addr, err := e.reverseGeocode(ctx, claim.Lat, claim.Lng)
+		addr, err := geocode.Default().Reverse(ctx, claim.Lat, claim.Lng)
 		if err != nil {
 			e.log.Warn("nominatim reverse", "court", claim.ID, "err", err)
 			succeeded = false
@@ -363,44 +364,6 @@ func (e *Enricher) doJSON(req *http.Request, dst any) error {
 		return fmt.Errorf("%s: %s", resp.Status, snippet)
 	}
 	return json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(dst)
-}
-
-type nominatimResponse struct {
-	Address map[string]string `json:"address"`
-}
-
-// reverseGeocode returns a short "street, locality" address, or "" when the
-// provider successfully reports no useful address.
-func (e *Enricher) reverseGeocode(ctx context.Context, lat, lng float64) (string, error) {
-	u := fmt.Sprintf(
-		"https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=%f&lon=%f&zoom=17&addressdetails=1",
-		lat, lng)
-	var resp nominatimResponse
-	if err := e.getJSON(ctx, u, &resp); err != nil {
-		return "", err
-	}
-	a := resp.Address
-	first := func(keys ...string) string {
-		for _, k := range keys {
-			if v := strings.TrimSpace(a[k]); v != "" {
-				return v
-			}
-		}
-		return ""
-	}
-	street := first("road", "pedestrian", "footway", "path")
-	if house := first("house_number"); house != "" && street != "" {
-		street = house + " " + street
-	}
-	locality := first("neighbourhood", "suburb", "city_district", "city", "town", "village", "hamlet")
-	switch {
-	case street != "" && locality != "":
-		return street + ", " + locality, nil
-	case street != "":
-		return street, nil
-	default:
-		return locality, nil
-	}
 }
 
 type commonsPhoto struct {

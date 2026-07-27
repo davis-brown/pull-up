@@ -15,6 +15,7 @@ import (
 	"github.com/davisbrown/pull-up/server/internal/auth"
 	"github.com/davisbrown/pull-up/server/internal/config"
 	"github.com/davisbrown/pull-up/server/internal/enrich"
+	"github.com/davisbrown/pull-up/server/internal/geocode"
 	"github.com/davisbrown/pull-up/server/internal/moderation"
 	"github.com/davisbrown/pull-up/server/internal/seeder"
 	"github.com/davisbrown/pull-up/server/internal/store"
@@ -29,11 +30,16 @@ type Server struct {
 	seeder           *seeder.Seeder     // nil when auto-seeding is disabled
 	enricher         *enrich.Enricher   // nil when enrichment is disabled
 	moderator        *moderation.Client // disabled without Workers AI credentials
-	moderationOutage outageThrottle     // rate-limits the "classifier is down" alert
+	geocoder         *geocode.Client
+	moderationOutage outageThrottle // rate-limits the "classifier is down" alert
 	backgroundSlots  chan struct{}
 }
 
-func NewServer(cfg *config.Config, st *store.Store, log *slog.Logger, sd *seeder.Seeder, en *enrich.Enricher) *Server {
+func NewServer(cfg *config.Config, st *store.Store, log *slog.Logger, sd *seeder.Seeder, en *enrich.Enricher, geocoders ...*geocode.Client) *Server {
+	geocoder := geocode.Default()
+	if len(geocoders) > 0 && geocoders[0] != nil {
+		geocoder = geocoders[0]
+	}
 	return &Server{
 		cfg:             cfg,
 		store:           st,
@@ -43,6 +49,7 @@ func NewServer(cfg *config.Config, st *store.Store, log *slog.Logger, sd *seeder
 		seeder:          sd,
 		enricher:        en,
 		moderator:       moderation.New(cfg.CloudflareAccountID, cfg.CloudflareAIToken),
+		geocoder:        geocoder,
 		backgroundSlots: make(chan struct{}, 32),
 	}
 }
