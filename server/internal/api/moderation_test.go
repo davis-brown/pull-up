@@ -320,11 +320,12 @@ func TestInternalResolveExternalPhoto(t *testing.T) {
 		t.Fatalf("resolved image_url = %q, want the seeded URL", got.ImageURL)
 	}
 
-	// Without the internal secret the endpoint is not reachable.
+	// Without the internal secret the endpoint is not reachable. The Worker
+	// 404s public /internal/ requests before they ever reach the container.
 	resp = doJSON(t, ts, http.MethodPost, "/internal/external-photo/resolve", "",
 		map[string]string{"source": "mapillary", "source_id": sourceID})
-	if resp.StatusCode != http.StatusNotFound {
-		t.Fatalf("resolve without secret: status %d, want 404", resp.StatusCode)
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("resolve without secret: status %d, want 401", resp.StatusCode)
 	}
 	resp.Body.Close()
 
