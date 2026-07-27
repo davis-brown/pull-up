@@ -100,6 +100,39 @@ func TestListCourtsByBBoxAndRadius(t *testing.T) {
 	}
 }
 
+func TestSearchCourtsByNameAndLegacyBBox(t *testing.T) {
+	ts, _ := newTestServer(t)
+	u := registerUser(t, ts, "searcher@test.local", "Searcher")
+	court := createTestCourt(t, ts, u.AccessToken, "Rucker Park", ruckerLat, ruckerLng)
+
+	resp := doJSON(t, ts, http.MethodPost, "/courts/search", "", map[string]any{
+		"text": "rucker", "lat": ruckerLat, "lng": ruckerLng,
+	})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("text search: status %d: %s", resp.StatusCode, readBody(t, resp))
+	}
+	search := decodeJSON[struct {
+		Courts []courtResp `json:"courts"`
+		Areas  []any       `json:"areas"`
+	}](t, resp)
+	if len(search.Courts) != 1 || search.Courts[0].ID != court.ID || search.Areas == nil {
+		t.Fatalf("search result = %+v", search)
+	}
+
+	resp = doJSON(t, ts, http.MethodPost, "/courts/search", "", map[string]any{
+		"query": "bbox=-73.946,40.819,-73.926,40.839",
+	})
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("legacy bbox search: status %d: %s", resp.StatusCode, readBody(t, resp))
+	}
+	legacy := decodeJSON[struct {
+		Courts []courtResp `json:"courts"`
+	}](t, resp)
+	if len(legacy.Courts) != 1 || legacy.Courts[0].ID != court.ID {
+		t.Fatalf("legacy bbox result = %+v", legacy.Courts)
+	}
+}
+
 func TestListCourtsRejectsInvalidBoundingBoxes(t *testing.T) {
 	ts, _ := newTestServer(t)
 	for _, bbox := range []string{

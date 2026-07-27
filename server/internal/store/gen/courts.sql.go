@@ -662,6 +662,77 @@ func (q *Queries) PromoteCourtIfPending(ctx context.Context, id uuid.UUID) (*uui
 	return submitted_by, err
 }
 
+const searchCourtsByName = `-- name: SearchCourtsByName :many
+SELECT
+    c.id, c.name,
+    ST_Y(c.location::geometry)::float8 AS lat,
+    ST_X(c.location::geometry)::float8 AS lng,
+    c.address,
+    ST_Distance(
+        c.location,
+        ST_SetSRID(ST_MakePoint(
+            coalesce($1::float8, ST_X(c.location::geometry)::float8),
+            coalesce($2::float8, ST_Y(c.location::geometry)::float8)
+        ), 4326)::geography
+    )::float8 AS distance_m
+FROM courts c
+WHERE c.status <> 'rejected'
+  AND c.name ILIKE '%' ||
+      replace(replace(replace($3::text, E'\\', E'\\\\'), '%', E'\\%'), '_', E'\\_') ||
+      '%' ESCAPE E'\\'
+ORDER BY
+    lower(c.name) = lower($3::text) DESC,
+    lower(c.name) LIKE
+      lower(replace(replace(replace($3::text, E'\\', E'\\\\'), '%', E'\\%'), '_', E'\\_')) ||
+      '%' ESCAPE E'\\' DESC,
+    CASE WHEN lower(c.name) = 'basketball court' THEN 1 ELSE 0 END,
+    distance_m NULLS LAST,
+    c.name
+LIMIT 12
+`
+
+type SearchCourtsByNameParams struct {
+	BiasLng *float64 `json:"bias_lng"`
+	BiasLat *float64 `json:"bias_lat"`
+	Query   string   `json:"query"`
+}
+
+type SearchCourtsByNameRow struct {
+	ID        uuid.UUID `json:"id"`
+	Name      string    `json:"name"`
+	Lat       float64   `json:"lat"`
+	Lng       float64   `json:"lng"`
+	Address   *string   `json:"address"`
+	DistanceM float64   `json:"distance_m"`
+}
+
+func (q *Queries) SearchCourtsByName(ctx context.Context, arg SearchCourtsByNameParams) ([]SearchCourtsByNameRow, error) {
+	rows, err := q.db.Query(ctx, searchCourtsByName, arg.BiasLng, arg.BiasLat, arg.Query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SearchCourtsByNameRow
+	for rows.Next() {
+		var i SearchCourtsByNameRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Lat,
+			&i.Lng,
+			&i.Address,
+			&i.DistanceM,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const setCourtStatus = `-- name: SetCourtStatus :exec
 UPDATE courts SET status = $2, updated_at = now()
 WHERE id = $1

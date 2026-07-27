@@ -9,6 +9,7 @@ whenever data practices change.
 | Name (display name) | Yes | Yes | App functionality | Shown on UGC |
 | Precise location | Yes | No | App functionality | Used transiently for nearby results and check-in distance; exact coordinates are discarded |
 | Coarse location | Yes | No | App functionality | Map centering and nearby-court ranking |
+| Search history | No | — | — | Explicit area queries are sent transiently to Nominatim with an approximate map-area bias; pull-up does not retain them as history or attach account identity |
 | Photos | Yes (user-chosen) | Yes | App functionality | Court photos users upload |
 | User content (chat, reports) | Yes | Yes | App functionality | Moderated, flaggable, blockable |
 | Other user content (game results, availability posts) | Yes | Yes | App functionality | A game result names other players; it stays private to participants until the losing side confirms it, and unconfirmed results are deleted after 48h |

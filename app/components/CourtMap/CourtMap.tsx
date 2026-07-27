@@ -1,4 +1,11 @@
-import { Camera, Map, Marker, UserLocation } from "@maplibre/maplibre-react-native";
+import {
+  Camera,
+  type CameraRef,
+  Map,
+  Marker,
+  UserLocation,
+} from "@maplibre/maplibre-react-native";
+import { useEffect, useRef } from "react";
 import { StyleSheet } from "react-native";
 import { useTheme } from "@/lib/theme";
 import { useMapStyle } from "./map-style";
@@ -9,6 +16,7 @@ export default function CourtMap({
   courts,
   initialCenter,
   initialZoom = 13,
+  cameraTarget,
   onRegionChange,
   onPinPress,
   showUserLocation = true,
@@ -18,6 +26,24 @@ export default function CourtMap({
 }: CourtMapProps) {
   const t = useTheme();
   const mapStyle = useMapStyle(t.scheme);
+  const cameraRef = useRef<CameraRef>(null);
+
+  useEffect(() => {
+    if (!cameraTarget) return;
+    if (cameraTarget.kind === "bounds") {
+      const b = cameraTarget.bbox;
+      cameraRef.current?.fitBounds([b.minLng, b.minLat, b.maxLng, b.maxLat], {
+        padding: { top: 72, right: 32, bottom: 72, left: 32 },
+        duration: 700,
+      });
+    } else {
+      cameraRef.current?.flyTo({
+        center: [cameraTarget.center.lng, cameraTarget.center.lat],
+        zoom: cameraTarget.zoom ?? 14,
+        duration: 700,
+      });
+    }
+  }, [cameraTarget]);
   return (
     <Map
       style={[styles.map, style]}
@@ -33,6 +59,7 @@ export default function CourtMap({
       }}
     >
       <Camera
+        ref={cameraRef}
         initialViewState={{
           center: [initialCenter.lng, initialCenter.lat],
           zoom: initialZoom,

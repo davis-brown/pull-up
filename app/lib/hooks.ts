@@ -22,6 +22,7 @@ import { safePathSegment } from "./routes";
 import type {
   AdminAction,
   AdminUser,
+  DiscoverySearchResults,
   BlockedUser,
   CheckIn,
   CheckInHistoryItem,
@@ -93,6 +94,28 @@ export function useCourtsInBBox(bbox: BBox | null, filters?: CourtFilters) {
       );
       return { courts: res.courts, seeding: !!res.seeding };
     },
+  });
+}
+
+export function useDiscoverySearch(
+  query: string,
+  bias?: { lat: number; lng: number },
+  enabled = true,
+) {
+  const normalized = query.trim();
+  return useQuery({
+    queryKey: ["courts", "search", normalized.toLocaleLowerCase(), bias],
+    enabled: enabled && normalized.length >= 2,
+    staleTime: 10 * 60_000,
+    retry: false,
+    refetchOnMount: false,
+    refetchOnReconnect: false,
+    refetchOnWindowFocus: false,
+    queryFn: () =>
+      api<DiscoverySearchResults>("/courts/search", {
+        method: "POST",
+        body: JSON.stringify({ text: normalized, lat: bias?.lat, lng: bias?.lng }),
+      }),
   });
 }
 

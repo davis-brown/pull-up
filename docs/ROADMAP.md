@@ -54,23 +54,16 @@ So items below don't re-propose shipped work.
 
 Highest-leverage, well-aligned, ready to start.
 
-*(The original Now tier — OSM attribute backfill, metadata filters, and a local
-integration-test path — has shipped or was already present; see Recently
-shipped below. Promote items up from Next as this empties.)*
+### 7. Observability cleanup · *reliability* · S
+Fix or document the pull-up-api double-logging (filter `executionModel=stateless`
+so latency percentiles are meaningful) and add a couple of views for the
+enrichment and object-deletion drains, which currently have no dashboard.
 
 ---
 
 ## Next
 
-### 6. Search by name and area · *discovery* · M
-Add text search and area jumps ("courts in <neighborhood>") on top of the
-current map/bbox-only discovery, so a court is findable without already knowing
-where it is on the map.
-
-### 7. Observability cleanup · *reliability* · S
-Fix or document the pull-up-api double-logging (filter `executionModel=stateless`
-so latency percentiles are meaningful) and add a couple of views for the
-enrichment and object-deletion drains, which currently have no dashboard.
+*(Promote an item from Later after observability cleanup.)*
 
 ---
 
@@ -92,6 +85,12 @@ enrichment and object-deletion drains, which currently have no dashboard.
 
 ## Recently shipped
 
+- **Search by name and area** (item 6) — discovery search now combines indexed,
+  location-biased court-name matches with submit-only Nominatim area results.
+  Selecting a court opens the existing detail flow; selecting an area fits the
+  map and reuses viewport loading and OSM seeding. Provider calls are
+  courtesy-limited and cached, and court results remain available during a
+  geocoder outage. Shipped 2026-07-26.
 - **OSM attribute backfill** (item 1) — the enricher now reads each OSM-sourced
   court's own tags (surface, lighting, hoops, covered, access, fee,
   opening_hours, …) and fills null columns, reusing the ingestion parser and
