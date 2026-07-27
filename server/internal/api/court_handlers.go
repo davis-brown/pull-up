@@ -15,6 +15,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/davisbrown/pull-up/server/internal/geocode"
 	"github.com/davisbrown/pull-up/server/internal/store/gen"
 )
 
@@ -131,7 +132,10 @@ func optSurface(q url.Values) *string {
 }
 
 type courtSearchRequest struct {
-	Query string `json:"query"`
+	Query string   `json:"query"`
+	Text  string   `json:"text"`
+	Lat   *float64 `json:"lat"`
+	Lng   *float64 `json:"lng"`
 }
 
 // POST keeps precise location and viewport coordinates out of URLs, edge
@@ -140,6 +144,14 @@ type courtSearchRequest struct {
 func (s *Server) handleSearchCourts(w http.ResponseWriter, r *http.Request) {
 	var req courtSearchRequest
 	if !readJSON(w, r, &req) {
+		return
+	}
+	if req.Query != "" && req.Text != "" {
+		writeError(w, http.StatusBadRequest, "invalid court search")
+		return
+	}
+	if req.Text != "" {
+		s.handleTextSearchCourts(w, r, req)
 		return
 	}
 	if req.Query == "" || len(req.Query) > 2_048 || strings.ContainsAny(req.Query, "#?") {
@@ -156,6 +168,50 @@ func (s *Server) handleSearchCourts(w http.ResponseWriter, r *http.Request) {
 	clonedURL.RawQuery = values.Encode()
 	clone.URL = &clonedURL
 	s.handleListCourts(w, clone)
+}
+
+type courtSearchHit struct {
+	ID        uuid.UUID `json:"id"`
+	Name      string    `json:"name"`
+	Lat       float64   `json:"lat"`
+	Lng       float64   `json:"lng"`
+	Address   *string   `json:"address"`
+	DistanceM *float64  `json:"distance_m,omitempty"`
+}
+
+func (s *Server) handleTextSearchCourts(w http.ResponseWriter, r *http.Request, req courtSearchRequest) {
+	query := strings.TrimSpace(req.Text)
+	if len(query) < 2 || len(query) > 120 || (req.Lat == nil) != (req.Lng == nil) ||
+		(req.Lat != nil && !validLatLng(*req.Lat, *req.Lng)) {
+		writeError(w, http.StatusBadRequest, "search text must be 2 to 120 characters")
+		return
+	}
+	rows, err := s.store.Queries.SearchCourtsByName(r.Context(), gen.SearchCourtsByNameParams{
+		Query: query, BiasLat: req.Lat, BiasLng: req.Lng,
+	})
+	if err != nil {
+		s.internalError(w, "search courts by name", err)
+		return
+	}
+	courts := make([]courtSearchHit, 0, len(rows))
+	for _, row := range rows {
+		var distance *float64
+		if req.Lat != nil {
+			distance = &row.DistanceM
+		}
+		courts = append(courts, courtSearchHit{
+			ID: row.ID, Name: row.Name, Lat: row.Lat, Lng: row.Lng,
+			Address: row.Address, DistanceM: distance,
+		})
+	}
+	areas, geocodeErr := s.geocoder.Search(r.Context(), query, req.Lat, req.Lng)
+	if geocodeErr != nil {
+		s.log.Warn("search areas", "err", geocodeErr)
+		areas = make([]geocode.Area, 0)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"courts": courts, "areas": areas, "area_search_unavailable": geocodeErr != nil,
+	})
 }
 
 func (s *Server) handleListCourts(w http.ResponseWriter, r *http.Request) {
