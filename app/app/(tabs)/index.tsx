@@ -13,8 +13,12 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import CourtMap from "@/components/CourtMap/CourtMap";
-import type { CourtPin } from "@/components/CourtMap/types";
+import type { CameraTarget, CourtPin } from "@/components/CourtMap/types";
 import { DesktopPanel } from "@/components/DesktopPanel";
+import {
+  DiscoverySearchButton,
+  DiscoverySearchSheet,
+} from "@/components/DiscoverySearch";
 import { FilterSheet } from "@/components/FilterSheet";
 import { GetTheAppBanner } from "@/components/GetTheAppBanner";
 import { MapSheet } from "@/components/MapSheet";
@@ -32,6 +36,7 @@ import { useCourtsInBBox, useForecasts, type BBox } from "@/lib/hooks";
 import { FALLBACK_CENTER, tryGetPosition, type Coords } from "@/lib/location";
 import { parseRouteId, safePathSegment } from "@/lib/routes";
 import { useTheme } from "@/lib/theme";
+import type { AreaSearchHit, CourtSearchHit } from "@/lib/types";
 
 export default function MapScreen() {
   const router = useRouter();
@@ -50,6 +55,8 @@ export default function MapScreen() {
   const [showLocationPrimer, setShowLocationPrimer] = useState(false);
   const [filters, setFilters] = useState<CourtFilters>({});
   const [filterSheetOpen, setFilterSheetOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [cameraTarget, setCameraTarget] = useState<CameraTarget | null>(null);
   const [mode, setMode] = useState<"now" | "all">("now");
   const [selectedCourtId, setSelectedCourtId] = useState<string | null>(
     courtParam ?? null,
@@ -153,6 +160,42 @@ export default function MapScreen() {
   // Desktop status chip: total loaded courts and how many are live now.
   const totalCourts = courts.length;
   const activeCourts = courts.filter((c) => c.active_count > 0).length;
+  const searchBias = bbox
+    ? {
+        lat: (bbox.minLat + bbox.maxLat) / 2,
+        lng: (bbox.minLng + bbox.maxLng) / 2,
+      }
+    : (center ?? FALLBACK_CENTER);
+
+  const selectSearchCourt = (court: CourtSearchHit) => {
+    setSearchOpen(false);
+    if (isDesktop) {
+      setSelectedCourtId(court.id);
+      setCameraTarget({
+        key: Date.now(),
+        kind: "center",
+        center: { lat: court.lat, lng: court.lng },
+        zoom: 15,
+      });
+    } else {
+      router.push(`/court/${safePathSegment(court.id)}`);
+    }
+  };
+
+  const selectSearchArea = (area: AreaSearchHit) => {
+    setSearchOpen(false);
+    setSelectedCourtId(null);
+    setCameraTarget({
+      key: Date.now(),
+      kind: "bounds",
+      bbox: {
+        minLng: area.bbox[0],
+        minLat: area.bbox[1],
+        maxLng: area.bbox[2],
+        maxLat: area.bbox[3],
+      },
+    });
+  };
 
   if (!center) {
     return (
@@ -192,6 +235,7 @@ export default function MapScreen() {
           <CourtMap
             courts={pins}
             initialCenter={center}
+            cameraTarget={cameraTarget}
             onRegionChange={setBBox}
             // Desktop: a pin click selects into the panel (no navigation);
             // clicking the selected pin again clears back to the list.
@@ -246,6 +290,9 @@ export default function MapScreen() {
               onChange={(key) => setMode(key as "now" | "all")}
             />
           </View>
+          <View style={[styles.chromeCentered, { top: 66 }]}>
+            <DiscoverySearchButton onPress={() => setSearchOpen(true)} />
+          </View>
           <View
             style={[
               styles.statusChip,
@@ -272,6 +319,13 @@ export default function MapScreen() {
             onApply={setFilters}
             onClose={() => setFilterSheetOpen(false)}
           />
+          <DiscoverySearchSheet
+            visible={searchOpen}
+            bias={searchBias}
+            onCourt={selectSearchCourt}
+            onArea={selectSearchArea}
+            onClose={() => setSearchOpen(false)}
+          />
         </View>
       </View>
     );
@@ -288,6 +342,7 @@ export default function MapScreen() {
       <CourtMap
         courts={pins}
         initialCenter={center}
+        cameraTarget={cameraTarget}
         onRegionChange={setBBox}
         onPinPress={(id) => {
           if (mode === "now") {
@@ -357,7 +412,13 @@ export default function MapScreen() {
       </View>
       <View
         pointerEvents="box-none"
-        style={[styles.chromeCentered, { top: insets.top + 12 + 44 }]}
+        style={[styles.chromeCentered, { top: insets.top + 66 }]}
+      >
+        <DiscoverySearchButton onPress={() => setSearchOpen(true)} />
+      </View>
+      <View
+        pointerEvents="box-none"
+        style={[styles.chromeCentered, { top: insets.top + 112 }]}
       >
         {bbox != null && state !== "has-courts" && (
           <View
@@ -432,6 +493,13 @@ export default function MapScreen() {
         courts={courts}
         onApply={setFilters}
         onClose={() => setFilterSheetOpen(false)}
+      />
+      <DiscoverySearchSheet
+        visible={searchOpen}
+        bias={searchBias}
+        onCourt={selectSearchCourt}
+        onArea={selectSearchArea}
+        onClose={() => setSearchOpen(false)}
       />
     </View>
   );

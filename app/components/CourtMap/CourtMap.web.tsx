@@ -2,7 +2,13 @@
 // Expo web, so Metro resolves this file instead (.web.tsx).
 import "maplibre-gl/dist/maplibre-gl.css";
 import type { StyleSpecification } from "maplibre-gl";
-import Map, { AttributionControl, GeolocateControl, Marker } from "react-map-gl/maplibre";
+import { useEffect, useRef } from "react";
+import Map, {
+  AttributionControl,
+  GeolocateControl,
+  Marker,
+  type MapRef,
+} from "react-map-gl/maplibre";
 import { useTheme } from "@/lib/theme";
 import { useMapStyle } from "./map-style";
 import { CourtPinMarker } from "./pin";
@@ -32,6 +38,7 @@ export default function CourtMap({
   courts,
   initialCenter,
   initialZoom = 13,
+  cameraTarget,
   onRegionChange,
   onPinPress,
   showUserLocation = true,
@@ -43,8 +50,30 @@ export default function CourtMap({
 }: CourtMapProps) {
   const t = useTheme();
   const mapStyle = useMapStyle(t.scheme);
+  const mapRef = useRef<MapRef>(null);
+
+  useEffect(() => {
+    if (!cameraTarget) return;
+    if (cameraTarget.kind === "bounds") {
+      const b = cameraTarget.bbox;
+      mapRef.current?.fitBounds(
+        [
+          [b.minLng, b.minLat],
+          [b.maxLng, b.maxLat],
+        ],
+        { padding: 48, duration: 700 },
+      );
+    } else {
+      mapRef.current?.flyTo({
+        center: [cameraTarget.center.lng, cameraTarget.center.lat],
+        zoom: cameraTarget.zoom ?? 14,
+        duration: 700,
+      });
+    }
+  }, [cameraTarget]);
   return (
     <Map
+      ref={mapRef}
       initialViewState={{
         longitude: initialCenter.lng,
         latitude: initialCenter.lat,

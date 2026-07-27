@@ -11,6 +11,8 @@ comes from geo-verified check-ins and crowd reports.
   turns green with a live player count once a court has active check-ins
 - "Now" and "All courts" map modes — Now shows only courts with live
   activity, weighted by turnout; All shows every court
+- Search globally by court name, neighborhood, or city; area results jump the
+  map and load courts through the same viewport discovery flow
 - Time scrubber on the map — drag to any hour and see a per-court turnout
   forecast (8-week hourly averages blended with today's scheduled runs)
 - Courts are crowd-sourced (community "add a court" pin-drop flow, with

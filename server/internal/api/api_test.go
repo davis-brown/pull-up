@@ -16,6 +16,7 @@ import (
 
 	"github.com/davisbrown/pull-up/server/internal/api"
 	"github.com/davisbrown/pull-up/server/internal/config"
+	"github.com/davisbrown/pull-up/server/internal/geocode"
 	"github.com/davisbrown/pull-up/server/internal/store"
 )
 
@@ -79,7 +80,13 @@ func newTestServer(t *testing.T) (*httptest.Server, *store.Store) {
 		InternalTaskSecret:   "test-internal-secret",
 	}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	ts := httptest.NewServer(api.NewServer(cfg, st, log, nil, nil).Routes())
+	geocodeUpstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`[]`))
+	}))
+	t.Cleanup(geocodeUpstream.Close)
+	geo := geocode.New(geocode.Options{BaseURL: geocodeUpstream.URL, Client: geocodeUpstream.Client()})
+	ts := httptest.NewServer(api.NewServer(cfg, st, log, nil, nil, geo).Routes())
 	t.Cleanup(ts.Close)
 	return ts, st
 }
