@@ -55,9 +55,10 @@ So items below don't re-propose shipped work.
 Highest-leverage, well-aligned, ready to start.
 
 ### 7. Observability cleanup · *reliability* · S
-Fix or document the pull-up-api double-logging (filter `executionModel=stateless`
-so latency percentiles are meaningful) and add a couple of views for the
-enrichment and object-deletion drains, which currently have no dashboard.
+The code-side cleanup is ready: structured per-queue cron events, JSON container
+logs, and exact view definitions live in `docs/OBSERVABILITY.md`. Deploy, create
+the three account-side saved views, and verify live fields before moving this to
+Recently shipped.
 
 ---
 
