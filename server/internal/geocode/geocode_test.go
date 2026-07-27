@@ -39,6 +39,27 @@ func TestSearchParsesBoundsAndCachesNormalizedQuery(t *testing.T) {
 	}
 }
 
+func TestSearchReturnsEmptySliceNotNil(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`[]`))
+	}))
+	defer upstream.Close()
+
+	client := New(Options{BaseURL: upstream.URL, Client: upstream.Client()})
+	// A nil slice would encode as JSON null, which the app's typed
+	// AreaSearchHit[] cannot handle.
+	for _, pass := range []string{"fresh", "cached"} {
+		areas, err := client.Search(context.Background(), "nowhere", nil, nil)
+		if err != nil {
+			t.Fatalf("%s search: %v", pass, err)
+		}
+		if areas == nil {
+			t.Fatalf("%s search returned a nil slice, want empty", pass)
+		}
+	}
+}
+
 func TestReverseBuildsShortAddress(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

@@ -94,7 +94,7 @@ func (c *Client) Search(ctx context.Context, query string, biasLat, biasLng *flo
 	}
 	defer c.mu.Unlock()
 	if cached, ok := c.cache[key]; ok {
-		return append([]Area(nil), cached...), nil
+		return clone(cached), nil
 	}
 	if err := c.wait(ctx); err != nil {
 		return nil, err
@@ -128,7 +128,15 @@ func (c *Client) Search(ctx context.Context, query string, biasLat, biasLng *flo
 		out = append(out, Area{Name: result.DisplayName, Lat: lat, Lng: lng, BBox: [4]float64{west, south, east, north}, Type: result.Type})
 	}
 	c.putCache(key, out)
-	return append([]Area(nil), out...), nil
+	return clone(out), nil
+}
+
+// clone returns an independent copy that is empty rather than nil, so a
+// zero-result search encodes as [] and never as JSON null.
+func clone(areas []Area) []Area {
+	out := make([]Area, len(areas))
+	copy(out, areas)
+	return out
 }
 
 type reverseResult struct {
@@ -208,7 +216,7 @@ func (c *Client) putCache(key string, areas []Area) {
 		delete(c.cache, c.cacheAt[0])
 		c.cacheAt = c.cacheAt[1:]
 	}
-	c.cache[key] = append([]Area(nil), areas...)
+	c.cache[key] = clone(areas)
 	c.cacheAt = append(c.cacheAt, key)
 }
 
