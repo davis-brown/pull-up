@@ -111,11 +111,15 @@ export function useDiscoverySearch(
     refetchOnMount: false,
     refetchOnReconnect: false,
     refetchOnWindowFocus: false,
-    queryFn: () =>
-      api<DiscoverySearchResults>("/courts/search", {
+    queryFn: async () => {
+      const result = await api<DiscoverySearchResults>("/courts/search", {
         method: "POST",
         body: JSON.stringify({ text: normalized, lat: bias?.lat, lng: bias?.lng }),
-      }),
+      });
+      // Both lists are read unguarded downstream, so a null from an older
+      // container must not reach the sheet.
+      return { ...result, courts: result.courts ?? [], areas: result.areas ?? [] };
+    },
   });
 }
 

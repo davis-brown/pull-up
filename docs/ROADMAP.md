@@ -54,17 +54,17 @@ So items below don't re-propose shipped work.
 
 Highest-leverage, well-aligned, ready to start.
 
-### 7. Observability cleanup · *reliability* · S
-The code-side cleanup is ready: structured per-queue cron events, JSON container
-logs, and exact view definitions live in `docs/OBSERVABILITY.md`. Deploy, create
-the three account-side saved views, and verify live fields before moving this to
-Recently shipped.
+### 8. Performance & accessibility pass · *reliability* · M
+Map/list perf, container cold starts, and an a11y audit across screens. Now
+that **API · stateless fetches** separates user-facing edge latency from the
+Durable Object half of each request, there is a trustworthy baseline to measure
+against — take a percentile reading before changing anything.
 
 ---
 
 ## Next
 
-*(Promote an item from Later after observability cleanup.)*
+*(Promote an item from Later when the performance pass is picked up.)*
 
 ---
 
@@ -77,8 +77,6 @@ Recently shipped.
   RSVP nudges.
 - **Personalized surfacing** · *discovery* · M — "your courts," recents, ranking
   that blends distance with current liveness.
-- **Performance & accessibility pass** · *reliability* · M — map/list perf, cold
-  starts, and an a11y audit across screens.
 - **Web preview & store refresh** · *platform* · S–M — extend the OG/deep-link
   work in `app/worker.ts` and refresh the store listing (`docs/store/`).
 
@@ -86,12 +84,22 @@ Recently shipped.
 
 ## Recently shipped
 
+- **Observability cleanup** (item 7) — structured per-queue `background_drain`
+  cron events, JSON container logs, and a runbook in `docs/OBSERVABILITY.md`.
+  Verified live: each cron emits one event per queue, filterable on `event`,
+  `queue`, and `outcome`, with `duration_ms` and the per-queue counters
+  queryable as numbers. Two corrections came out of the live check — the
+  runbook's invocation-metadata keys were `$cloudflare.*` and are really
+  `$workers.*`, and the three saved views must be created by hand because the
+  deploy token can read the observability queries API but not write it.
+  Shipped 2026-07-27.
 - **Search by name and area** (item 6) — discovery search now combines indexed,
   location-biased court-name matches with submit-only Nominatim area results.
   Selecting a court opens the existing detail flow; selecting an area fits the
   map and reuses viewport loading and OSM seeding. Provider calls are
   courtesy-limited and cached, and court results remain available during a
-  geocoder outage. Shipped 2026-07-26.
+  geocoder outage. Shipped 2026-07-26; a zero-result area search was returning
+  `"areas": null` and crashing the sheet, fixed 2026-07-27.
 - **OSM attribute backfill** (item 1) — the enricher now reads each OSM-sourced
   court's own tags (surface, lighting, hoops, covered, access, fee,
   opening_hours, …) and fills null columns, reusing the ingestion parser and
