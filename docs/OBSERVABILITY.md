@@ -17,7 +17,15 @@ the user-facing Worker edge. Do not combine the two latency series.
 
 Create these saved views under **Workers & Pages → pull-up-api →
 Observability**. Cloudflare stores saved views in the account rather than in
-Wrangler, so this file is their source-controlled definition.
+Wrangler, so this file is their source-controlled definition. They have to be
+created by hand: saved views are the observability *queries* API, and the
+deploy token can read that endpoint but not write it.
+
+Field names below are the ones the query API accepts, verified against live
+`pull-up-api` logs on 2026-07-27. Invocation metadata lives under `$workers.`,
+not `$cloudflare.`; drain fields are top-level because the Worker logs a flat
+JSON object. Numeric fields need their type set explicitly, or a calculation
+over them returns empty.
 
 ### API edge latency
 
@@ -25,13 +33,15 @@ Use invocation records with all of these filters:
 
 | Field | Operator | Value |
 |---|---|---|
-| `$cloudflare.$metadata.type` | equals | `cf-worker-event` |
-| `$cloudflare.executionModel` | equals | `stateless` |
-| `$cloudflare.eventType` | equals | `fetch` |
+| `$metadata.type` | equals | `cf-worker-event` |
+| `$workers.executionModel` | equals | `stateless` |
+| `$workers.eventType` | equals | `fetch` |
 
 Name the view **API · stateless fetches**. The `executionModel` filter removes
 the Durable Object half of each request; `eventType=fetch` keeps the 15-minute
-cron out of request counts and latency percentiles.
+cron out of request counts and latency percentiles. Percentiles come from
+`$workers.wallTimeMs`; group by `$workers.outcome` to separate `ok` from
+`exception` and `exceededCpu`.
 
 ### Court enrichment drain
 
