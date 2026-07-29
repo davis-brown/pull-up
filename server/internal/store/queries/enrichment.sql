@@ -88,6 +88,8 @@ UPDATE courts SET
     covered       = coalesce(covered, sqlc.narg('covered')),
     access        = coalesce(access, sqlc.narg('access')),
     fee           = coalesce(fee, sqlc.narg('fee')),
+    fee_amount_cents = coalesce(fee_amount_cents, sqlc.narg('fee_amount_cents')),
+    fee_currency     = coalesce(fee_currency, sqlc.narg('fee_currency')),
     opening_hours = coalesce(opening_hours, sqlc.narg('opening_hours')),
     fenced        = coalesce(fenced, sqlc.narg('fenced')),
     website       = coalesce(website, sqlc.narg('website')),

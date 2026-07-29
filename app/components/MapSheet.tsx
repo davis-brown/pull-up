@@ -4,6 +4,7 @@ import { StyleSheet, Text, View } from "react-native";
 import { TimeScrubber } from "@/components/TimeScrubber";
 import { Button, ErrorText } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
+import { shortAccessLabel, shortCostLabel } from "@/lib/court-cost";
 import { expectedAt, sessionAt, type CourtForecast } from "@/lib/forecast";
 import { useRSVP } from "@/lib/hooks";
 import { signInHref } from "@/lib/routes";
@@ -17,10 +18,8 @@ function hourLabel(hour: number): string {
   return `${displayHour} ${h < 12 ? "AM" : "PM"}`;
 }
 
-// Bottom sheet for the map home's "Now" mode: today's time scrubber plus the
-// selected court's live/forecast turnout. Scrubbing is purely local — the
-// forecast data is already in props (fetched once per visible id set by
-// useForecasts), so dragging the thumb triggers zero network requests.
+// Bottom sheet for the map home's "Now" mode. Scrubbing is purely local: the
+// forecast is already in props, so dragging the thumb makes no requests.
 export function MapSheet({
   court,
   hours,
@@ -58,10 +57,12 @@ export function MapSheet({
     ? `${count} playing now`
     : `~${count} expected at ${hourLabel(scrubHour)}${session ? " · run scheduled" : ""}`;
 
-  // The "your window" lens: one honest line when the player's availability
-  // overlaps this court's historical curve — omitted entirely when forecast
-  // history is thin, their windows don't apply today, or their windows are
-  // historically dead here.
+  // Cost outranks access in one chip's worth of space: a player who walks to a
+  // members-only court can still ask, but a price is a hard stop.
+  const restriction = shortCostLabel(court) ?? shortAccessLabel(court);
+
+  // The "your window" lens. Omitted entirely when history is thin, the
+  // player's windows don't apply today, or they are dead at this court.
   const windowLine = yourWindowSummary(forecast, user?.availability ?? [], new Date());
 
   const imIn = () => {
@@ -98,12 +99,10 @@ export function MapSheet({
         t.shadows.sheet,
         {
           backgroundColor: t.colors.surface,
-          // No safe-area inset added here: this sheet renders inside the
-          // (tabs) map screen, whose content area already sits flush above
-          // the bottom tab bar — and the tab bar itself already pads for
-          // the home-indicator inset. Adding insets.bottom again on top of
-          // that double-counted it, floating the sheet a few px above the
-          // tab bar on notched iPhones.
+          // No safe-area inset here. This sheet sits inside the (tabs) screen,
+          // whose content area is already flush above the tab bar, and the tab
+          // bar already pads for the home indicator. Adding insets.bottom
+          // double-counts it and floats the sheet on notched iPhones.
           paddingBottom: t.spacing.lg,
         },
       ]}
@@ -143,9 +142,19 @@ export function MapSheet({
                 },
               ]}
             />
-            <Text style={[t.type.heading, { color: t.colors.textPrimary }]} numberOfLines={1}>
+            <Text
+              style={[t.type.heading, styles.nameText, { color: t.colors.textPrimary }]}
+              numberOfLines={1}
+            >
               {court.name}
             </Text>
+            {restriction ? (
+              <View style={[styles.restrictionChip, { borderColor: t.colors.warning }]}>
+                <Text style={[t.type.overline, { color: t.colors.warning }]}>
+                  {restriction}
+                </Text>
+              </View>
+            ) : null}
           </View>
           <Text style={[t.type.caption, { color: t.colors.textSecondary }]} numberOfLines={1}>
             {statusLine}
@@ -213,6 +222,16 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
+  },
+  // Shrinks so a long court name yields to the chip rather than pushing it out.
+  nameText: {
+    flexShrink: 1,
+  },
+  restrictionChip: {
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 6,
+    paddingVertical: 1,
   },
   liveDot: {
     width: 8,

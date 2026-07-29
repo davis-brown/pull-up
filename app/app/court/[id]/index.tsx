@@ -33,6 +33,7 @@ import { SignInAction, useSignInDetour } from "@/components/SignInCta";
 import { Button, Card, ErrorText, FullScreenLoader, Overline } from "@/components/ui";
 import { Leaderboard } from "@/components/Leaderboard";
 import { useAuth } from "@/lib/auth-context";
+import { accessTier, costTier, restrictionLine } from "@/lib/court-cost";
 import { markPushPrimerDone, pushPrimerDone } from "@/lib/first-run";
 import {
   externalPhotoURL,
@@ -201,14 +202,11 @@ export default function CourtDetailScreen() {
     activeCount,
     expectedCount: activeCount,
     status: detail.status,
+    paid: costTier(detail) === "paid",
+    restricted: accessTier(detail) !== "open",
   };
 
-  const accessWarning =
-    detail.access === "private"
-      ? "Private court"
-      : detail.access === "customers"
-        ? "Customers/members only"
-        : "";
+  const restriction = restrictionLine(detail);
   const amenities = [
     detail.drinking_water && "Water",
     detail.toilets && "Restroom",
@@ -286,12 +284,11 @@ export default function CourtDetailScreen() {
               </Text>
             ) : null}
 
-            {(accessWarning || detail.fee) && (
+            {restriction ? (
               <Text style={[t.type.caption, styles.gap, { color: t.colors.warning }]}>
-                {accessWarning}
-                {detail.fee ? (accessWarning ? "  ·  Fee to play" : "Fee to play") : ""}
+                {restriction}
               </Text>
-            )}
+            ) : null}
 
             {amenities.length > 0 && (
               <Text style={[t.type.caption, styles.gap, { color: t.colors.textSecondary }]}>

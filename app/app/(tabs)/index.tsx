@@ -24,6 +24,7 @@ import { GetTheAppBanner } from "@/components/GetTheAppBanner";
 import { MapSheet } from "@/components/MapSheet";
 import { PermissionPrimer } from "@/components/PermissionPrimer";
 import { SegmentedToggle, withAlpha } from "@/components/ui";
+import { accessTier, costTier } from "@/lib/court-cost";
 import type { CourtFilters } from "@/lib/court-filters";
 import { courtsDisplayState, viewportTooLarge } from "@/lib/court-seeding";
 import {
@@ -43,8 +44,8 @@ export default function MapScreen() {
   const insets = useSafeAreaInsets();
   const t = useTheme();
   const { width } = useWindowDimensions();
-  // Desktop master-detail (Task 14) is web-only and gated on a wide viewport;
-  // below this, and on native, the mobile layout is used unchanged.
+  // Desktop master-detail is web-only and gated on a wide viewport; below
+  // this, and on native, the mobile layout is used unchanged.
   const isDesktop = Platform.OS === "web" && width >= 1024;
   // Deep link: /court/[id] redirects to /?court=<id> on desktop web, and the
   // panel opens straight to that court's detail.
@@ -78,8 +79,7 @@ export default function MapScreen() {
   useEffect(() => {
     void (async () => {
       // On first launch the root layout redirects to onboarding; don't pop the
-      // location primer (or an OS prompt) over a screen that's about to unmount.
-      // The effect re-runs when the user returns to the map after onboarding.
+      // location primer over a screen that's about to unmount.
       if (!(await onboardingSeen())) {
         setCenter(FALLBACK_CENTER);
         return;
@@ -99,9 +99,8 @@ export default function MapScreen() {
     })();
   }, []);
 
-  // Keep the panel in sync if the deep-link param arrives after mount (e.g. a
-  // /court/[id] redirect while the map is already open). Depending only on the
-  // param means tapping "back" (which clears the selection) never re-triggers.
+  // Keeps the panel in sync when the deep-link param arrives after mount.
+  // Depending only on the param means clearing the selection never re-fires.
   useEffect(() => {
     if (isDesktop && courtParam) {
       setSelectedCourtId(courtParam);
@@ -118,10 +117,8 @@ export default function MapScreen() {
     }
   };
 
-  // One batched forecast fetch per visible id set (only in "now" mode) —
-  // scrubbing below reads it locally via expectedAt, never refetching. The
-  // selected court is passed as priorityId so it's never dropped by the
-  // 50-id cap even when the viewport has more courts than that.
+  // One batched forecast fetch per visible id set; scrubbing reads it locally
+  // via expectedAt. priorityId keeps the selected court inside the 50-id cap.
   const forecasts = useForecasts(
     mode === "now" ? courts.map((c) => c.id) : [],
     mode === "now" ? selectedCourtId : null,
@@ -144,6 +141,8 @@ export default function MapScreen() {
             : c.active_count,
         status: c.status,
         nextRunAt: c.next_run_at,
+        paid: costTier(c) === "paid",
+        restricted: accessTier(c) !== "open",
       })),
     [courts, mode, atNow, forecasts, scrubHour],
   );

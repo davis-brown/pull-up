@@ -7,14 +7,10 @@ import type { CourtPin } from "./types";
 
 // Shared pin for both map implementations.
 //
-// "all" mode keeps the original equal-weight look for every court (a quiet
-// basketball badge, or a green live bubble with the current player count) —
-// unaffected by selection or activity weighting.
-//
-// "now" mode weights pins by expectedCount: a quiet, unselected court shrinks
-// to a dot; everything else is a violet count pin; the selected pin grows to
-// 52px, gains a pulsing halo, and drops an ink label chip with the court name
-// below it. Sizing is decided by the pure app/lib/pin-size.ts helper.
+// "all" mode gives every court an equal-weight look, unaffected by selection
+// or activity. "now" mode weights pins by expectedCount: quiet unselected
+// courts shrink to dots, the selected pin grows and gains a halo and label.
+// Sizing is decided by the pure app/lib/pin-size.ts helper.
 export function CourtPinMarker({
   pin,
   mode,
@@ -25,8 +21,8 @@ export function CourtPinMarker({
   pin: CourtPin;
   mode: "now" | "all";
   selected?: boolean;
-  /** Desktop web (Task 14): the panel is hovering this court — raise a quiet
-   * dot to a full 36px pin so it stands out on the map. */
+  /** Desktop web: the panel is hovering this court, so raise a quiet dot to
+   * a full 36px pin. */
   hovered?: boolean;
   onPress?: () => void;
 }) {
@@ -41,8 +37,8 @@ export function CourtPinMarker({
 
   if (variant.kind === "dot") {
     if (hovered) {
-      // A quiet, hovered court: a 36px accent pin with a basketball glyph
-      // (there's no player count to show).
+      // Quiet and hovered: an accent pin with a glyph, since there is no
+      // player count to show.
       return (
         <Pressable onPress={onPress} hitSlop={8}>
           <View
@@ -59,13 +55,12 @@ export function CourtPinMarker({
             ]}
           >
             <Ionicons name="basketball" size={18} color={t.colors.onAccent} />
-            {pin.nextRunAt ? <RunTick t={t} /> : null}
+            {pinBadges(pin, t)}
           </View>
         </Pressable>
       );
     }
-    // A quiet court (spec 3a): a small 16px dot with a surface ring, kept far
-    // lighter than any count pin so "now" mode's activity hierarchy reads.
+    // Kept far lighter than any count pin so "now" mode's hierarchy reads.
     return (
       <Pressable onPress={onPress} hitSlop={12}>
         <View>
@@ -75,7 +70,7 @@ export function CourtPinMarker({
               { backgroundColor: t.colors.quietDot, borderColor: t.colors.surface },
             ]}
           />
-          {pin.nextRunAt ? <RunTick t={t} /> : null}
+          {pinBadges(pin, t)}
         </View>
       </Pressable>
     );
@@ -112,7 +107,7 @@ export function CourtPinMarker({
               {count}
             </Text>
           </View>
-          {pin.nextRunAt ? <RunTick t={t} /> : null}
+          {pinBadges(pin, t)}
         </View>
         {selected && (
           <View
@@ -129,10 +124,43 @@ export function CourtPinMarker({
   );
 }
 
-// Small accent tick at a pin's top-right corner: this court has a run
-// scheduled in the next 24h (phase 17). Absolute-positioned so every pin
-// variant can carry it without reflowing; the surface ring keeps it legible
-// on both the accent pin and the live bubble.
+// The corner markers every pin variant carries. Both are absolute-positioned
+// and sit on opposite corners, so a court can be both scheduled and paid
+// without either mark moving.
+function pinBadges(pin: CourtPin, t: Theme) {
+  return (
+    <>
+      {pin.nextRunAt ? <RunTick t={t} /> : null}
+      {pin.paid || pin.restricted ? <CostBadge t={t} paid={!!pin.paid} /> : null}
+    </>
+  );
+}
+
+// Marks a court that is not free and open to all: a $ for pay-to-play, a lock
+// for private or customers-only. Cost wins when a court is both, since it is
+// the harder constraint to discover on arrival.
+function CostBadge({ t, paid }: { t: Theme; paid: boolean }) {
+  return (
+    <View
+      pointerEvents="none"
+      style={[
+        styles.costBadge,
+        // Inverted against the pin — several variants are accent-filled, and
+        // a surface-on-ink badge stays legible on all of them.
+        { backgroundColor: t.colors.surface, borderColor: t.colors.textPrimary },
+      ]}
+    >
+      {paid ? (
+        <Text style={[styles.costGlyph, { color: t.colors.textPrimary }]}>$</Text>
+      ) : (
+        <Ionicons name="lock-closed" size={8} color={t.colors.textPrimary} />
+      )}
+    </View>
+  );
+}
+
+// Marks a court with a run scheduled in the next 24h. Absolute-positioned so
+// every pin variant can carry it without reflowing.
 function RunTick({ t }: { t: Theme }) {
   return (
     <View
@@ -146,9 +174,8 @@ function RunTick({ t }: { t: Theme }) {
   );
 }
 
-// Grows from 0.6x to 1.4x its own size while fading out, looping every 2s.
-// useNativeDriver stays off so the same code path runs unmodified on
-// react-native-web (no native animated module there).
+// Grows from 0.6x to 1.4x while fading out, looping every 2s. useNativeDriver
+// stays off so the same code path runs on react-native-web.
 function PulseHalo({ color, size }: { color: string; size: number }) {
   const progress = useRef(new Animated.Value(0)).current;
 
@@ -187,8 +214,8 @@ function PulseHalo({ color, size }: { color: string; size: number }) {
   );
 }
 
-// The pre-Task-8 marker: a quiet basketball badge, or a green live bubble
-// with the player count. Untouched by "now" mode's weighting/selection.
+// "all" mode's marker: a quiet badge, or a green live bubble with the player
+// count. Untouched by "now" mode's weighting and selection.
 function AllCourtsPin({
   pin,
   onPress,
@@ -220,7 +247,7 @@ function AllCourtsPin({
               color={pending ? t.colors.textMuted : t.colors.onAccent}
             />
           </View>
-          {pin.nextRunAt ? <RunTick t={t} /> : null}
+          {pinBadges(pin, t)}
         </View>
       </Pressable>
     );
@@ -237,7 +264,7 @@ function AllCourtsPin({
         >
           <Text style={styles.liveCount}>{pin.activeCount}</Text>
         </View>
-        {pin.nextRunAt ? <RunTick t={t} /> : null}
+        {pinBadges(pin, t)}
       </View>
     </Pressable>
   );
@@ -289,6 +316,22 @@ const styles = StyleSheet.create({
     height: 10,
     borderRadius: 5,
     borderWidth: 2,
+  },
+  costBadge: {
+    position: "absolute",
+    bottom: -3,
+    right: -3,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    borderWidth: 1.5,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  costGlyph: {
+    fontSize: 9,
+    fontWeight: "800",
+    lineHeight: 11,
   },
   labelChip: {
     marginTop: 4,
