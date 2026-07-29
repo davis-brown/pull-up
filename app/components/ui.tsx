@@ -18,9 +18,8 @@ import {
 } from "react-native";
 import { useTheme } from "@/lib/theme";
 
-// Applies an alpha channel to a theme hex color (e.g. surface at 92%
-// opacity for the floating segmented toggle). Derives from a token value —
-// not a new hardcoded color.
+// Applies an alpha channel to a theme hex color. Derives from a token value
+// rather than introducing a new hardcoded color.
 export function withAlpha(hex: string, alpha: number): string {
   const clean = hex.replace("#", "");
   const r = parseInt(clean.substring(0, 2), 16);
@@ -31,8 +30,8 @@ export function withAlpha(hex: string, alpha: number): string {
 
 type ButtonVariant = "primary" | "secondary" | "danger" | "ghost";
 
-// Distance the border highlight travels per sweep; generous enough for
-// full-bleed buttons on tablets while staying cheap (transform-only).
+// Distance the border highlight travels per sweep. Transform-only, so it
+// stays cheap even at full-bleed tablet widths.
 const SHEEN_TRAVEL = 640;
 const RING_WIDTH = 2;
 
@@ -53,10 +52,8 @@ export function Button({
   compact?: boolean;
 }) {
   const t = useTheme();
-  // Machined-metal border: primary/secondary sit inside a titanium gradient
-  // ring. While hovered (web/pointer) a light band sweeps around the ring in
-  // a loop; on touch, pressing fires one sweep. Press also settles the
-  // button slightly via scale.
+  // Machined-metal border. Hover (web/pointer) loops a light band around the
+  // ring; touch fires one sweep per press, which also settles the scale.
   const scale = useRef(new Animated.Value(1)).current;
   const sheenX = useRef(new Animated.Value(-SHEEN_TRAVEL / 2)).current;
   const sweepLoop = useRef<Animated.CompositeAnimation | null>(null);

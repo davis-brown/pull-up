@@ -1,11 +1,9 @@
-// Player-confirmed court conditions: each fact shows tap-to-confirm value
-// chips and a freshness line. The selected chip is the court's stored value,
-// which follows the recent-confirmation majority server-side.
+// Player-confirmed court conditions. The selected chip is the court's stored
+// value, which follows the recent-confirmation majority server-side.
 //
-// Core playing facts (rims/nets/surface/hoops/lights) are always shown. The
-// amenity/policy facts are shown only when the court already has a value or a
-// confirmation for them; the still-empty ones tuck behind "add more details"
-// so the section stays short without ever hiding known information.
+// Core playing facts are always shown; amenity/policy facts appear only when
+// the court has a value or a confirmation, with the rest behind "add more
+// details" — so the section stays short without hiding known information.
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Chip, ErrorText, Overline } from "@/components/ui";

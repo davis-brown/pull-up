@@ -15,9 +15,8 @@ import (
 )
 
 // windowAlertThreshold is the live headcount (party-size aware) at which a
-// court counts as having "a real run" worth interrupting someone for. The
-// 0 → 1 favoriter ping (notifyRunStarted) covers the run *starting*; this
-// alert fires only when it has clearly materialized.
+// court counts as having a real run. notifyRunStarted covers the 0 → 1 ping;
+// this fires only once the run has materialized.
 const windowAlertThreshold = 4
 
 // windowSpan mirrors the availability windows players pick in profile
@@ -69,10 +68,9 @@ func validTimezone(name string) bool {
 	return err == nil
 }
 
-// notifyWindowAlerts pushes "a real run is on during your window" to eligible
-// favoriters when this check-in carried the court's live headcount across the
-// threshold. Fire-and-forget from the check-in handler; partySize is the
-// just-created check-in's contribution, used to detect the crossing.
+// notifyWindowAlerts pushes eligible favoriters when this check-in carried
+// the court's live headcount across the threshold. Fire-and-forget; partySize
+// is the new check-in's contribution, used to detect the crossing.
 func (s *Server) notifyWindowAlerts(courtID, actor uuid.UUID, partySize int) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -82,9 +80,8 @@ func (s *Server) notifyWindowAlerts(courtID, actor uuid.UUID, partySize int) {
 		s.log.Error("window alert count", "court", courtID, "err", err)
 		return
 	}
-	// Crossing-only: alert when this check-in pushed the count over the
-	// threshold, never on the ones after — the wobble as players come and go
-	// must not re-fire (the per-user cooldown is the second guard).
+	// Crossing-only: never alert on check-ins after the threshold, or the
+	// wobble as players come and go would re-fire.
 	if int(count) < windowAlertThreshold || int(count)-partySize >= windowAlertThreshold {
 		return
 	}
@@ -138,8 +135,8 @@ func (s *Server) notifyWindowAlerts(courtID, actor uuid.UUID, partySize int) {
 			s.log.Error("window alert push", "court", courtID, "err", err)
 		}
 	}
-	// Record sends after the pushes: a failed Send still records, which
-	// errs on the quiet side (cooldown applies) rather than re-pinging.
+	// Record after the pushes: a failed Send still records, erring quiet
+	// rather than re-pinging.
 	for _, uid := range notified {
 		if err := s.store.Queries.RecordWindowAlert(ctx, gen.RecordWindowAlertParams{
 			UserID: uid, CourtID: courtID,

@@ -1,6 +1,6 @@
-// Pure, node-safe: presentation helpers for XP levels (phase 20). The
-// curve itself lives server-side (internal/api/xp.go) and arrives via
-// /me/stats — the app never recomputes a level, so the two can't drift.
+// Pure and node-safe: presentation helpers for XP levels. The curve lives
+// server-side (internal/api/xp.go) and arrives via /me/stats; the app never
+// recomputes a level, so the two can't drift.
 import type { MeStats } from "./types";
 
 // How full the progress bar should be, 0..1. The level cap reports
@@ -20,8 +20,7 @@ export function xpToNextLabel(stats: MeStats | undefined): string {
   return `${remaining} XP to level ${stats.level + 1}`;
 }
 
-// How a player earns XP, for the in-app explainer. Mirrors the award
-// constants in internal/api/xp.go — if those change, change these.
+// Mirrors the award constants in internal/api/xp.go. Keep in sync.
 export const XP_SOURCES: { label: string; points: string }[] = [
   { label: "Check in at a court", points: "+10" },
   { label: "First check-in of the day", points: "+5" },
@@ -33,11 +32,9 @@ export const XP_SOURCES: { label: string; points: string }[] = [
   { label: "Weekly streak bonus", points: "+10 per week, up to 5" },
 ];
 
-// Display names for the award kinds in /me/stats' xp_breakdown. Keyed by
-// the raw ledger kind from internal/api/xp.go. The server sends only kinds
-// that actually earned something in the window, so this map is read
-// defensively: an unrecognised kind (a new award shipped ahead of the app)
-// falls back to a readable form of the key rather than rendering blank.
+// Display names for the award kinds in /me/stats' xp_breakdown, keyed by the
+// raw ledger kind. Read defensively: an unrecognised kind (a new award
+// shipped ahead of the app) falls back to a readable form of the key.
 const XP_KIND_LABELS: Record<string, string> = {
   check_in: "Check-ins",
   daily_first: "First check-in of the day",

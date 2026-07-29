@@ -8,7 +8,6 @@ import (
 
 func TestInternalDrainRequiresSecret(t *testing.T) {
 	ts, _ := newTestServer(t)
-	// No secret header → 401.
 	resp := doJSON(t, ts, http.MethodPost, "/internal/drain", "", nil)
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("no-secret drain: status %d, want 401", resp.StatusCode)
@@ -142,12 +141,10 @@ func TestInternalMediaAuthorizationAndDeletionQueue(t *testing.T) {
 	ack(keys)
 }
 
-// TestAvatarFinalizeBeforePatchStillClaims reproduces the real Worker-mediated
-// upload order: the client creates a pending avatar upload, the Worker calls
-// /internal/media/uploaded when the R2 PUT lands, and only THEN does the client
-// PATCH /me with the avatar_url. Regression test for the finalize step deleting
-// the pending_uploads row prematurely, which made every avatar PATCH fail with
-// 400 "avatar_url must reference a pending upload".
+// TestAvatarFinalizeBeforePatchStillClaims covers the real upload order:
+// pending upload, Worker calls /internal/media/uploaded, then the client
+// PATCHes /me. Regression test for finalize deleting the pending_uploads row
+// prematurely, which made every avatar PATCH 400.
 func TestAvatarFinalizeBeforePatchStillClaims(t *testing.T) {
 	ts, _ := newTestServer(t)
 	u := registerUser(t, ts, "avatar-finalize@test.local", "Avatar Finalize")

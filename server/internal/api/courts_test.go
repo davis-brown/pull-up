@@ -60,7 +60,6 @@ func TestCreateCourtDuplicateDetection(t *testing.T) {
 	}
 	resp.Body.Close()
 
-	// Same spot with ignore_duplicates=true succeeds anyway.
 	resp = doJSON(t, ts, http.MethodPost, "/courts", u.AccessToken, map[string]any{
 		"name": "Forced Court", "lat": ruckerLat + 0.00027, "lng": ruckerLng, "indoor": false,
 		"ignore_duplicates": true,
@@ -190,8 +189,6 @@ func TestListCourtsFilter(t *testing.T) {
 	u := registerUser(t, ts, "cf@test.local", "CF")
 	lit := createTestCourt(t, ts, u.AccessToken, "Lit", ruckerLat, ruckerLng)
 	createTestCourt(t, ts, u.AccessToken, "Dark", ruckerLat+0.001, ruckerLng)
-	// Mark one lit via the attributes endpoint (added in Task 5) OR a raw patch;
-	// here assert the filter param is accepted and returns a subset.
 	_ = lit
 
 	latStr := strconv.FormatFloat(ruckerLat, 'f', -1, 64)
@@ -202,7 +199,6 @@ func TestListCourtsFilter(t *testing.T) {
 	}
 	resp.Body.Close()
 
-	// bbox path also accepts the same filter params.
 	resp = doJSON(t, ts, http.MethodGet, "/courts?bbox=-73.946,40.819,-73.926,40.839&lit=true", "", nil)
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("filtered bbox list: status %d: %s", resp.StatusCode, readBody(t, resp))
@@ -267,7 +263,6 @@ func TestListCourtsFilterMinHoops(t *testing.T) {
 		t.Fatalf("absent min_hoops bbox result = %+v, want both courts", absentResult.Courts)
 	}
 
-	// near-me path also accepts min_hoops.
 	latStr := strconv.FormatFloat(ruckerLat, 'f', -1, 64)
 	lngStr := strconv.FormatFloat(ruckerLng, 'f', -1, 64)
 	resp = doJSON(t, ts, http.MethodGet, "/courts?lat="+latStr+"&lng="+lngStr+"&radius_m=2000&min_hoops=4", "", nil)
@@ -307,19 +302,16 @@ func TestPatchCourtAttributes(t *testing.T) {
 	u := registerUser(t, ts, "attr@test.local", "Attr")
 	c := createTestCourt(t, ts, u.AccessToken, "Attr Court", ruckerLat, ruckerLng)
 
-	// Requires auth.
 	resp := doJSON(t, ts, http.MethodPatch, "/courts/"+c.ID+"/attributes", "", map[string]any{"lighting": true})
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("no-auth patch: status %d, want 401", resp.StatusCode)
 	}
 	resp.Body.Close()
-	// Invalid surface → 400.
 	resp = doJSON(t, ts, http.MethodPatch, "/courts/"+c.ID+"/attributes", u.AccessToken, map[string]any{"surface": "lava"})
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("bad surface: status %d, want 400", resp.StatusCode)
 	}
 	resp.Body.Close()
-	// Valid update reflected in GET.
 	doJSON(t, ts, http.MethodPatch, "/courts/"+c.ID+"/attributes", u.AccessToken, map[string]any{"lighting": true, "drinking_water": true}).Body.Close()
 	resp = doJSON(t, ts, http.MethodGet, "/courts/"+c.ID, "", nil)
 	if p := decodeJSON[struct {

@@ -12,7 +12,6 @@ func TestCourtFactConfirmations(t *testing.T) {
 	u3 := registerUser(t, ts, "facts3@test.local", "Facts Three")
 	court := createTestCourt(t, ts, u1.AccessToken, "Fact Court", ruckerLat, ruckerLng)
 
-	// Invalid fact and value are rejected.
 	resp := doJSON(t, ts, http.MethodPost, "/courts/"+court.ID+"/facts", u1.AccessToken, map[string]any{
 		"fact": "vibes", "value": "immaculate",
 	})
@@ -119,7 +118,6 @@ func TestCourtFactConfirmations(t *testing.T) {
 		t.Fatalf("off-bucket hoop_count: status %d, want 400", resp.StatusCode)
 	}
 	resp.Body.Close()
-	// A boolean amenity fact converts to the column type.
 	resp = doJSON(t, ts, http.MethodPost, "/courts/"+court.ID+"/facts", u1.AccessToken, map[string]any{
 		"fact": "covered", "value": "yes",
 	})

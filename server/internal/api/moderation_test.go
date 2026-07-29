@@ -113,7 +113,6 @@ func TestAdminFlagAndModerationFlow(t *testing.T) {
 	}
 	flagID := flags.Flags[0].ID
 
-	// Reject the flagged court.
 	resp = doJSON(t, ts, http.MethodPost, "/admin/courts/"+court.ID+"/status", admin.AccessToken, map[string]string{
 		"status": "rejected",
 	})
@@ -127,7 +126,6 @@ func TestAdminFlagAndModerationFlow(t *testing.T) {
 		t.Errorf("court status = %q, want rejected", got.Status)
 	}
 
-	// Bad status values are rejected.
 	resp = doJSON(t, ts, http.MethodPost, "/admin/courts/"+court.ID+"/status", admin.AccessToken, map[string]string{
 		"status": "banned",
 	})
@@ -136,7 +134,6 @@ func TestAdminFlagAndModerationFlow(t *testing.T) {
 	}
 	resp.Body.Close()
 
-	// Resolve the flag; it must drop off the open queue.
 	resp = doJSON(t, ts, http.MethodPost, "/admin/flags/"+flagID+"/resolve", admin.AccessToken, nil)
 	if resp.StatusCode != http.StatusNoContent {
 		t.Fatalf("resolve flag: status %d", resp.StatusCode)
@@ -154,7 +151,6 @@ func TestAdminFlagAndModerationFlow(t *testing.T) {
 		t.Fatalf("flags after resolve = %+v, want none", flags.Flags)
 	}
 
-	// Photo moderation: upload then remove.
 	resp = doJSON(t, ts, http.MethodPost, "/courts/"+court.ID+"/photos", reporter.AccessToken, map[string]any{})
 	photo := decodeJSON[struct {
 		Photo struct {
@@ -223,7 +219,6 @@ func TestAdminHideExternalPhoto(t *testing.T) {
 	}
 	photoID := ids[0]
 
-	// A non-admin cannot hide it.
 	resp := doJSON(t, ts, http.MethodPost, "/admin/external-photos/"+photoID+"/status", owner.AccessToken, map[string]string{
 		"status": "hidden",
 	})
@@ -232,7 +227,6 @@ func TestAdminHideExternalPhoto(t *testing.T) {
 	}
 	resp.Body.Close()
 
-	// Invalid status is rejected.
 	resp = doJSON(t, ts, http.MethodPost, "/admin/external-photos/"+photoID+"/status", admin.AccessToken, map[string]string{
 		"status": "removed",
 	})
@@ -241,7 +235,6 @@ func TestAdminHideExternalPhoto(t *testing.T) {
 	}
 	resp.Body.Close()
 
-	// Admin hides it; it drops out of the listing.
 	resp = doJSON(t, ts, http.MethodPost, "/admin/external-photos/"+photoID+"/status", admin.AccessToken, map[string]string{
 		"status": "hidden",
 	})
@@ -270,7 +263,6 @@ func TestAdminHideExternalPhoto(t *testing.T) {
 		t.Fatalf("deletion queue = %v, want to contain %q", keys, wantKey)
 	}
 
-	// Unknown id is a 404.
 	resp = doJSON(t, ts, http.MethodPost, "/admin/external-photos/"+uuid.NewString()+"/status", admin.AccessToken, map[string]string{
 		"status": "hidden",
 	})
@@ -311,7 +303,6 @@ func TestInternalResolveExternalPhoto(t *testing.T) {
 			map[string]string{"source": source, "source_id": id}, secret)
 	}
 
-	// A visible photo resolves to its upstream URL.
 	resp := resolve("mapillary", sourceID)
 	got := decodeJSON[struct {
 		ImageURL string `json:"image_url"`
@@ -329,7 +320,6 @@ func TestInternalResolveExternalPhoto(t *testing.T) {
 	}
 	resp.Body.Close()
 
-	// A bad source or non-numeric id is a 400.
 	for _, bad := range []struct{ source, id string }{
 		{"flickr", sourceID}, {"mapillary", "not-a-number"}, {"mapillary", ""},
 	} {
@@ -340,7 +330,6 @@ func TestInternalResolveExternalPhoto(t *testing.T) {
 		resp.Body.Close()
 	}
 
-	// An unknown photo is a 404.
 	resp = resolve("commons", "999")
 	if resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("resolve unknown: status %d, want 404", resp.StatusCode)
@@ -382,7 +371,6 @@ func TestAdminPromoteDemoteAndLastAdminGuard(t *testing.T) {
 	bootstrapAdmin(t, st, first.User.ID)
 	regular := registerUser(t, ts, "promotable@test.local", "Promotable Pat")
 
-	// Search finds the user by name and by email.
 	resp := doJSON(t, ts, http.MethodGet, "/admin/users?q=Promotable", first.AccessToken, nil)
 	found := decodeJSON[struct {
 		Users []struct {
@@ -394,7 +382,6 @@ func TestAdminPromoteDemoteAndLastAdminGuard(t *testing.T) {
 		t.Fatalf("search result = %+v, want one non-admin match", found.Users)
 	}
 
-	// Promote them.
 	resp = doJSON(t, ts, http.MethodPost, "/admin/users/"+regular.User.ID+"/admin", first.AccessToken, map[string]bool{
 		"is_admin": true,
 	})
@@ -413,7 +400,6 @@ func TestAdminPromoteDemoteAndLastAdminGuard(t *testing.T) {
 	}
 	resp.Body.Close()
 
-	// With two admins, demoting the first one is fine.
 	resp = doJSON(t, ts, http.MethodPost, "/admin/users/"+first.User.ID+"/admin", regular.AccessToken, map[string]bool{
 		"is_admin": false,
 	})
@@ -441,7 +427,6 @@ func TestAdminPromoteDemoteAndLastAdminGuard(t *testing.T) {
 	}
 	resp.Body.Close()
 
-	// The demoted first admin can no longer reach admin routes.
 	resp = doJSON(t, ts, http.MethodGet, "/admin/flags", first.AccessToken, nil)
 	if resp.StatusCode != http.StatusForbidden {
 		t.Fatalf("demoted user hitting admin route: status %d, want 403", resp.StatusCode)

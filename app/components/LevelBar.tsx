@@ -5,14 +5,10 @@ import { useTheme } from "@/lib/theme";
 import { levelProgressRatio, xpKindLabel, xpToNextLabel } from "@/lib/levels";
 import type { MeStats } from "@/lib/types";
 
-// Level, tier, and progress to the next level (phase 20). Reads from
-// /me/stats; renders a neutral zero-state before stats land rather than
-// flashing a wrong level.
-//
-// Phase 21: the header row expands to show what actually earned the recent
-// XP. Collapsed by default — the player card is already dense, and the
-// breakdown answers a question ("why is my bar here?") that's only asked
-// occasionally.
+// Level, tier, and progress to the next level, from /me/stats. Renders a
+// neutral zero-state before stats land rather than flashing a wrong level.
+// The header row expands to show the recent XP breakdown, collapsed by
+// default.
 export function LevelBar({ stats }: { stats: MeStats | undefined }) {
   const t = useTheme();
   const [expanded, setExpanded] = useState(false);

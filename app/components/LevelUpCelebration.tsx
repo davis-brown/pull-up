@@ -3,17 +3,12 @@ import { Modal, StyleSheet, Text, View } from "react-native";
 import { Button } from "@/components/ui";
 import { useTheme } from "@/lib/theme";
 
-// The in-app half of levelling up (phase 21). Until now a crossing only
-// produced a push, so a player levelling with the app open saw nothing.
+// The in-app half of levelling up. Mounted on the profile screen, where the
+// level-up push deep-links to.
 //
-// Mounted on the profile screen rather than globally: the level-up push
-// deep-links to view_profile, so this is where a player arrives expecting
-// it, and keeping it off the map home avoids competing for a slot in the
-// map's overlay layout.
-// tier comes from /me/stats rather than being recomputed here: the tier
-// table lives in internal/api/xp.go, and MarkLevelUpPending stores the
-// highest unseen level, which is always the player's current level — so
-// the stats tier is the right label for the level being celebrated.
+// tier comes from /me/stats rather than being recomputed: the tier table
+// lives in internal/api/xp.go, and MarkLevelUpPending stores the highest
+// unseen level, which is always the player's current one.
 export function LevelUpCelebration({
   level,
   tier,

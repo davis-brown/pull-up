@@ -48,13 +48,10 @@ func (s *Server) handleInternalDrain(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, "drain stale pending uploads", err)
 		return
 	}
-	// Streak nudges (phase 20) ride this same cron rather than adding
-	// scheduling infrastructure. Self-limiting: each pass only touches
-	// players whose local clock is in the evening window, and each player
-	// is gated to one nudge per 6 days.
+	// Self-limiting: each pass only touches players whose local clock is in
+	// the evening window, and each is gated to one nudge per 6 days.
 	nudges := s.runStreakNudges(ctx)
-	// Unconfirmed games (phase 18) simply stop existing after 48h — a
-	// contested pickup result doesn't go to arbitration.
+	// Unconfirmed games simply stop existing after 48h.
 	expiredGames, err := s.store.Queries.ExpireUnconfirmedGames(ctx)
 	if err != nil {
 		s.log.Error("expire unconfirmed games", "err", err)
@@ -155,13 +152,10 @@ func (s *Server) handleInternalMediaUploaded(w http.ResponseWriter, r *http.Requ
 			return
 		}
 	}
-	// Do not remove the pending-upload record here. Avatars are finalized later
-	// by PATCH /me, which claims the pending row via ClaimPendingUpload; deleting
-	// it now (this call fires during the upload PUT, before the client's PATCH)
-	// would make that claim fail and break every avatar upload. Court photos never
-	// create a pending_uploads row, so there is nothing to remove for them either.
-	// Abandoned pending uploads are reaped by drainStalePendingUploads.
-	// Schedule cleanup of any future object that becomes orphaned at this key.
+	// Do NOT remove the pending-upload record here. This fires during the
+	// upload PUT, before the client's PATCH /me claims the row via
+	// ClaimPendingUpload; deleting it now breaks every avatar upload.
+	// Abandoned rows are reaped by drainStalePendingUploads instead.
 	if err := q.ScheduleUploadedObjectCleanup(r.Context(), req.Key); err != nil {
 		s.internalError(w, "schedule abandoned upload cleanup", err)
 		return
@@ -237,16 +231,15 @@ type resolveExternalPhotoRequest struct {
 	SourceID string `json:"source_id"`
 }
 
-// externalSourceID matches the numeric ids both auto-photo sources produce:
-// Commons pageids and Mapillary image ids. Bounding the shape here keeps a
-// caller from probing arbitrary rows and mirrors the Worker's key regex.
+// externalSourceID matches the numeric ids both auto-photo sources produce.
+// Bounding the shape stops a caller probing arbitrary rows, and mirrors the
+// Worker's key regex.
 var externalSourceID = regexp.MustCompile(`^[0-9]{1,20}$`)
 
-// handleInternalResolveExternalPhoto backs the Worker's read-through R2 cache
-// for auto-fetched Commons/Mapillary photos: it returns the upstream image URL
-// for a (source, source_id) pair, but only while the row is visible. A hidden
-// or unknown photo returns 404, so admin moderation takes effect on the next
-// read regardless of what the Worker already cached.
+// handleInternalResolveExternalPhoto backs the Worker's read-through R2 cache,
+// returning a photo's upstream URL only while the row is visible. A hidden or
+// unknown photo 404s, so moderation takes effect on the next read whatever the
+// Worker already cached.
 func (s *Server) handleInternalResolveExternalPhoto(w http.ResponseWriter, r *http.Request) {
 	var req resolveExternalPhotoRequest
 	if !readJSON(w, r, &req) {

@@ -1,5 +1,5 @@
-// Player-confirmable court conditions (Phase 14). Mirrors the server's fact
-// allowlist; boolean columns use "yes"/"no" in the confirmations ledger.
+// Player-confirmable court conditions. Mirrors the server's fact allowlist;
+// boolean columns use "yes"/"no" in the confirmations ledger.
 import { relativeSince } from "./relative-time";
 import type { CourtDetail, CourtFact } from "./types";
 
@@ -14,9 +14,8 @@ const YES_NO = [
   { key: "no", label: "No" },
 ];
 
-// The core playing facts, always shown in the conditions section. The rest
-// (amenities, policy) only appear when the court already has a value for them
-// or behind the "add more details" toggle, so the list stays scannable.
+// Always shown in the conditions section. The rest appear only when the
+// court has a value or behind the "add more details" toggle.
 export const CORE_FACTS = new Set(["rim_type", "net_type", "surface", "hoop_count", "lighting"]);
 
 // Ordered physical hardware → surface → amenities → policy. Mirrors the
@@ -51,8 +50,7 @@ export const COURT_FACTS: CourtFactDef[] = [
     ],
   },
   {
-    // A count, so it uses discrete buckets — an off-bucket court (e.g. 3 hoops)
-    // matches no chip until players correct it.
+    // Discrete buckets: an off-bucket court (e.g. 3 hoops) matches no chip.
     fact: "hoop_count",
     label: "Hoops",
     values: [

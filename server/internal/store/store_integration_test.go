@@ -13,17 +13,14 @@ import (
 	"github.com/davisbrown/pull-up/server/internal/store/gen"
 )
 
-// These tests exercise the PostGIS queries against a real database.
-// They are skipped unless TEST_DATABASE_URL points at a Postgres with
-// PostGIS available (e.g. the docker-compose db with a scratch database):
+// These tests exercise the PostGIS queries against a real database, and are
+// skipped unless TEST_DATABASE_URL points at a Postgres with PostGIS:
 //
 //	TEST_DATABASE_URL=postgres://pullup:pullup@localhost:5432/pullup_test?sslmode=disable go test ./internal/store/...
 //
-// The internal/api package's HTTP tests point at the same database and
-// truncate the same tables between tests. `go test ./...` runs different
-// packages' test binaries concurrently, so both packages take a Postgres
-// advisory lock (see testDBLockKey) around setup+truncate to keep one
-// package's reset from clobbering another package's in-flight test.
+// internal/api's tests truncate the same tables, and `go test ./...` runs
+// package binaries concurrently, so both take a Postgres advisory lock (see
+// testDBLockKey) around setup+truncate.
 
 const testDBLockKey = 0x7075_6c6c_7570 // "pullup" — arbitrary, just needs to match internal/api's
 
@@ -58,7 +55,6 @@ func testStore(t *testing.T) *store.Store {
 	if err := st.Migrate(ctx); err != nil {
 		t.Fatalf("migrate: %v", err)
 	}
-	// Isolate each run.
 	if _, err := st.Pool.Exec(ctx,
 		"TRUNCATE object_deletion_queue, users, refresh_tokens, courts, check_ins, crowd_reports, court_votes, court_photos, flags, seed_regions, sessions, session_rsvps, court_messages, follows, favorites, blocked_users, follow_requests CASCADE"); err != nil {
 		t.Fatalf("truncate: %v", err)
@@ -196,7 +192,6 @@ func TestCheckInFlow(t *testing.T) {
 	court := createCourt(t, st, "Court A", ruckerLat, ruckerLng, uid)
 	courtB := createCourt(t, st, "Court B", ruckerLat+0.05, ruckerLng, uid)
 
-	// Distance check: at the court vs ~5.5 km away.
 	d, err := st.Queries.CourtCheckInDistance(ctx, gen.CourtCheckInDistanceParams{
 		Lng: ruckerLng, Lat: ruckerLat, CourtID: court.ID,
 	})
@@ -269,7 +264,6 @@ func TestCheckInExpiryFiltering(t *testing.T) {
 	if err != nil {
 		t.Fatalf("check in: %v", err)
 	}
-	// Force the check-in into the past.
 	if _, err := st.Pool.Exec(ctx, "UPDATE check_ins SET expires_at = now() - interval '1 minute' WHERE id = $1", row.ID); err != nil {
 		t.Fatalf("expire: %v", err)
 	}
@@ -287,20 +281,16 @@ func TestCheckInExpiryFiltering(t *testing.T) {
 	}
 }
 
-// TestCourtHourlyCheckInHistoryOverlapsBuckets is the store-level regression
-// for the Gate-2 finding: a check-in must contribute its party_size to EVERY
-// local hour its active window [created_at, checked_out_at/expires_at)
-// overlaps, not just its start hour. A check-in starting at 10:30 and active
-// until 12:00 (90 minutes, tz_offset 0) must land in both the 10 and 11
-// o'clock buckets, and must not leak into 9 or 12.
+// TestCourtHourlyCheckInHistoryOverlapsBuckets: a check-in must contribute
+// its party_size to EVERY local hour its active window overlaps, not just its
+// start hour.
 func TestCourtHourlyCheckInHistoryOverlapsBuckets(t *testing.T) {
 	st := testStore(t)
 	ctx := context.Background()
 	uid := createUser(t, st, "overlap@test.local")
 	court := createCourt(t, st, "Overlap Court", ruckerLat, ruckerLng, uid)
 
-	// Anchor to today (comfortably inside the trailing 56-day window) at a
-	// fixed UTC hour that can't wrap past midnight, so dow is unambiguous.
+	// A fixed UTC hour that can't wrap past midnight, so dow is unambiguous.
 	today := time.Now().UTC().Truncate(24 * time.Hour)
 	createdAt := today.Add(10*time.Hour + 30*time.Minute)
 	expiresAt := createdAt.Add(90 * time.Minute) // 12:00 -> spans hours 10 and 11
@@ -380,7 +370,6 @@ func TestOSMUpsertIdempotent(t *testing.T) {
 		t.Fatalf("first upsert: %v", err)
 	}
 
-	// Simulate the court getting verified by the crowd, then a re-import.
 	if _, err := st.Queries.PromoteCourtIfPending(ctx, first.ID); err != nil {
 		t.Fatalf("promote: %v", err)
 	}
@@ -415,7 +404,6 @@ func TestSeedTileClaimSemantics(t *testing.T) {
 	if _, err := st.Queries.ClaimSeedTile(ctx, params); err != nil {
 		t.Fatalf("first claim: %v", err)
 	}
-	// Second claim while importing (fresh) must lose.
 	if _, err := st.Queries.ClaimSeedTile(ctx, params); err != pgx.ErrNoRows {
 		t.Fatalf("concurrent claim should return ErrNoRows, got %v", err)
 	}
@@ -499,7 +487,6 @@ func TestPhase3Sessions(t *testing.T) {
 		t.Fatalf("want 1 session, 2 going, viewer going; got %+v", rows)
 	}
 
-	// Flipping to out drops the count; anonymous viewers see no my_rsvp.
 	if err := st.Queries.UpsertRSVP(ctx, gen.UpsertRSVPParams{
 		SessionID: sess.ID, UserID: joiner, Status: "out",
 	}); err != nil {
@@ -555,7 +542,6 @@ func TestPhase3ChatAndModeration(t *testing.T) {
 		t.Fatalf("list messages: %d rows, err=%v", len(rows), err)
 	}
 
-	// Hidden messages disappear from the list and reappear on unhide.
 	if n, err := st.Queries.SetMessageHidden(ctx, gen.SetMessageHiddenParams{ID: msg.ID, Hidden: true}); err != nil || n != 1 {
 		t.Fatalf("hide: n=%d err=%v", n, err)
 	}
@@ -792,7 +778,6 @@ func TestFeedFriendsHere(t *testing.T) {
 	stranger := createUser(t, st, "feed-stranger@test.local")
 	court := createCourt(t, st, "Feed Court", ruckerLat, ruckerLng, viewer)
 
-	// Mutual follow between viewer and friend; one-directional to stranger.
 	for _, p := range []gen.FollowParams{
 		{FollowerID: viewer, FolloweeID: friend},
 		{FollowerID: friend, FolloweeID: viewer},
@@ -892,7 +877,6 @@ func TestFollowRequestLifecycle(t *testing.T) {
 	if err != nil || !got {
 		t.Fatalf("IsFollowRequested = %v, %v; want true", got, err)
 	}
-	// No follow edge exists yet.
 	if f, _ := st.Queries.IsFollowing(ctx, gen.IsFollowingParams{FollowerID: requester, FolloweeID: target}); f {
 		t.Fatal("pending request must not create a follow edge")
 	}
@@ -934,7 +918,6 @@ func TestCourtFilters(t *testing.T) {
 	if len(rows) != 1 || rows[0].ID != lit.ID {
 		t.Fatalf("lit filter returned %d rows, want only Lit Court", len(rows))
 	}
-	// No filter → both courts.
 	all, _ := st.Queries.CourtsNearby(ctx, gen.CourtsNearbyParams{Lng: ruckerLng, Lat: ruckerLat, RadiusM: 5000})
 	if len(all) != 2 {
 		t.Errorf("no-filter returned %d, want 2", len(all))
@@ -945,7 +928,6 @@ func TestReseedAndCount(t *testing.T) {
 	st := testStore(t)
 	ctx := context.Background()
 
-	// Claim + mark one tile done.
 	if _, err := st.Queries.ClaimSeedTile(ctx, gen.ClaimSeedTileParams{TileX: 100, TileY: 100}); err != nil {
 		t.Fatalf("claim: %v", err)
 	}
@@ -990,7 +972,6 @@ func TestSeedTileQueue(t *testing.T) {
 			t.Fatalf("enqueue %d: %v", i, err)
 		}
 	}
-	// Claim returns the pending tile.
 	row, err := st.Queries.ClaimNextSeedTile(ctx)
 	if err != nil || row.TileX != 5 || row.TileY != 7 {
 		t.Fatalf("claim next = %+v, %v; want tile (5,7)", row, err)
@@ -1014,7 +995,6 @@ func TestEnrichmentQueue(t *testing.T) {
 	uid := createUser(t, st, "enrichq@test.local")
 	c := createCourt(t, st, "Enrich Court", ruckerLat, ruckerLng, uid)
 
-	// Not requested yet → nothing to claim.
 	if _, err := st.Queries.ClaimNextCourtEnrichment(ctx); err == nil {
 		t.Error("no court requested yet, claim should be empty")
 	}
@@ -1042,7 +1022,6 @@ func TestSetCourtAttributesIfNull(t *testing.T) {
 	ctx := context.Background()
 	uid := createUser(t, st, "attrs@test.local")
 
-	// A court that already knows its surface but nothing else.
 	existing := "asphalt"
 	c, err := st.Queries.CreateCourt(ctx, gen.CreateCourtParams{
 		Name: "Attr Court", Lng: ruckerLng, Lat: ruckerLat,

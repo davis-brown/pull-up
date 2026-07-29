@@ -9,26 +9,20 @@ import (
 	"github.com/davisbrown/pull-up/server/internal/store/gen"
 )
 
-// The streak nudge (phase 20) is the app's only unprompted "come play"
-// notification, and it is deliberately narrow. It fires on a fact the
-// player created themselves — a streak they built is about to lapse — not
-// on manufactured urgency, and only inside a window where acting on it is
-// still possible.
+// The streak nudge is the app's only unprompted "come play" notification. It
+// fires only on a streak the player built themselves, and only inside a
+// window where acting on it is still possible.
 const (
 	// nudgeMaxCandidatesPerRun bounds one cron tick's work.
 	nudgeMaxCandidatesPerRun = 200
-	// Local-time gate: evening, when someone could still go play, and late
-	// enough in the week that the streak is genuinely at risk. Weekday
-	// numbering is Go's (Sunday=0), and the streak week runs Monday-Sunday
-	// to match Postgres date_trunc('week', …).
+	// Local-time gate. Weekday numbering is Go's (Sunday=0); the streak week
+	// runs Monday-Sunday to match Postgres date_trunc('week', …).
 	nudgeHourStart = 17
 	nudgeHourEnd   = 21
 )
 
-// nudgeEligible reports whether a candidate's local time is inside the
-// nudge window: Thursday through Saturday evening. Sunday is excluded —
-// the streak lapses at midnight and a nudge that late reads as taunting
-// rather than helping.
+// nudgeEligible reports whether a candidate's local time is inside the nudge
+// window: Thursday through Saturday evening. Sunday is deliberately excluded.
 func nudgeEligible(localNow time.Time) bool {
 	switch localNow.Weekday() {
 	case time.Thursday, time.Friday, time.Saturday:
@@ -39,9 +33,7 @@ func nudgeEligible(localNow time.Time) bool {
 	return h >= nudgeHourStart && h < nudgeHourEnd
 }
 
-// streakNudgeBody renders the copy for a streak of n weeks. Kept honest:
-// it states the streak the player actually has and how long is left, with
-// no invented scarcity.
+// streakNudgeBody renders the copy for a streak of n weeks.
 func streakNudgeBody(streak int, daysLeft int) string {
 	unit := "days"
 	if daysLeft == 1 {
@@ -60,9 +52,8 @@ func daysLeftInStreakWeek(localNow time.Time) int {
 }
 
 // runStreakNudges is the cron pass: find players whose streak is alive but
-// unplayed this week, and nudge the ones for whom it's currently evening.
-// Called from the internal drain endpoint, so it inherits the 15-minute
-// Cloudflare cron without new infrastructure.
+// unplayed this week, and nudge the ones for whom it is currently evening.
+// Called from the internal drain endpoint on the 15-minute Cloudflare cron.
 func (s *Server) runStreakNudges(ctx context.Context) int {
 	candidates, err := s.store.Queries.ListStreakNudgeCandidates(ctx, nudgeMaxCandidatesPerRun)
 	if err != nil {
@@ -84,8 +75,7 @@ func (s *Server) runStreakNudges(ctx context.Context) int {
 			continue
 		}
 
-		// The exact streak length, from the same helper /me/stats uses, so
-		// the number in the push matches the number on their profile.
+		// Same helper /me/stats uses, so the push matches the profile.
 		weeks, err := s.store.Queries.UserCheckInWeeks(ctx, gen.UserCheckInWeeksParams{
 			UserID: c.UserID, TzOffsetMinutes: 0,
 		})
@@ -108,8 +98,8 @@ func (s *Server) runStreakNudges(ctx context.Context) int {
 		if err != nil || len(tokens) == 0 {
 			continue
 		}
-		// Mark before sending: a push that fails is not worth retrying
-		// into a double-notify, and the 6-day gate is the whole point.
+		// Mark before sending: a failed push must not retry into a
+		// double-notify.
 		if err := s.store.Queries.MarkPlayNudgeSent(ctx, c.UserID); err != nil {
 			s.log.Error("mark play nudge sent", "user", c.UserID, "err", err)
 			continue

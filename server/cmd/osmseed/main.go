@@ -4,13 +4,12 @@
 //	DATABASE_URL=... go run ./cmd/osmseed -bbox 30.19,-97.87,30.40,-97.65
 //
 // Imported courts are © OpenStreetMap contributors, licensed ODbL
-// (https://www.openstreetmap.org/copyright). They are stored with
-// source='osm' and their OSM ids so the derived subset stays separable and
-// re-runs are idempotent (upsert on osm_type+osm_id, never touching status).
+// (https://www.openstreetmap.org/copyright), stored with source='osm' and
+// their OSM ids so re-runs are idempotent (upsert on osm_type+osm_id, never
+// touching status).
 //
-// Overpass is a shared free service: this command sends one query per run,
-// with a descriptive User-Agent. For large imports (whole countries), use a
-// Geofabrik extract with osmium instead of hammering Overpass.
+// Overpass is a shared free service. For large imports use a Geofabrik
+// extract with osmium instead.
 package main
 
 import (

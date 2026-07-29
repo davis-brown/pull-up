@@ -5,24 +5,13 @@ import (
 	"time"
 )
 
-// Seasons (phase 22b) window XP so standing is re-competable: without them
-// a leaderboard just ranks tenure, and a player who joined in year two can
-// never catch someone who has been checking in since launch.
+// Seasons window XP so standing is re-competable. A season is a calendar
+// quarter in UTC — never per-user timezones, or a leaderboard's window would
+// depend on who was looking.
 //
-// A season is a calendar quarter in UTC. Quarters are long enough that a
-// casual player still registers on a board and short enough that a season
-// feels like a thing you can win. UTC (not per-user timezones) so every
-// player's season starts and ends at the same instant — a leaderboard whose
-// window depended on who was looking would rank people inconsistently.
-//
-// Nothing is stored. Season membership is derived from xp_events.created_at,
-// which means seasons applied retroactively to history that predates them,
-// and a season boundary needs no migration or backfill.
-//
-// The player's LIFETIME level is untouched by any of this. It stays their
-// identity — resetting a visible level every quarter would take away
-// something earned, which is the same mistake as decaying it. The season
-// tier sits alongside it as the thing that resets.
+// Nothing is stored: membership derives from xp_events.created_at, so a
+// season boundary needs no migration or backfill. Lifetime level is
+// untouched; only the season tier resets.
 
 // seasonBounds returns the half-open interval [start, end) of the calendar
 // quarter containing t.
@@ -39,9 +28,7 @@ func seasonQuarter(t time.Time) int {
 	return (int(t.UTC().Month())-1)/3 + 1
 }
 
-// seasonKey is the stable machine identifier, e.g. "2026-Q3". Sortable as a
-// string, which is why the quarter is zero-padded-by-construction rather
-// than free-form.
+// seasonKey is the stable machine identifier, e.g. "2026-Q3". String-sortable.
 func seasonKey(t time.Time) string {
 	return fmt.Sprintf("%d-Q%d", t.UTC().Year(), seasonQuarter(t))
 }
@@ -52,8 +39,7 @@ func seasonLabel(t time.Time) string {
 }
 
 // seasonInfo describes the season a payload is scoped to. Shared by
-// /me/stats and both leaderboards so a client never has to guess whether
-// two season-scoped numbers cover the same window.
+// /me/stats and both leaderboards.
 type seasonInfo struct {
 	Key       string    `json:"key"`
 	Label     string    `json:"label"`
