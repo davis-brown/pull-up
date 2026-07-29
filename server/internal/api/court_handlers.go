@@ -66,6 +66,12 @@ type courtSummary struct {
 	RimType *string `json:"rim_type"`
 	NetType *string `json:"net_type"`
 
+	// Pay-to-play detail. Amount is minor units paired with an ISO 4217 code;
+	// the client formats it. Note is free text ("drop-in", "$200/mo").
+	FeeAmountCents *int32  `json:"fee_amount_cents"`
+	FeeCurrency    *string `json:"fee_currency"`
+	FeeNote        *string `json:"fee_note"`
+
 	// Earliest non-canceled run in the next 24h (phase 17 pin badge).
 	NextRunAt *time.Time `json:"next_run_at"`
 }
@@ -84,8 +90,8 @@ func newLatestReport(playerCount *int16, runQuality *string, createdAt time.Time
 }
 
 // nextRunPtr undoes the SQL epoch sentinel: sqlc can't see that the lateral
-// join makes next_run_at nullable, so the query coalesces to 'epoch' and the
-// payload maps that back to null (same trick as latest_report_at).
+// join makes next_run_at nullable, so the query coalesces to 'epoch' and this
+// maps it back to null.
 func nextRunPtr(t time.Time) *time.Time {
 	if t.Unix() <= 0 {
 		return nil
@@ -138,9 +144,8 @@ type courtSearchRequest struct {
 	Lng   *float64 `json:"lng"`
 }
 
-// POST keeps precise location and viewport coordinates out of URLs, edge
-// access logs, browser history, and telemetry while reusing the validated
-// list implementation below.
+// POST keeps precise location out of URLs, access logs, and browser history
+// while reusing the validated list implementation below.
 func (s *Server) handleSearchCourts(w http.ResponseWriter, r *http.Request) {
 	var req courtSearchRequest
 	if !readJSON(w, r, &req) {
@@ -276,6 +281,7 @@ func (s *Server) handleListCourts(w http.ResponseWriter, r *http.Request) {
 			LatestReport:  newLatestReport(c.LatestPlayerCount, c.LatestRunQuality, c.LatestReportAt),
 			DrinkingWater: c.DrinkingWater, Toilets: c.Toilets, Parking: c.Parking, Fenced: c.Fenced,
 			Covered: c.Covered, Fee: c.Fee, Access: c.Access, RimType: c.RimType, NetType: c.NetType,
+			FeeAmountCents: c.FeeAmountCents, FeeCurrency: c.FeeCurrency, FeeNote: c.FeeNote,
 			NextRunAt: nextRunPtr(c.NextRunAt),
 		})
 	}
@@ -333,6 +339,7 @@ func (s *Server) listCourtsInBBox(w http.ResponseWriter, r *http.Request, bbox s
 			LatestReport:  newLatestReport(c.LatestPlayerCount, c.LatestRunQuality, c.LatestReportAt),
 			DrinkingWater: c.DrinkingWater, Toilets: c.Toilets, Parking: c.Parking, Fenced: c.Fenced,
 			Covered: c.Covered, Fee: c.Fee, Access: c.Access, RimType: c.RimType, NetType: c.NetType,
+			FeeAmountCents: c.FeeAmountCents, FeeCurrency: c.FeeCurrency, FeeNote: c.FeeNote,
 			NextRunAt: nextRunPtr(c.NextRunAt),
 		})
 	}
@@ -371,7 +378,80 @@ type createCourtRequest struct {
 	Surface          *string `json:"surface"`
 	Lighting         *bool   `json:"lighting"`
 	IsPublic         *bool   `json:"is_public"`
+	Access           *string `json:"access"`
+	Fee              *bool   `json:"fee"`
+	FeeAmountCents   *int32  `json:"fee_amount_cents"`
+	FeeCurrency      *string `json:"fee_currency"`
+	FeeNote          *string `json:"fee_note"`
 	IgnoreDuplicates bool    `json:"ignore_duplicates"`
+}
+
+// maxFeeAmountCents mirrors the courts_fee_amount_cents CHECK, so an
+// out-of-range price is a 400 rather than a constraint violation turned 500.
+const maxFeeAmountCents = 1_000_000
+
+// maxFeeNoteLen mirrors the fee_note CHECK.
+const maxFeeNoteLen = 80
+
+// normalizeFee validates the pay-to-play triple in place and returns a client
+// error message, or "" when the input is acceptable. Shared by create and
+// patch so both reject the same shapes the courts table would.
+//
+// It also applies the fee implication: a price is itself an assertion that the
+// court charges, so an amount with no explicit fee flag sets fee=true. The
+// reverse is never inferred — fee=false with an amount is a contradiction the
+// caller has to resolve.
+//
+// existingCurrency is the court's stored fee_currency (nil on create). A patch
+// that sets only an amount is valid when the court already has a currency,
+// since the UPDATE coalesces the unset column and the CHECK still holds.
+func normalizeFee(fee **bool, amount **int32, currency **string, note **string, existingCurrency *string) string {
+	if *note != nil {
+		trimmed := strings.TrimSpace(**note)
+		if len(trimmed) > maxFeeNoteLen {
+			return fmt.Sprintf("fee_note must be %d characters or fewer", maxFeeNoteLen)
+		}
+		if trimmed == "" {
+			*note = nil
+		} else {
+			*note = &trimmed
+		}
+	}
+	if *currency != nil {
+		code := strings.ToUpper(strings.TrimSpace(**currency))
+		if !isCurrencyCode(code) {
+			return "fee_currency must be a 3-letter ISO 4217 code"
+		}
+		*currency = &code
+	}
+	if *amount != nil {
+		if **amount < 0 || **amount > maxFeeAmountCents {
+			return fmt.Sprintf("fee_amount_cents must be between 0 and %d", maxFeeAmountCents)
+		}
+		if *currency == nil && existingCurrency == nil {
+			return "fee_currency is required when fee_amount_cents is set"
+		}
+		if *fee != nil && !**fee {
+			return "fee_amount_cents cannot be set when fee is false"
+		}
+		if *fee == nil {
+			charged := true
+			*fee = &charged
+		}
+	}
+	return ""
+}
+
+func isCurrencyCode(v string) bool {
+	if len(v) != 3 {
+		return false
+	}
+	for _, r := range v {
+		if r < 'A' || r > 'Z' {
+			return false
+		}
+	}
+	return true
 }
 
 func (s *Server) handleCreateCourt(w http.ResponseWriter, r *http.Request) {
@@ -396,6 +476,14 @@ func (s *Server) handleCreateCourt(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "hoop_count must be between 1 and 50")
 		return
 	}
+	if req.Access != nil && !validAccess(*req.Access) {
+		writeError(w, http.StatusBadRequest, "access must be one of public, private, customers")
+		return
+	}
+	if msg := normalizeFee(&req.Fee, &req.FeeAmountCents, &req.FeeCurrency, &req.FeeNote, nil); msg != "" {
+		writeError(w, http.StatusBadRequest, msg)
+		return
+	}
 
 	if !req.IgnoreDuplicates {
 		dupes, err := s.store.Queries.FindNearbyCourts(r.Context(), gen.FindNearbyCourtsParams{
@@ -417,12 +505,19 @@ func (s *Server) handleCreateCourt(w http.ResponseWriter, r *http.Request) {
 	isPublic := true
 	if req.IsPublic != nil {
 		isPublic = *req.IsPublic
+	} else if req.Access != nil && *req.Access != "public" {
+		// is_public is the coarse legacy flag and access is the specific one;
+		// leaving them contradictory ("public" but access=private) would be a
+		// data bug, so an unstated is_public follows access.
+		isPublic = false
 	}
 	uid := userID(r)
 	court, err := s.store.Queries.CreateCourt(r.Context(), gen.CreateCourtParams{
 		Name: req.Name, Lng: req.Lng, Lat: req.Lat,
 		Address: req.Address, HoopCount: req.HoopCount, Indoor: req.Indoor,
 		Surface: req.Surface, Lighting: req.Lighting, IsPublic: isPublic,
+		Access: req.Access, Fee: req.Fee, FeeAmountCents: req.FeeAmountCents,
+		FeeCurrency: req.FeeCurrency, FeeNote: req.FeeNote,
 		SubmittedBy: &uid,
 	})
 	if err != nil {
@@ -519,8 +614,8 @@ func (s *Server) handleCreateFlag(w http.ResponseWriter, r *http.Request) {
 	switch req.EntityType {
 	case "court", "photo", "report", "message", "session", "user":
 	case "feedback":
-		// App feedback has no separate target; it is recorded against the
-		// reporting user so entity_id stays meaningful in the admin queue.
+		// App feedback has no separate target, so it is recorded against the
+		// reporting user to keep entity_id meaningful.
 		req.EntityID = userID(r)
 	default:
 		writeError(w, http.StatusBadRequest, "entity_type must be court, photo, report, message, session, user, or feedback")
@@ -541,17 +636,20 @@ func (s *Server) handleCreateFlag(w http.ResponseWriter, r *http.Request) {
 }
 
 type patchAttributesRequest struct {
-	Surface       *string `json:"surface"`
-	Lighting      *bool   `json:"lighting"`
-	Indoor        *bool   `json:"indoor"`
-	Covered       *bool   `json:"covered"`
-	HoopCount     *int16  `json:"hoop_count"`
-	Access        *string `json:"access"`
-	Fee           *bool   `json:"fee"`
-	DrinkingWater *bool   `json:"drinking_water"`
-	Toilets       *bool   `json:"toilets"`
-	Parking       *bool   `json:"parking"`
-	Fenced        *bool   `json:"fenced"`
+	Surface        *string `json:"surface"`
+	Lighting       *bool   `json:"lighting"`
+	Indoor         *bool   `json:"indoor"`
+	Covered        *bool   `json:"covered"`
+	HoopCount      *int16  `json:"hoop_count"`
+	Access         *string `json:"access"`
+	Fee            *bool   `json:"fee"`
+	FeeAmountCents *int32  `json:"fee_amount_cents"`
+	FeeCurrency    *string `json:"fee_currency"`
+	FeeNote        *string `json:"fee_note"`
+	DrinkingWater  *bool   `json:"drinking_water"`
+	Toilets        *bool   `json:"toilets"`
+	Parking        *bool   `json:"parking"`
+	Fenced         *bool   `json:"fenced"`
 }
 
 var validAccesses = map[string]bool{"public": true, "private": true, "customers": true}
@@ -593,9 +691,16 @@ func (s *Server) handlePatchCourtAttributes(w http.ResponseWriter, r *http.Reque
 		s.internalError(w, "get court", err)
 		return
 	}
+	// Needs `current`: an amount-only edit is valid against a stored currency.
+	if msg := normalizeFee(&req.Fee, &req.FeeAmountCents, &req.FeeCurrency, &req.FeeNote,
+		current.FeeCurrency); msg != "" {
+		writeError(w, http.StatusBadRequest, msg)
+		return
+	}
 	if _, err := s.store.Queries.UpdateCourtAttributes(r.Context(), gen.UpdateCourtAttributesParams{
 		ID: courtID, Surface: req.Surface, Lighting: req.Lighting, Indoor: req.Indoor,
 		Covered: req.Covered, HoopCount: req.HoopCount, Access: req.Access, Fee: req.Fee,
+		FeeAmountCents: req.FeeAmountCents, FeeCurrency: req.FeeCurrency, FeeNote: req.FeeNote,
 		DrinkingWater: req.DrinkingWater, Toilets: req.Toilets, Parking: req.Parking, Fenced: req.Fenced,
 	}); err != nil {
 		s.internalError(w, "update attributes", err)
@@ -636,6 +741,12 @@ func (s *Server) logAttributeEdits(ctx context.Context, courtID, editorID uuid.U
 		}
 		return fmt.Sprint(*v)
 	}
+	int32Of := func(v *int32) string {
+		if v == nil {
+			return ""
+		}
+		return fmt.Sprint(*v)
+	}
 
 	if req.Surface != nil {
 		logField("surface", !strPtrEq(req.Surface, current.Surface), strOf(current.Surface), *req.Surface)
@@ -657,6 +768,18 @@ func (s *Server) logAttributeEdits(ctx context.Context, courtID, editorID uuid.U
 	}
 	if req.Fee != nil {
 		logField("fee", !boolPtrEq(req.Fee, current.Fee), boolOf(current.Fee), fmt.Sprint(*req.Fee))
+	}
+	if req.FeeAmountCents != nil {
+		logField("fee_amount_cents", !int32PtrEq(req.FeeAmountCents, current.FeeAmountCents),
+			int32Of(current.FeeAmountCents), fmt.Sprint(*req.FeeAmountCents))
+	}
+	if req.FeeCurrency != nil {
+		logField("fee_currency", !strPtrEq(req.FeeCurrency, current.FeeCurrency),
+			strOf(current.FeeCurrency), *req.FeeCurrency)
+	}
+	if req.FeeNote != nil {
+		logField("fee_note", !strPtrEq(req.FeeNote, current.FeeNote),
+			strOf(current.FeeNote), *req.FeeNote)
 	}
 	if req.DrinkingWater != nil {
 		logField("drinking_water", !boolPtrEq(req.DrinkingWater, current.DrinkingWater), boolOf(current.DrinkingWater), fmt.Sprint(*req.DrinkingWater))
@@ -687,6 +810,13 @@ func boolPtrEq(a, b *bool) bool {
 }
 
 func int16PtrEq(a, b *int16) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return *a == *b
+}
+
+func int32PtrEq(a, b *int32) bool {
 	if a == nil || b == nil {
 		return a == b
 	}

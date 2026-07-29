@@ -1,8 +1,7 @@
-// Package enrich lazily augments courts with data from free services:
-// a reverse-geocoded address from Nominatim and openly-licensed photos
-// from Wikimedia Commons. Both are shared community services, so a single
-// worker processes courts one at a time with courtesy delays. Claims are
-// leased so interrupted or transiently failed work can be retried.
+// Package enrich lazily augments courts with a reverse-geocoded address from
+// Nominatim and openly-licensed photos from Wikimedia Commons. Both are
+// shared community services, so a single worker processes courts one at a
+// time with courtesy delays. Claims are leased so failed work can be retried.
 package enrich
 
 import (
@@ -34,25 +33,19 @@ const (
 	courtesyDelay  = 1200 * time.Millisecond
 	requestTimeout = 15 * time.Second
 	maxPhotos      = 6
-	// Commons geosearch radius: tight enough that photos are plausibly of
-	// the court or its park, not the block over.
+	// Commons geosearch radius, in metres.
 	photoRadiusM = 200
 
-	// Mapillary: street-level imagery (CC BY-SA), queried by a bounding box
-	// around the court. Kept to a handful so a busy street doesn't bury the
-	// court's own photos.
+	// Mapillary street-level imagery (CC BY-SA), queried by bounding box.
 	mapillaryAttribution = "© Mapillary contributors (CC BY-SA)"
 	maxMapillaryPhotos   = 4
-	// Half-width of the query box. bbox() spans ±this, so ~80m yields a ~160m
-	// box — the largest that stays under Mapillary's per-query data limit even
-	// in the densest cities (a 300m box is refused there). Sparser areas just
-	// find fewer images in the smaller box.
+	// Half-width of the query box; bbox() spans ±this. ~80m is the largest
+	// that stays under Mapillary's per-query data limit in dense cities.
 	mapillaryRadiusM = 80
-	// Error code Mapillary returns when a bbox would scan too many images
-	// ("reduce the amount of data"); a smaller box can still succeed.
+	// Error code Mapillary returns when a bbox would scan too many images;
+	// a smaller box can still succeed.
 	mapillaryDataLimit = 1
-	// Throttle for the "Mapillary is down" alert: a bad token rejects every
-	// court, so paging on each would burn Sentry quota to say one thing.
+	// Throttle for the "Mapillary is down" alert.
 	mapillaryOutageInterval = 15 * time.Minute
 )
 
@@ -73,9 +66,9 @@ type Enricher struct {
 	mapillaryToken string
 	// mapillaryOutage throttles the Sentry alert for a rejecting Mapillary API.
 	mapillaryOutage throttle
-	// mu serializes enrichment so the in-process Run loop and a concurrent
-	// /internal/drain call never hit Nominatim/Commons/Overpass at once —
-	// the courtesy delays only space calls within a single serialized run.
+	// mu serializes enrichment so the Run loop and a concurrent
+	// /internal/drain never hit the upstream services at once; the courtesy
+	// delays only space calls within a single serialized run.
 	mu sync.Mutex
 }
 
@@ -96,10 +89,9 @@ func (t *throttle) allow(now time.Time, every time.Duration) bool {
 	return true
 }
 
-// mapillaryAPIError is an explicit rejection from the Graph API (bad/expired
-// token, quota, bad params) — distinct from a network blip or the data-limit
-// code, so callers can page on a persistent auth/quota problem while staying
-// quiet on transient failures.
+// mapillaryAPIError is an explicit rejection from the Graph API (bad token,
+// quota, bad params), distinct from a network blip or the data-limit code so
+// callers can page on the former and stay quiet on the latter.
 type mapillaryAPIError struct {
 	code    int
 	message string
@@ -110,9 +102,8 @@ func (e *mapillaryAPIError) Error() string {
 }
 
 // reportMapillaryOutage pages when Mapillary is configured but rejecting
-// requests (the same silent-failure class that once left the feature quietly
-// off). Throttled and fingerprinted so repeated rejections group into one
-// Sentry issue. No-op unless SENTRY_DSN was set at startup.
+// requests. Throttled and fingerprinted into one Sentry issue. No-op unless
+// SENTRY_DSN was set at startup.
 func (e *Enricher) reportMapillaryOutage(cause error) {
 	if !e.mapillaryOutage.allow(time.Now(), mapillaryOutageInterval) {
 		return
@@ -136,9 +127,8 @@ func New(queries *gen.Queries, log *slog.Logger, mapillaryToken string) *Enriche
 	}
 }
 
-// Request durably (and lazily) marks a viewed court for enrichment. The short
-// database write stays bound to the triggering HTTP request; no goroutine is
-// created per public read.
+// Request durably marks a viewed court for enrichment. The write stays bound
+// to the triggering HTTP request; no goroutine per public read.
 func (e *Enricher) Request(ctx context.Context, id uuid.UUID) {
 	if err := e.queries.RequestEnrichment(ctx, id); err != nil {
 		e.log.Error("request enrichment", "court", id, "err", err)
@@ -226,12 +216,10 @@ func (e *Enricher) enrichClaimed(ctx context.Context, claim gen.ClaimNextCourtEn
 		mphotos, err := e.mapillaryPhotos(ctx, claim.Lat, claim.Lng)
 		if err != nil {
 			// Best-effort: a Mapillary failure must not fail the court, or it
-			// retries forever re-hitting Nominatim/Commons/Overpass. Commons
-			// still carries the primary photo source.
+			// retries forever re-hitting the other providers.
 			e.log.Warn("mapillary search", "court", claim.ID, "err", err)
-			// A hard API rejection (bad/expired token, quota) is a silent
-			// outage — page on it, throttled. Transient network blips fall
-			// through as a plain warn.
+			// A hard API rejection is a silent outage — page on it. Transient
+			// blips fall through as a plain warn.
 			var apiErr *mapillaryAPIError
 			if errors.As(err, &apiErr) {
 				e.reportMapillaryOutage(err)
@@ -264,10 +252,8 @@ func (e *Enricher) enrichClaimed(ctx context.Context, claim gen.ClaimNextCourtEn
 		}
 	}
 
-	// Backfill court attributes (surface, lighting, hoops, …) from the court's
-	// own OSM tags, for OSM-sourced courts that have an element to look up.
-	// Best-effort like the photo sources: a transient Overpass failure logs but
-	// must not fail the court, or a nice-to-have would trap it in retry.
+	// Backfill court attributes from the court's own OSM tags. Best-effort:
+	// a transient Overpass failure must not fail the court.
 	attrsFilled := false
 	if claim.OsmType != nil && claim.OsmID != nil {
 		select {
@@ -304,34 +290,35 @@ func (e *Enricher) enrichClaimed(ctx context.Context, claim gen.ClaimNextCourtEn
 	}
 }
 
-// attributeParams maps a court's parsed OSM tags onto the SetIfNull params,
-// reporting whether any attribute is actually present. When nothing is set it
-// returns ok=false so the caller skips a no-op UPDATE. indoor is only ever
-// pushed as true (additive); a false OSM signal is left for ingest/crowd input.
+// attributeParams maps a court's parsed OSM tags onto the SetIfNull params.
+// Returns ok=false when nothing is set, so the caller skips a no-op UPDATE.
+// indoor is only ever pushed as true; a false OSM signal is left to ingest.
 func attributeParams(id uuid.UUID, c *osm.Court) (gen.SetCourtAttributesIfNullParams, bool) {
 	if c == nil {
 		return gen.SetCourtAttributesIfNullParams{}, false
 	}
 	p := gen.SetCourtAttributesIfNullParams{
-		ID:           id,
-		Surface:      c.Surface,
-		Lighting:     c.Lighting,
-		HoopCount:    c.HoopCount,
-		Covered:      c.Covered,
-		Access:       c.Access,
-		Fee:          c.Fee,
-		OpeningHours: c.OpeningHours,
-		Fenced:       c.Fenced,
-		Website:      c.Website,
-		Description:  c.Description,
+		ID:             id,
+		Surface:        c.Surface,
+		Lighting:       c.Lighting,
+		HoopCount:      c.HoopCount,
+		Covered:        c.Covered,
+		Access:         c.Access,
+		Fee:            c.Fee,
+		FeeAmountCents: c.FeeAmount,
+		FeeCurrency:    c.FeeCurrency,
+		OpeningHours:   c.OpeningHours,
+		Fenced:         c.Fenced,
+		Website:        c.Website,
+		Description:    c.Description,
 	}
 	if c.Indoor {
 		t := true
 		p.Indoor = &t
 	}
 	has := p.Surface != nil || p.Lighting != nil || p.HoopCount != nil || p.Covered != nil ||
-		p.Access != nil || p.Fee != nil || p.OpeningHours != nil || p.Fenced != nil ||
-		p.Website != nil || p.Description != nil || p.Indoor != nil
+		p.Access != nil || p.Fee != nil || p.FeeAmountCents != nil || p.OpeningHours != nil ||
+		p.Fenced != nil || p.Website != nil || p.Description != nil || p.Indoor != nil
 	return p, has
 }
 
@@ -351,8 +338,8 @@ func (e *Enricher) getJSON(ctx context.Context, rawURL string, dst any) error {
 	return e.doJSON(req, dst)
 }
 
-// doJSON executes an already-built request and decodes a JSON body, sharing
-// the status check and response-size cap across all providers.
+// doJSON executes a request and decodes a JSON body, sharing the status check
+// and response-size cap across all providers.
 func (e *Enricher) doJSON(req *http.Request, dst any) error {
 	resp, err := e.client.Do(req)
 	if err != nil {
@@ -463,11 +450,9 @@ type mapillaryResponse struct {
 	} `json:"error"`
 }
 
-// mapillaryPhotos returns up to maxMapillaryPhotos street-level images near the
-// court. Requires a configured token. Dense cities exceed Mapillary's per-query
-// data limit at the full radius, so it shrinks the box and retries once; if the
-// smaller box is still refused it returns no photos rather than an error, since
-// retrying will not help.
+// mapillaryPhotos returns up to maxMapillaryPhotos street-level images near
+// the court. Requires a configured token. On a data-limit refusal it shrinks
+// the box and retries once, then returns no photos rather than an error.
 func (e *Enricher) mapillaryPhotos(ctx context.Context, lat, lng float64) ([]mapillaryImage, error) {
 	for _, r := range []float64{mapillaryRadiusM, mapillaryRadiusM / 2} {
 		resp, err := e.mapillaryQuery(ctx, lat, lng, r)
