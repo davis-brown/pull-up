@@ -32,24 +32,27 @@ const BOOL_TOGGLES: Array<{ key: keyof CourtFilters; label: string }> = [
   { key: "fenced", label: "Fenced" },
 ];
 
+// The inverses of the two tri-state filters. They share `public`/`free` rather
+// than adding keys, so selecting "Paid" clears "Free" for free — one key
+// cannot hold both — and the query string stays a single parameter.
+const INVERSE_TOGGLES: Array<{ key: "public" | "free"; label: string }> = [
+  { key: "free", label: "Paid" },
+  { key: "public", label: "Private" },
+];
+
 const SURFACES: Array<{ value: Surface; label: string }> = [
   { value: "concrete", label: "Concrete" },
   { value: "asphalt", label: "Asphalt" },
   { value: "hardwood", label: "Hardwood" },
 ];
 
-// Modal filter sheet: quick presets (canned filter bundles) plus individual
-// chips for fine-tuning. Presets just set the draft wholesale — chips stay
-// editable afterward, and editing them off a preset's exact bundle clears
-// its highlight (see `activePreset`). The count on the CTA is computed
-// client-side over the already-loaded viewport courts against the DRAFT
-// state. That loaded court set is itself already server-filtered by the
-// COMMITTED filters (not the draft) — so broadening the draft (e.g.
-// clearing a toggle the committed filters had set) can undercount, since
-// courts the wider draft would match were never fetched; the count is only
-// accurate again once Apply commits the draft and the server-filtered
-// refetch completes. Apply commits the draft to the real filters
-// (triggering that refetch) and closes.
+// Modal filter sheet: quick presets plus individual chips for fine-tuning.
+//
+// The CTA count is computed client-side over the already-loaded viewport
+// courts against the DRAFT state. That set is server-filtered by the
+// COMMITTED filters, so BROADENING the draft can undercount — courts the
+// wider draft would match were never fetched. It is accurate again once
+// Apply commits and the refetch completes.
 export function FilterSheet({
   visible,
   filters,
@@ -66,9 +69,8 @@ export function FilterSheet({
   const t = useTheme();
   const [draft, setDraft] = useState<CourtFilters>(filters);
 
-  // Re-seed the draft from the committed filters every time the sheet opens
-  // so a stale in-progress edit from a previous open (dismissed without
-  // Apply) never leaks into the next one.
+  // Re-seed the draft on every open, so an edit dismissed without Apply
+  // never leaks into the next one.
   useEffect(() => {
     if (visible) setDraft(filters);
   }, [visible, filters]);
@@ -78,6 +80,12 @@ export function FilterSheet({
 
   const toggle = (key: keyof CourtFilters) => {
     setDraft((d) => ({ ...d, [key]: d[key] ? undefined : true }));
+  };
+
+  // Sets the key to false rather than true, so "Paid"/"Private" select the
+  // inverse of their positive chip instead of an unrelated filter.
+  const toggleInverse = (key: "public" | "free") => {
+    setDraft((d) => ({ ...d, [key]: d[key] === false ? undefined : false }));
   };
 
   const setMinHoops = (value: 2 | 4) => {
@@ -202,8 +210,16 @@ export function FilterSheet({
                 <Chip
                   key={key}
                   label={label}
-                  selected={!!draft[key]}
+                  selected={draft[key] === true}
                   onPress={() => toggle(key)}
+                />
+              ))}
+              {INVERSE_TOGGLES.map(({ key, label }) => (
+                <Chip
+                  key={`not_${key}`}
+                  label={label}
+                  selected={draft[key] === false}
+                  onPress={() => toggleInverse(key)}
                 />
               ))}
               <Chip

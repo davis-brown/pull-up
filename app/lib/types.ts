@@ -16,18 +16,17 @@ export interface User {
   skill_level: string | null;
   availability: string[];
   xp: number;
-  // Optional: only the /me and PATCH /me responses carry it (login/register
-  // payloads predate phase 16 and are left untouched).
+  // Only the /me and PATCH /me responses carry it.
   window_alerts_enabled?: boolean;
   play_nudges_enabled?: boolean;
 }
 
-// /me/stats (Task 6): the player card's stats, badges, and home courts.
+// /me/stats: the player card's stats, badges, and home courts.
 export interface MeStatsBadge {
   id: string;
   earned: boolean;
-  // Phase 21b: when the badge was first observed. Null for unearned
-  // badges, and for earned ones recorded before earn dates were tracked.
+  // When the badge was first observed. Null for unearned badges, and for
+  // earned ones recorded before earn dates were tracked.
   earned_at: string | null;
 }
 
@@ -44,30 +43,27 @@ export interface MeStats {
   week_streak: number;
   badges: MeStatsBadge[];
   home_courts: MeStatsHomeCourt[];
-  // Phase 20: XP and level. xp_for_next_level is 0 at the level cap.
+  // xp_for_next_level is 0 at the level cap.
   level: number;
   tier: string;
   xp: number;
   xp_into_level: number;
   xp_for_next_level: number;
-  // Phase 18: W-L across confirmed games only.
+  // W-L across confirmed games only.
   wins: number;
   losses: number;
-  // Phase 21: recent XP grouped by award kind (last 30 days, highest
-  // first), and a level crossing not yet shown — null when there is
-  // nothing to celebrate.
+  // Recent XP by award kind (last 30 days, highest first), and a level
+  // crossing not yet shown (null when there is nothing to celebrate).
   xp_breakdown: MeStatsXPEntry[];
   level_up_pending: number | null;
-  // Phase 21b: badge ids earned since the app last showed them. Empty
-  // rather than null when there is nothing to celebrate.
+  // Badge ids earned since the app last showed them. Empty, never null.
   new_badges: string[];
-  // Phase 22b: this quarter's standing. level/tier above stay LIFETIME and
-  // never reset; this is the part that does.
+  // level/tier above stay LIFETIME and never reset; this is what does.
   season: SeasonStats;
 }
 
 // The window a season-scoped payload covers. Shared by /me/stats and both
-// leaderboards, so two season-scoped numbers can be trusted to line up.
+// leaderboards.
 export interface SeasonInfo {
   key: string;
   label: string;
@@ -88,7 +84,7 @@ export interface MeStatsXPEntry {
   events: number;
 }
 
-// A player in a recorded game (phase 18). team is 0 or 1.
+// A player in a recorded game. team is 0 or 1.
 export interface GamePlayer {
   user_id: string;
   display_name: string;
@@ -150,6 +146,10 @@ export interface CourtSummary {
   covered: boolean | null;
   fee: boolean | null;
   access: "public" | "private" | "customers" | null;
+  fee_amount_cents: number | null;
+  /** ISO 4217; pairs with fee_amount_cents, which is never set without it. */
+  fee_currency: string | null;
+  fee_note: string | null;
   source: "user" | "osm";
   status: CourtStatus;
   active_count: number;
@@ -183,8 +183,8 @@ export interface DiscoverySearchResults {
   area_search_unavailable: boolean;
 }
 
-// A single seeker row from GET /courts/{id}/run-intents (phase 19): the
-// app groups these flat rows into buckets via lib/run-intents.ts.
+// A seeker row from GET /courts/{id}/run-intents; grouped into buckets by
+// lib/run-intents.ts.
 export interface RunIntentSeeker {
   run_date: string;
   window_key: string;
@@ -194,8 +194,7 @@ export interface RunIntentSeeker {
   skill_level: string | null;
 }
 
-// A nearby upcoming run from GET /sessions/nearby (phase 17): public
-// discovery for the Activity tab's "Runs near you" rail.
+// A nearby upcoming run from GET /sessions/nearby.
 export interface NearbyRun {
   id: string;
   court_id: string;
@@ -221,6 +220,10 @@ export interface CourtDetail {
   is_public: boolean;
   access: "public" | "private" | "customers" | null;
   fee: boolean | null;
+  fee_amount_cents: number | null;
+  /** ISO 4217; pairs with fee_amount_cents, which is never set without it. */
+  fee_currency: string | null;
+  fee_note: string | null;
   covered: boolean | null;
   drinking_water: boolean | null;
   toilets: boolean | null;
@@ -250,8 +253,8 @@ export interface ExternalPhoto {
   id: string;
   source: "commons" | "mapillary";
   source_id: string;
-  // Upstream provider URL. Not rendered directly (Mapillary's is a signed URL
-  // that expires); build the cached URL with externalPhotoURL instead.
+  // Upstream provider URL. Never rendered directly — Mapillary's expires;
+  // build the cached URL with externalPhotoURL instead.
   image_url: string;
   page_url: string;
   attribution: string | null;
@@ -327,9 +330,8 @@ export interface FeedRun extends CourtSession {
   court_name: string;
 }
 
-// Compact view-model for a planned run, shown by the RunRow building block
-// (court detail + Task 14 desktop panel). `capacity` is optional — when
-// absent the row shows "N in" without a cap.
+// Compact view-model for a planned run, shown by RunRow. `capacity` is
+// optional; when absent the row shows "N in" without a cap.
 export interface SessionSummary {
   id: string;
   starts_at: string;
@@ -443,8 +445,8 @@ export interface FollowRequest {
   created_at: string;
 }
 
-// Phase 22: scoped leaderboards. score is check-ins on a court board and
-// XP on a circle board; metric says which, so one component renders both.
+// Scoped leaderboards. score is check-ins on a court board and XP on a
+// circle board; metric says which.
 export interface LeaderboardEntry {
   rank: number;
   user_id: string;

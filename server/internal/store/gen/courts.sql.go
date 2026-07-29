@@ -42,6 +42,7 @@ SELECT
     c.address, c.hoop_count, c.indoor, c.surface, c.lighting, c.is_public,
     c.drinking_water, c.toilets, c.parking, c.fenced,
     c.covered, c.fee, c.access,
+    c.fee_amount_cents, c.fee_currency, c.fee_note,
     c.rim_type, c.net_type,
     c.source, c.status,
     ac.active_count,
@@ -78,8 +79,16 @@ WHERE c.status <> 'rejected'
   AND ($5::bool   IS NULL OR c.indoor = $5)
   AND ($6::bool      IS NULL OR c.lighting = $6)
   AND ($7::bool IS NULL OR ($7 = false) OR c.hoop_count > 0)
-  AND ($8::bool   IS NULL OR ($8 = false) OR (c.is_public = true AND (c.access IS NULL OR c.access = 'public')))
-  AND ($9::bool     IS NULL OR ($9 = false) OR c.fee IS NULL OR c.fee = false)
+  -- public/free are tri-state: true keeps only open-to-all/no-charge courts,
+  -- false keeps only the restricted/pay-to-play ones, NULL is unfiltered.
+  -- Unknown (NULL) access and fee read as public and free respectively, so a
+  -- court with no data surfaces under ` + "`" + `true` + "`" + ` and is excluded by ` + "`" + `false` + "`" + `.
+  AND ($8::bool IS NULL
+       OR ($8 = true  AND c.is_public = true AND (c.access IS NULL OR c.access = 'public'))
+       OR ($8 = false AND (c.is_public = false OR c.access IN ('private','customers'))))
+  AND ($9::bool IS NULL
+       OR ($9 = true  AND (c.fee IS NULL OR c.fee = false))
+       OR ($9 = false AND c.fee = true))
   AND ($10::bool  IS NULL OR c.covered = $10)
   AND ($11::text  IS NULL OR c.surface = $11)
   AND ($12::bool    IS NULL OR ($12 = false) OR c.drinking_water = true)
@@ -127,6 +136,9 @@ type CourtsInBBoxRow struct {
 	Covered           *bool     `json:"covered"`
 	Fee               *bool     `json:"fee"`
 	Access            *string   `json:"access"`
+	FeeAmountCents    *int32    `json:"fee_amount_cents"`
+	FeeCurrency       *string   `json:"fee_currency"`
+	FeeNote           *string   `json:"fee_note"`
 	RimType           *string   `json:"rim_type"`
 	NetType           *string   `json:"net_type"`
 	Source            string    `json:"source"`
@@ -182,6 +194,9 @@ func (q *Queries) CourtsInBBox(ctx context.Context, arg CourtsInBBoxParams) ([]C
 			&i.Covered,
 			&i.Fee,
 			&i.Access,
+			&i.FeeAmountCents,
+			&i.FeeCurrency,
+			&i.FeeNote,
 			&i.RimType,
 			&i.NetType,
 			&i.Source,
@@ -210,6 +225,7 @@ SELECT
     c.address, c.hoop_count, c.indoor, c.surface, c.lighting, c.is_public,
     c.drinking_water, c.toilets, c.parking, c.fenced,
     c.covered, c.fee, c.access,
+    c.fee_amount_cents, c.fee_currency, c.fee_note,
     c.rim_type, c.net_type,
     c.source, c.status,
     ST_Distance(c.location, ST_SetSRID(ST_MakePoint($1::float8, $2::float8), 4326)::geography)::float8 AS distance_m,
@@ -245,8 +261,16 @@ WHERE c.status <> 'rejected'
   AND ($4::bool   IS NULL OR c.indoor = $4)
   AND ($5::bool      IS NULL OR c.lighting = $5)
   AND ($6::bool IS NULL OR ($6 = false) OR c.hoop_count > 0)
-  AND ($7::bool   IS NULL OR ($7 = false) OR (c.is_public = true AND (c.access IS NULL OR c.access = 'public')))
-  AND ($8::bool     IS NULL OR ($8 = false) OR c.fee IS NULL OR c.fee = false)
+  -- public/free are tri-state: true keeps only open-to-all/no-charge courts,
+  -- false keeps only the restricted/pay-to-play ones, NULL is unfiltered.
+  -- Unknown (NULL) access and fee read as public and free respectively, so a
+  -- court with no data surfaces under ` + "`" + `true` + "`" + ` and is excluded by ` + "`" + `false` + "`" + `.
+  AND ($7::bool IS NULL
+       OR ($7 = true  AND c.is_public = true AND (c.access IS NULL OR c.access = 'public'))
+       OR ($7 = false AND (c.is_public = false OR c.access IN ('private','customers'))))
+  AND ($8::bool IS NULL
+       OR ($8 = true  AND (c.fee IS NULL OR c.fee = false))
+       OR ($8 = false AND c.fee = true))
   AND ($9::bool  IS NULL OR c.covered = $9)
   AND ($10::text  IS NULL OR c.surface = $10)
   AND ($11::bool    IS NULL OR ($11 = false) OR c.drinking_water = true)
@@ -294,6 +318,9 @@ type CourtsNearbyRow struct {
 	Covered           *bool     `json:"covered"`
 	Fee               *bool     `json:"fee"`
 	Access            *string   `json:"access"`
+	FeeAmountCents    *int32    `json:"fee_amount_cents"`
+	FeeCurrency       *string   `json:"fee_currency"`
+	FeeNote           *string   `json:"fee_note"`
 	RimType           *string   `json:"rim_type"`
 	NetType           *string   `json:"net_type"`
 	Source            string    `json:"source"`
@@ -349,6 +376,9 @@ func (q *Queries) CourtsNearby(ctx context.Context, arg CourtsNearbyParams) ([]C
 			&i.Covered,
 			&i.Fee,
 			&i.Access,
+			&i.FeeAmountCents,
+			&i.FeeCurrency,
+			&i.FeeNote,
 			&i.RimType,
 			&i.NetType,
 			&i.Source,
@@ -371,45 +401,61 @@ func (q *Queries) CourtsNearby(ctx context.Context, arg CourtsNearbyParams) ([]C
 }
 
 const createCourt = `-- name: CreateCourt :one
-INSERT INTO courts (name, location, address, hoop_count, indoor, surface, lighting, is_public, source, status, submitted_by)
+INSERT INTO courts (name, location, address, hoop_count, indoor, surface, lighting, is_public,
+    access, fee, fee_amount_cents, fee_currency, fee_note,
+    source, status, submitted_by)
 VALUES (
     $1,
     ST_SetSRID(ST_MakePoint($2::float8, $3::float8), 4326)::geography,
     $4, $5, $6, $7, $8,
-    $9, 'user', 'pending', $10
+    $9,
+    $10, $11, $12, $13, $14,
+    'user', 'pending', $15
 )
 RETURNING id, name, ST_Y(location::geometry)::float8 AS lat, ST_X(location::geometry)::float8 AS lng,
-    address, hoop_count, indoor, surface, lighting, is_public, source, status, submitted_by, created_at
+    address, hoop_count, indoor, surface, lighting, is_public,
+    access, fee, fee_amount_cents, fee_currency, fee_note,
+    source, status, submitted_by, created_at
 `
 
 type CreateCourtParams struct {
-	Name        string     `json:"name"`
-	Lng         float64    `json:"lng"`
-	Lat         float64    `json:"lat"`
-	Address     *string    `json:"address"`
-	HoopCount   *int16     `json:"hoop_count"`
-	Indoor      bool       `json:"indoor"`
-	Surface     *string    `json:"surface"`
-	Lighting    *bool      `json:"lighting"`
-	IsPublic    bool       `json:"is_public"`
-	SubmittedBy *uuid.UUID `json:"submitted_by"`
+	Name           string     `json:"name"`
+	Lng            float64    `json:"lng"`
+	Lat            float64    `json:"lat"`
+	Address        *string    `json:"address"`
+	HoopCount      *int16     `json:"hoop_count"`
+	Indoor         bool       `json:"indoor"`
+	Surface        *string    `json:"surface"`
+	Lighting       *bool      `json:"lighting"`
+	IsPublic       bool       `json:"is_public"`
+	Access         *string    `json:"access"`
+	Fee            *bool      `json:"fee"`
+	FeeAmountCents *int32     `json:"fee_amount_cents"`
+	FeeCurrency    *string    `json:"fee_currency"`
+	FeeNote        *string    `json:"fee_note"`
+	SubmittedBy    *uuid.UUID `json:"submitted_by"`
 }
 
 type CreateCourtRow struct {
-	ID          uuid.UUID  `json:"id"`
-	Name        string     `json:"name"`
-	Lat         float64    `json:"lat"`
-	Lng         float64    `json:"lng"`
-	Address     *string    `json:"address"`
-	HoopCount   *int16     `json:"hoop_count"`
-	Indoor      bool       `json:"indoor"`
-	Surface     *string    `json:"surface"`
-	Lighting    *bool      `json:"lighting"`
-	IsPublic    bool       `json:"is_public"`
-	Source      string     `json:"source"`
-	Status      string     `json:"status"`
-	SubmittedBy *uuid.UUID `json:"submitted_by"`
-	CreatedAt   time.Time  `json:"created_at"`
+	ID             uuid.UUID  `json:"id"`
+	Name           string     `json:"name"`
+	Lat            float64    `json:"lat"`
+	Lng            float64    `json:"lng"`
+	Address        *string    `json:"address"`
+	HoopCount      *int16     `json:"hoop_count"`
+	Indoor         bool       `json:"indoor"`
+	Surface        *string    `json:"surface"`
+	Lighting       *bool      `json:"lighting"`
+	IsPublic       bool       `json:"is_public"`
+	Access         *string    `json:"access"`
+	Fee            *bool      `json:"fee"`
+	FeeAmountCents *int32     `json:"fee_amount_cents"`
+	FeeCurrency    *string    `json:"fee_currency"`
+	FeeNote        *string    `json:"fee_note"`
+	Source         string     `json:"source"`
+	Status         string     `json:"status"`
+	SubmittedBy    *uuid.UUID `json:"submitted_by"`
+	CreatedAt      time.Time  `json:"created_at"`
 }
 
 func (q *Queries) CreateCourt(ctx context.Context, arg CreateCourtParams) (CreateCourtRow, error) {
@@ -423,6 +469,11 @@ func (q *Queries) CreateCourt(ctx context.Context, arg CreateCourtParams) (Creat
 		arg.Surface,
 		arg.Lighting,
 		arg.IsPublic,
+		arg.Access,
+		arg.Fee,
+		arg.FeeAmountCents,
+		arg.FeeCurrency,
+		arg.FeeNote,
 		arg.SubmittedBy,
 	)
 	var i CreateCourtRow
@@ -437,6 +488,11 @@ func (q *Queries) CreateCourt(ctx context.Context, arg CreateCourtParams) (Creat
 		&i.Surface,
 		&i.Lighting,
 		&i.IsPublic,
+		&i.Access,
+		&i.Fee,
+		&i.FeeAmountCents,
+		&i.FeeCurrency,
+		&i.FeeNote,
 		&i.Source,
 		&i.Status,
 		&i.SubmittedBy,
@@ -531,6 +587,7 @@ SELECT
     c.address, c.hoop_count, c.indoor, c.surface, c.lighting, c.is_public,
     c.drinking_water, c.toilets, c.parking, c.fenced,
     c.access, c.fee, c.covered, c.rim_type, c.net_type,
+    c.fee_amount_cents, c.fee_currency, c.fee_note,
     c.opening_hours, c.website, c.description,
     c.source, c.osm_type, c.osm_id, c.status, c.submitted_by, c.created_at,
     c.enriched_at,
@@ -551,37 +608,40 @@ WHERE c.id = $1
 `
 
 type GetCourtRow struct {
-	ID            uuid.UUID  `json:"id"`
-	Name          string     `json:"name"`
-	Lat           float64    `json:"lat"`
-	Lng           float64    `json:"lng"`
-	Address       *string    `json:"address"`
-	HoopCount     *int16     `json:"hoop_count"`
-	Indoor        bool       `json:"indoor"`
-	Surface       *string    `json:"surface"`
-	Lighting      *bool      `json:"lighting"`
-	IsPublic      bool       `json:"is_public"`
-	DrinkingWater *bool      `json:"drinking_water"`
-	Toilets       *bool      `json:"toilets"`
-	Parking       *bool      `json:"parking"`
-	Fenced        *bool      `json:"fenced"`
-	Access        *string    `json:"access"`
-	Fee           *bool      `json:"fee"`
-	Covered       *bool      `json:"covered"`
-	RimType       *string    `json:"rim_type"`
-	NetType       *string    `json:"net_type"`
-	OpeningHours  *string    `json:"opening_hours"`
-	Website       *string    `json:"website"`
-	Description   *string    `json:"description"`
-	Source        string     `json:"source"`
-	OsmType       *string    `json:"osm_type"`
-	OsmID         *int64     `json:"osm_id"`
-	Status        string     `json:"status"`
-	SubmittedBy   *uuid.UUID `json:"submitted_by"`
-	CreatedAt     time.Time  `json:"created_at"`
-	EnrichedAt    *time.Time `json:"enriched_at"`
-	ActiveCount   int32      `json:"active_count"`
-	NetVotes      int32      `json:"net_votes"`
+	ID             uuid.UUID  `json:"id"`
+	Name           string     `json:"name"`
+	Lat            float64    `json:"lat"`
+	Lng            float64    `json:"lng"`
+	Address        *string    `json:"address"`
+	HoopCount      *int16     `json:"hoop_count"`
+	Indoor         bool       `json:"indoor"`
+	Surface        *string    `json:"surface"`
+	Lighting       *bool      `json:"lighting"`
+	IsPublic       bool       `json:"is_public"`
+	DrinkingWater  *bool      `json:"drinking_water"`
+	Toilets        *bool      `json:"toilets"`
+	Parking        *bool      `json:"parking"`
+	Fenced         *bool      `json:"fenced"`
+	Access         *string    `json:"access"`
+	Fee            *bool      `json:"fee"`
+	Covered        *bool      `json:"covered"`
+	RimType        *string    `json:"rim_type"`
+	NetType        *string    `json:"net_type"`
+	FeeAmountCents *int32     `json:"fee_amount_cents"`
+	FeeCurrency    *string    `json:"fee_currency"`
+	FeeNote        *string    `json:"fee_note"`
+	OpeningHours   *string    `json:"opening_hours"`
+	Website        *string    `json:"website"`
+	Description    *string    `json:"description"`
+	Source         string     `json:"source"`
+	OsmType        *string    `json:"osm_type"`
+	OsmID          *int64     `json:"osm_id"`
+	Status         string     `json:"status"`
+	SubmittedBy    *uuid.UUID `json:"submitted_by"`
+	CreatedAt      time.Time  `json:"created_at"`
+	EnrichedAt     *time.Time `json:"enriched_at"`
+	ActiveCount    int32      `json:"active_count"`
+	NetVotes       int32      `json:"net_votes"`
 }
 
 func (q *Queries) GetCourt(ctx context.Context, id uuid.UUID) (GetCourtRow, error) {
@@ -607,6 +667,9 @@ func (q *Queries) GetCourt(ctx context.Context, id uuid.UUID) (GetCourtRow, erro
 		&i.Covered,
 		&i.RimType,
 		&i.NetType,
+		&i.FeeAmountCents,
+		&i.FeeCurrency,
+		&i.FeeNote,
 		&i.OpeningHours,
 		&i.Website,
 		&i.Description,
@@ -757,32 +820,38 @@ UPDATE courts SET
     hoop_count     = coalesce($5, hoop_count),
     access         = coalesce($6, access),
     fee            = coalesce($7, fee),
-    drinking_water = coalesce($8, drinking_water),
-    toilets        = coalesce($9, toilets),
-    parking        = coalesce($10, parking),
-    fenced         = coalesce($11, fenced),
-    rim_type       = coalesce($12, rim_type),
-    net_type       = coalesce($13, net_type),
+    fee_amount_cents = coalesce($8, fee_amount_cents),
+    fee_currency     = coalesce($9, fee_currency),
+    fee_note         = coalesce($10, fee_note),
+    drinking_water = coalesce($11, drinking_water),
+    toilets        = coalesce($12, toilets),
+    parking        = coalesce($13, parking),
+    fenced         = coalesce($14, fenced),
+    rim_type       = coalesce($15, rim_type),
+    net_type       = coalesce($16, net_type),
     updated_at     = now()
-WHERE id = $14
+WHERE id = $17
 RETURNING id
 `
 
 type UpdateCourtAttributesParams struct {
-	Surface       *string   `json:"surface"`
-	Lighting      *bool     `json:"lighting"`
-	Indoor        *bool     `json:"indoor"`
-	Covered       *bool     `json:"covered"`
-	HoopCount     *int16    `json:"hoop_count"`
-	Access        *string   `json:"access"`
-	Fee           *bool     `json:"fee"`
-	DrinkingWater *bool     `json:"drinking_water"`
-	Toilets       *bool     `json:"toilets"`
-	Parking       *bool     `json:"parking"`
-	Fenced        *bool     `json:"fenced"`
-	RimType       *string   `json:"rim_type"`
-	NetType       *string   `json:"net_type"`
-	ID            uuid.UUID `json:"id"`
+	Surface        *string   `json:"surface"`
+	Lighting       *bool     `json:"lighting"`
+	Indoor         *bool     `json:"indoor"`
+	Covered        *bool     `json:"covered"`
+	HoopCount      *int16    `json:"hoop_count"`
+	Access         *string   `json:"access"`
+	Fee            *bool     `json:"fee"`
+	FeeAmountCents *int32    `json:"fee_amount_cents"`
+	FeeCurrency    *string   `json:"fee_currency"`
+	FeeNote        *string   `json:"fee_note"`
+	DrinkingWater  *bool     `json:"drinking_water"`
+	Toilets        *bool     `json:"toilets"`
+	Parking        *bool     `json:"parking"`
+	Fenced         *bool     `json:"fenced"`
+	RimType        *string   `json:"rim_type"`
+	NetType        *string   `json:"net_type"`
+	ID             uuid.UUID `json:"id"`
 }
 
 // Structured crowd correction: each arg is coalesced so only provided fields change.
@@ -795,6 +864,9 @@ func (q *Queries) UpdateCourtAttributes(ctx context.Context, arg UpdateCourtAttr
 		arg.HoopCount,
 		arg.Access,
 		arg.Fee,
+		arg.FeeAmountCents,
+		arg.FeeCurrency,
+		arg.FeeNote,
 		arg.DrinkingWater,
 		arg.Toilets,
 		arg.Parking,
@@ -827,15 +899,15 @@ func (q *Queries) UpsertCourtVote(ctx context.Context, arg UpsertCourtVoteParams
 
 const upsertOSMCourt = `-- name: UpsertOSMCourt :one
 INSERT INTO courts (name, location, hoop_count, indoor, surface, lighting,
-    access, fee, covered, opening_hours, website, description, fenced,
+    access, fee, fee_amount_cents, fee_currency, covered, opening_hours, website, description, fenced,
     source, osm_type, osm_id, status)
 VALUES (
     $1,
     ST_SetSRID(ST_MakePoint($2::float8, $3::float8), 4326)::geography,
     $4, $5, $6, $7,
-    $8, $9, $10,
-    $11, $12, $13, $14,
-    'osm', $15, $16, 'pending'
+    $8, $9, $10, $11, $12,
+    $13, $14, $15, $16,
+    'osm', $17, $18, 'pending'
 )
 ON CONFLICT (osm_type, osm_id) DO UPDATE SET
     name          = EXCLUDED.name,
@@ -846,6 +918,11 @@ ON CONFLICT (osm_type, osm_id) DO UPDATE SET
     lighting      = EXCLUDED.lighting,
     access        = EXCLUDED.access,
     fee           = EXCLUDED.fee,
+    -- Coalesced, unlike the columns above: a re-import of a court whose OSM
+    -- charge=* tag is missing or unparseable must not wipe a price a player
+    -- typed in. Both move together or the amount/currency check fails.
+    fee_amount_cents = coalesce(EXCLUDED.fee_amount_cents, courts.fee_amount_cents),
+    fee_currency     = coalesce(EXCLUDED.fee_currency, courts.fee_currency),
     covered       = EXCLUDED.covered,
     opening_hours = EXCLUDED.opening_hours,
     website       = EXCLUDED.website,
@@ -856,22 +933,24 @@ RETURNING id, (xmax = 0) AS inserted
 `
 
 type UpsertOSMCourtParams struct {
-	Name         string  `json:"name"`
-	Lng          float64 `json:"lng"`
-	Lat          float64 `json:"lat"`
-	HoopCount    *int16  `json:"hoop_count"`
-	Indoor       bool    `json:"indoor"`
-	Surface      *string `json:"surface"`
-	Lighting     *bool   `json:"lighting"`
-	Access       *string `json:"access"`
-	Fee          *bool   `json:"fee"`
-	Covered      *bool   `json:"covered"`
-	OpeningHours *string `json:"opening_hours"`
-	Website      *string `json:"website"`
-	Description  *string `json:"description"`
-	Fenced       *bool   `json:"fenced"`
-	OsmType      *string `json:"osm_type"`
-	OsmID        *int64  `json:"osm_id"`
+	Name           string  `json:"name"`
+	Lng            float64 `json:"lng"`
+	Lat            float64 `json:"lat"`
+	HoopCount      *int16  `json:"hoop_count"`
+	Indoor         bool    `json:"indoor"`
+	Surface        *string `json:"surface"`
+	Lighting       *bool   `json:"lighting"`
+	Access         *string `json:"access"`
+	Fee            *bool   `json:"fee"`
+	FeeAmountCents *int32  `json:"fee_amount_cents"`
+	FeeCurrency    *string `json:"fee_currency"`
+	Covered        *bool   `json:"covered"`
+	OpeningHours   *string `json:"opening_hours"`
+	Website        *string `json:"website"`
+	Description    *string `json:"description"`
+	Fenced         *bool   `json:"fenced"`
+	OsmType        *string `json:"osm_type"`
+	OsmID          *int64  `json:"osm_id"`
 }
 
 type UpsertOSMCourtRow struct {
@@ -890,6 +969,8 @@ func (q *Queries) UpsertOSMCourt(ctx context.Context, arg UpsertOSMCourtParams) 
 		arg.Lighting,
 		arg.Access,
 		arg.Fee,
+		arg.FeeAmountCents,
+		arg.FeeCurrency,
 		arg.Covered,
 		arg.OpeningHours,
 		arg.Website,

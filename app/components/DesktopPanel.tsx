@@ -6,15 +6,15 @@ import { RunRow } from "@/components/court/RunRow";
 import { useSignInDetour } from "@/components/SignInCta";
 import { Button, ErrorText, Overline } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
+import { shortAccessLabel, shortCostLabel } from "@/lib/court-cost";
 import { externalPhotoURL, photoURL, useCourt, useCourtPhotos, useCourtSessions, useRSVP } from "@/lib/hooks";
 import { safePathSegment } from "@/lib/routes";
 import { useTheme } from "@/lib/theme";
 import type { CourtDetail, CourtSummary, SessionSummary } from "@/lib/types";
 
-// The desktop master-detail sidebar (design 3f). Rendered by the map home only
-// on wide web viewports; it swaps between a scrollable court list and a single
-// court's detail entirely from `selectedId` — no navigation. Hovering a list
-// row raises that court's pin on the map via `onHover`.
+// The desktop master-detail sidebar, rendered only on wide web viewports. It
+// swaps between the court list and a single court's detail entirely from
+// `selectedId`, with no navigation.
 export function DesktopPanel({
   courts,
   selectedId,
@@ -48,25 +48,26 @@ export function DesktopPanel({
   );
 }
 
-// The court's one-line attribute summary: "Outdoor · 2 hoops · Lights · Asphalt".
-function attributeLine(court: CourtSummary | CourtDetail): string {
+// Cost and access lead the attribute list: they decide whether a court is an
+// option at all, which the surface and hoop count do not.
+function attributeParts(court: CourtSummary | CourtDetail): string[] {
   return [
-    court.indoor ? "Indoor" : "Outdoor",
-    court.hoop_count != null ? `${court.hoop_count} hoops` : null,
-    court.lighting ? "Lights" : null,
-    court.surface ? court.surface.charAt(0).toUpperCase() + court.surface.slice(1) : null,
-  ]
-    .filter(Boolean)
-    .join("  ·  ");
-}
-
-function attributeChips(court: CourtSummary | CourtDetail): string[] {
-  return [
+    shortCostLabel(court),
+    shortAccessLabel(court),
     court.indoor ? "Indoor" : "Outdoor",
     court.hoop_count != null ? `${court.hoop_count} hoops` : null,
     court.lighting ? "Lights" : null,
     court.surface ? court.surface.charAt(0).toUpperCase() + court.surface.slice(1) : null,
   ].filter((v): v is string => Boolean(v));
+}
+
+// The court's one-line attribute summary: "$5 · Outdoor · 2 hoops · Lights".
+function attributeLine(court: CourtSummary | CourtDetail): string {
+  return attributeParts(court).join("  ·  ");
+}
+
+function attributeChips(court: CourtSummary | CourtDetail): string[] {
+  return attributeParts(court);
 }
 
 function ListLevel({

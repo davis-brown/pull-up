@@ -152,3 +152,80 @@ func TestParseFenced(t *testing.T) {
 		}
 	}
 }
+
+func TestParseCharge(t *testing.T) {
+	cases := []struct {
+		name         string
+		tags         map[string]string
+		wantAmount   *int32
+		wantCurrency string
+	}{
+		{"code after amount", map[string]string{"charge": "5 USD"}, ptrInt32(500), "USD"},
+		{"decimal amount", map[string]string{"charge": "2.50 EUR"}, ptrInt32(250), "EUR"},
+		{"decimal comma", map[string]string{"charge": "2,50 EUR"}, ptrInt32(250), "EUR"},
+		{"symbol prefix", map[string]string{"charge": "€3"}, ptrInt32(300), "EUR"},
+		{"rate suffix dropped", map[string]string{"charge": "5 EUR/hour"}, ptrInt32(500), "EUR"},
+		{"zero-decimal currency not scaled", map[string]string{"charge": "500 JPY"}, ptrInt32(500), "JPY"},
+		{"fee:amount fallback", map[string]string{"fee:amount": "10 GBP"}, ptrInt32(1000), "GBP"},
+
+		// Rejected: an amount with no currency is unformattable, and the
+		// courts table rejects the pair anyway.
+		{"no currency", map[string]string{"charge": "5"}, nil, ""},
+		{"bare dollar sign is ambiguous", map[string]string{"charge": "$5"}, nil, ""},
+		{"no amount", map[string]string{"charge": "yes"}, nil, ""},
+		{"absent", map[string]string{}, nil, ""},
+		{"over the column ceiling", map[string]string{"charge": "999999 USD"}, nil, ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			amount, currency := parseCharge(c.tags)
+			if (amount == nil) != (c.wantAmount == nil) ||
+				(amount != nil && *amount != *c.wantAmount) {
+				t.Errorf("amount = %v, want %v", derefInt32(amount), derefInt32(c.wantAmount))
+			}
+			got := ""
+			if currency != nil {
+				got = *currency
+			}
+			if got != c.wantCurrency {
+				t.Errorf("currency = %q, want %q", got, c.wantCurrency)
+			}
+		})
+	}
+}
+
+// A parseable price implies a fee even where the fee=* tag is absent, since
+// courts carrying charge=* often omit it.
+func TestParseCourtsInfersFeeFromCharge(t *testing.T) {
+	body := []byte(`{"elements":[{"type":"node","id":11,"lat":40.7,"lon":-73.9,
+		"tags":{"charge":"5 USD"}}]}`)
+	courts, err := ParseCourts(body)
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	c := courts[0]
+	if c.Fee == nil || !*c.Fee {
+		t.Errorf("Fee = %v, want true", c.Fee)
+	}
+	if c.FeeAmount == nil || *c.FeeAmount != 500 {
+		t.Errorf("FeeAmount = %v, want 500", derefInt32(c.FeeAmount))
+	}
+
+	// An explicit fee=no is not overridden — the tag is a stronger signal
+	// than an inference, even when a stale charge value lingers.
+	body2 := []byte(`{"elements":[{"type":"node","id":12,"lat":40.7,"lon":-73.9,
+		"tags":{"fee":"no","charge":"5 USD"}}]}`)
+	courts2, _ := ParseCourts(body2)
+	if courts2[0].Fee == nil || *courts2[0].Fee {
+		t.Errorf("Fee = %v, want false", courts2[0].Fee)
+	}
+}
+
+func ptrInt32(v int32) *int32 { return &v }
+
+func derefInt32(v *int32) any {
+	if v == nil {
+		return nil
+	}
+	return *v
+}

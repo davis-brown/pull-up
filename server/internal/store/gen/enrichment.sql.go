@@ -255,28 +255,32 @@ UPDATE courts SET
     covered       = coalesce(covered, $4),
     access        = coalesce(access, $5),
     fee           = coalesce(fee, $6),
-    opening_hours = coalesce(opening_hours, $7),
-    fenced        = coalesce(fenced, $8),
-    website       = coalesce(website, $9),
-    description   = coalesce(description, $10),
-    indoor        = indoor OR coalesce($11, false),
+    fee_amount_cents = coalesce(fee_amount_cents, $7),
+    fee_currency     = coalesce(fee_currency, $8),
+    opening_hours = coalesce(opening_hours, $9),
+    fenced        = coalesce(fenced, $10),
+    website       = coalesce(website, $11),
+    description   = coalesce(description, $12),
+    indoor        = indoor OR coalesce($13, false),
     updated_at    = now()
-WHERE id = $12
+WHERE id = $14
 `
 
 type SetCourtAttributesIfNullParams struct {
-	Surface      *string   `json:"surface"`
-	Lighting     *bool     `json:"lighting"`
-	HoopCount    *int16    `json:"hoop_count"`
-	Covered      *bool     `json:"covered"`
-	Access       *string   `json:"access"`
-	Fee          *bool     `json:"fee"`
-	OpeningHours *string   `json:"opening_hours"`
-	Fenced       *bool     `json:"fenced"`
-	Website      *string   `json:"website"`
-	Description  *string   `json:"description"`
-	Indoor       *bool     `json:"indoor"`
-	ID           uuid.UUID `json:"id"`
+	Surface        *string   `json:"surface"`
+	Lighting       *bool     `json:"lighting"`
+	HoopCount      *int16    `json:"hoop_count"`
+	Covered        *bool     `json:"covered"`
+	Access         *string   `json:"access"`
+	Fee            *bool     `json:"fee"`
+	FeeAmountCents *int32    `json:"fee_amount_cents"`
+	FeeCurrency    *string   `json:"fee_currency"`
+	OpeningHours   *string   `json:"opening_hours"`
+	Fenced         *bool     `json:"fenced"`
+	Website        *string   `json:"website"`
+	Description    *string   `json:"description"`
+	Indoor         *bool     `json:"indoor"`
+	ID             uuid.UUID `json:"id"`
 }
 
 // Backfill court attributes parsed from the court's own OSM tags, only where
@@ -291,6 +295,8 @@ func (q *Queries) SetCourtAttributesIfNull(ctx context.Context, arg SetCourtAttr
 		arg.Covered,
 		arg.Access,
 		arg.Fee,
+		arg.FeeAmountCents,
+		arg.FeeCurrency,
 		arg.OpeningHours,
 		arg.Fenced,
 		arg.Website,

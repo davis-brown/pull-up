@@ -20,8 +20,7 @@ import (
 )
 
 // TileDeg is the tile grid size in degrees (~28 km of longitude at the
-// equator, ~25 km of latitude): small enough for quick Overpass queries,
-// large enough that a city is a handful of tiles.
+// equator, ~25 km of latitude).
 const TileDeg = 0.25
 
 // maxTilesPerRequest skips seeding for zoomed-out viewports — a whole-country
@@ -72,8 +71,8 @@ func TilesCovering(minLng, minLat, maxLng, maxLat float64) []Tile {
 }
 
 // TileRange returns the inclusive tile-index bounds covering the bbox and
-// whether the viewport is seedable (within maxTilesPerRequest). ok=false for an
-// invalid or too-zoomed-out bbox — mirrors the cap in TilesCovering.
+// whether the viewport is seedable. ok=false for an invalid or too-zoomed-out
+// bbox, mirroring the cap in TilesCovering.
 func TileRange(minLng, minLat, maxLng, maxLat float64) (x0, x1, y0, y1 int, ok bool) {
 	if !validBBox(minLng, minLat, maxLng, maxLat) {
 		return 0, 0, 0, 0, false
@@ -103,9 +102,9 @@ type Seeder struct {
 	queries  *gen.Queries
 	endpoint string
 	log      *slog.Logger
-	// mu serializes tile imports so the in-process Run loop and a concurrent
-	// /internal/drain call never fetch Overpass at once — courtesyDelay only
-	// spaces successive imports within a single serialized run.
+	// mu serializes tile imports so the Run loop and a concurrent
+	// /internal/drain never fetch Overpass at once; courtesyDelay only spaces
+	// imports within a single serialized run.
 	mu sync.Mutex
 }
 
@@ -120,8 +119,8 @@ func New(queries *gen.Queries, endpoint string, log *slog.Logger) *Seeder {
 	}
 }
 
-// Request durably enqueues any covering tiles for import. The bounded tile cap
-// and caller's request context avoid spawning work that outlives public reads.
+// Request durably enqueues any covering tiles for import, bounded by the tile
+// cap and the caller's request context.
 func (s *Seeder) Request(ctx context.Context, minLng, minLat, maxLng, maxLat float64) {
 	tiles := TilesCovering(minLng, minLat, maxLng, maxLat)
 	if len(tiles) == 0 {
@@ -210,6 +209,7 @@ func (s *Seeder) importTile(ctx context.Context, tile Tile) {
 			Name: c.Name, Lng: c.Lng, Lat: c.Lat,
 			HoopCount: c.HoopCount, Indoor: c.Indoor, Surface: c.Surface, Lighting: c.Lighting,
 			Access: c.Access, Fee: c.Fee, Covered: c.Covered,
+			FeeAmountCents: c.FeeAmount, FeeCurrency: c.FeeCurrency,
 			OpeningHours: c.OpeningHours, Website: c.Website, Description: c.Description,
 			Fenced:  c.Fenced,
 			OsmType: &c.OSMType, OsmID: &c.OSMID,

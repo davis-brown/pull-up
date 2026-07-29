@@ -52,6 +52,9 @@ function makeCourt(overrides: Partial<CourtSummary>): CourtSummary {
     covered: null,
     fee: null,
     access: null,
+    fee_amount_cents: null,
+    fee_currency: null,
+    fee_note: null,
     source: "osm",
     status: "verified",
     active_count: 0,
@@ -172,10 +175,7 @@ describe("matchesFilters", () => {
     ).toBe(false);
   });
 
-  it("public: false is a no-op; true requires is_public AND (access null or 'public')", () => {
-    expect(
-      matchesFilters(makeCourt({ is_public: false }), { public: false }),
-    ).toBe(true);
+  it("public: true requires is_public AND (access null or 'public')", () => {
     expect(
       matchesFilters(makeCourt({ is_public: true, access: null }), {
         public: true,
@@ -201,10 +201,29 @@ describe("matchesFilters", () => {
     ).toBe(false);
   });
 
-  it("free: false is a no-op; true passes when fee is null or false, fails when fee is true", () => {
-    expect(matchesFilters(makeCourt({ fee: false }), { free: false })).toBe(
-      true,
-    );
+  it("public: false is the inverse — restricted courts only, not a no-op", () => {
+    expect(
+      matchesFilters(makeCourt({ is_public: false }), { public: false }),
+    ).toBe(true);
+    expect(
+      matchesFilters(makeCourt({ is_public: true, access: "private" }), {
+        public: false,
+      }),
+    ).toBe(true);
+    expect(
+      matchesFilters(makeCourt({ is_public: true, access: "customers" }), {
+        public: false,
+      }),
+    ).toBe(true);
+    // Unknown access reads as public, so an open court is excluded.
+    expect(
+      matchesFilters(makeCourt({ is_public: true, access: null }), {
+        public: false,
+      }),
+    ).toBe(false);
+  });
+
+  it("free: true passes when fee is null or false, fails when fee is true", () => {
     expect(matchesFilters(makeCourt({ fee: null }), { free: true })).toBe(
       true,
     );
@@ -212,6 +231,19 @@ describe("matchesFilters", () => {
       true,
     );
     expect(matchesFilters(makeCourt({ fee: true }), { free: true })).toBe(
+      false,
+    );
+  });
+
+  it("free: false is the inverse — pay-to-play courts only, not a no-op", () => {
+    expect(matchesFilters(makeCourt({ fee: true }), { free: false })).toBe(
+      true,
+    );
+    expect(matchesFilters(makeCourt({ fee: false }), { free: false })).toBe(
+      false,
+    );
+    // Unknown fee reads as free, so it does not surface under "Paid".
+    expect(matchesFilters(makeCourt({ fee: null }), { free: false })).toBe(
       false,
     );
   });
