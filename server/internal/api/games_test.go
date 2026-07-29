@@ -45,7 +45,6 @@ func TestGameConfirmationRules(t *testing.T) {
 		}
 	}
 
-	// A valid game: winner records, team 0 (themselves) took it.
 	resp := record(winner.AccessToken, map[string]any{
 		"team_a": []string{winner.User.ID}, "team_b": []string{loser.User.ID},
 		"winning_team": 0, "score_win": 11, "score_lose": 7,
@@ -82,14 +81,12 @@ func TestGameConfirmationRules(t *testing.T) {
 	}
 	resp.Body.Close()
 
-	// It shows up in the loser's pending queue.
 	resp = doJSON(t, ts, http.MethodGet, "/me/games/pending", loser.AccessToken, nil)
 	pending := decodeJSON[map[string][]map[string]any](t, resp)
 	if len(pending["games"]) != 1 {
 		t.Fatalf("loser pending games = %d, want 1", len(pending["games"]))
 	}
 
-	// The losing side confirms: the game becomes a fact.
 	resp = doJSON(t, ts, http.MethodPost, "/games/"+gameID+"/confirm", loser.AccessToken, nil)
 	if resp.StatusCode != http.StatusOK {
 		defer resp.Body.Close()
@@ -106,7 +103,6 @@ func TestGameConfirmationRules(t *testing.T) {
 		t.Fatalf("status after opposing confirm = %q, want confirmed", status)
 	}
 
-	// Now it's public, with both players and the score.
 	resp = doJSON(t, ts, http.MethodGet, "/courts/"+court.ID+"/games", "", nil)
 	listed = decodeJSON[map[string][]map[string]any](t, resp)
 	if len(listed["games"]) != 1 {
@@ -119,7 +115,6 @@ func TestGameConfirmationRules(t *testing.T) {
 		t.Errorf("score_win = %v, want 11", listed["games"][0]["score_win"])
 	}
 
-	// It leaves the pending queue, and re-confirming is a harmless no-op.
 	resp = doJSON(t, ts, http.MethodGet, "/me/games/pending", loser.AccessToken, nil)
 	pending = decodeJSON[map[string][]map[string]any](t, resp)
 	if len(pending["games"]) != 0 {
@@ -229,7 +224,6 @@ func TestUnconfirmedGamesExpire(t *testing.T) {
 	}
 	gameID := decodeJSON[gameResp](t, resp).Game.ID
 
-	// Age it past the 48h window, then run the sweep the cron calls.
 	if _, err := st.Pool.Exec(context.Background(),
 		"UPDATE games SET created_at = now() - interval '49 hours' WHERE id = $1", gameID); err != nil {
 		t.Fatalf("age game: %v", err)
@@ -246,7 +240,6 @@ func TestUnconfirmedGamesExpire(t *testing.T) {
 		t.Errorf("unconfirmed game survived the sweep")
 	}
 
-	// A confirmed game of the same age is untouched.
 	resp = doJSON(t, ts, http.MethodPost, "/courts/"+court.ID+"/games", a.AccessToken, map[string]any{
 		"team_a": []string{a.User.ID}, "team_b": []string{b.User.ID}, "winning_team": 0,
 	})

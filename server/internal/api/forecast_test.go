@@ -15,8 +15,6 @@ import (
 	"github.com/davisbrown/pull-up/server/internal/store/gen"
 )
 
-// -- parseForecastIDs ---------------------------------------------------
-
 func TestParseForecastIDs(t *testing.T) {
 	a := uuid.New()
 	b := uuid.New()
@@ -65,8 +63,6 @@ func TestParseForecastIDs(t *testing.T) {
 	}
 }
 
-// -- parseTzOffsetMinutes ------------------------------------------------
-
 func TestParseTzOffsetMinutes(t *testing.T) {
 	if v, ok := parseTzOffsetMinutes(""); !ok || v != 0 {
 		t.Errorf("absent offset = (%d, %v), want (0, true)", v, ok)
@@ -84,8 +80,6 @@ func TestParseTzOffsetMinutes(t *testing.T) {
 		t.Error("non-numeric offset should be rejected")
 	}
 }
-
-// -- forecastDayBounds / localHour ---------------------------------------
 
 func TestForecastDayBounds(t *testing.T) {
 	// 2026-07-12T02:00:00Z with offset -300 (UTC-5) is 2026-07-11T21:00 local
@@ -122,8 +116,6 @@ func TestLocalHour(t *testing.T) {
 	}
 }
 
-// -- averageHeads ----------------------------------------------------------
-
 func TestAverageHeads(t *testing.T) {
 	// The brief's example: total 24 over 8 weeks -> 3 (unchanged behavior).
 	if got := averageHeads(24, 8); got != 3 {
@@ -156,25 +148,17 @@ func TestAverageHeads(t *testing.T) {
 	}
 }
 
-// -- buildForecasts (the pure assembly logic; no DB needed) ---------------
-//
-// These tests exercise Go assembly from fake gen.CourtHourlyCheckInHistoryRow
-// rows and are agnostic to how the store computed TotalHeads per bucket.
-// CourtHourlyCheckInHistory (forecast.sql) buckets a check-in's ENTIRE active
-// window [created_at, coalesce(checked_out_at, expires_at)) into every local
-// hour it overlaps (an average concurrent headcount), not just its start
-// hour — see TestCourtHourlyCheckInHistoryOverlapsBuckets in
-// internal/store/store_integration_test.go for the DB-backed overlap case.
-// The row contract consumed here (court_id, local_hour, total_heads) is
-// unchanged by that bucketing, so these fakes remain valid regardless.
+// buildForecasts tests use fake history rows and are agnostic to how the
+// store computed TotalHeads per bucket; see
+// TestCourtHourlyCheckInHistoryOverlapsBuckets in internal/store for the
+// DB-backed bucketing case.
 
 func TestBuildForecastsAssemblesInIDsOrderWithHistoryAndSessions(t *testing.T) {
 	courtA := uuid.New()
 	courtB := uuid.New() // no history, no sessions
 	sessionID := uuid.New()
 
-	// Fake rows, standing in for what the store would return: court A has
-	// 24 heads total in bucket hour 18 over the trailing 8 weeks -> 3.
+	// Court A: 24 heads in bucket hour 18 over the trailing 8 weeks -> 3.
 	history := []gen.CourtHourlyCheckInHistoryRow{
 		{CourtID: courtA, LocalHour: 18, TotalHeads: 24},
 	}
@@ -182,8 +166,7 @@ func TestBuildForecastsAssemblesInIDsOrderWithHistoryAndSessions(t *testing.T) {
 	weeks := []gen.CourtHistoryWeeksRow{
 		{CourtID: courtA, WeekCount: 8},
 	}
-	// Session starts at a UTC instant that's 19:00 local once shifted by the
-	// offset (UTC-5): localHour(startsAt, offsetMinutes) must equal 19.
+	// A UTC instant that is 19:00 local once shifted by the offset (UTC-5).
 	offsetMinutes := -300 // UTC-5
 	startsAt := time.Date(2026, 7, 12, 19, 0, 0, 0, time.UTC).Add(-time.Duration(offsetMinutes) * time.Minute)
 	sessions := []gen.CourtSessionsForDayRow{
@@ -197,7 +180,6 @@ func TestBuildForecastsAssemblesInIDsOrderWithHistoryAndSessions(t *testing.T) {
 		t.Fatalf("len(forecasts) = %d, want 2", len(got))
 	}
 
-	// ids order preserved.
 	if got[0].CourtID != courtA || got[1].CourtID != courtB {
 		t.Fatalf("forecasts not in ids order: %+v", got)
 	}
@@ -284,9 +266,8 @@ func TestBuildForecastsDividesByActualWeekCount(t *testing.T) {
 	}
 }
 
-// TestBuildForecastsNoHistoryRowsZerosOut covers the 0-rows case: a court
-// with no matching history rows at all gets has_history:false and every
-// hour zero, regardless of what CourtHistoryWeeks might separately report.
+// TestBuildForecastsNoHistoryRowsZerosOut: no history rows gives
+// has_history:false and every hour zero, whatever CourtHistoryWeeks reports.
 func TestBuildForecastsNoHistoryRowsZerosOut(t *testing.T) {
 	court := uuid.New()
 	got := buildForecasts([]uuid.UUID{court}, nil, nil, nil, 0)
@@ -303,11 +284,8 @@ func TestBuildForecastsNoHistoryRowsZerosOut(t *testing.T) {
 	}
 }
 
-// -- handler-level validation (no DB touched on these paths) --------------
-
-// newBareServer builds a Server with a nil store: safe for exercising the
-// 400 paths in handleForecast, which validate query params before ever
-// touching s.store.
+// newBareServer builds a Server with a nil store, safe for the 400 paths
+// that validate query params before touching s.store.
 func newBareServer() *Server {
 	return &Server{
 		cfg: &config.Config{CORSOrigins: []string{"*"}},
@@ -342,12 +320,8 @@ func TestHandleForecastValidation(t *testing.T) {
 	}
 }
 
-// TestForecastRouteRegisteredAboveCourtsID verifies the route ordering
-// requirement: GET /courts/forecast must resolve to handleForecast, not be
-// swallowed by the /courts/{id} pattern (which would try to uuid.Parse
-// "forecast" and 400 with a different message). Uses the real router with a
-// bare (storeless) Server since a request with no ids never reaches the
-// store.
+// TestForecastRouteRegisteredAboveCourtsID: GET /courts/forecast must
+// resolve to handleForecast, not be swallowed by the /courts/{id} pattern.
 func TestForecastRouteRegisteredAboveCourtsID(t *testing.T) {
 	s := newBareServer()
 	ts := httptest.NewServer(s.Routes())

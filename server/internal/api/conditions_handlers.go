@@ -15,8 +15,7 @@ import (
 
 // courtFacts maps each player-confirmable fact to its allowed values. Facts
 // mirror courts columns; boolean columns use "yes"/"no" in the ledger.
-// hoop_count is a count, so it uses discrete buckets — a court with an
-// off-bucket count (e.g. 3) simply matches no chip until players correct it.
+// hoop_count uses discrete buckets, so an off-bucket court matches no chip.
 var courtFacts = map[string][]string{
 	"rim_type":       {"single", "double"},
 	"net_type":       {"chain", "nylon", "none"},
@@ -116,8 +115,7 @@ func (s *Server) handleConfirmCourtFact(w http.ResponseWriter, r *http.Request) 
 		s.internalError(w, "confirm fact", err)
 		return
 	}
-	// Keeping a court's facts current earns a little XP (phase 20), keyed
-	// per court per day so re-tapping chips isn't a farm.
+	// Keyed per court per day, so re-tapping chips isn't a farm.
 	s.awardXP(r.Context(), userID(r), "fact_confirmed",
 		"fact:"+courtID.String()+":"+utcDay(time.Now()), xpFactConfirmed)
 

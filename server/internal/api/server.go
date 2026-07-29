@@ -183,8 +183,8 @@ func (s *Server) Routes() http.Handler {
 			r.Get("/me/stats", s.handleMeStats)
 			r.Post("/me/level-up/ack", s.handleAckLevelUp)
 			r.Post("/me/badges/ack", s.handleAckBadges)
-			// Leaderboards are authenticated: they name players, and the
-			// visibility rules they enforce are all relative to a viewer.
+			// Authenticated: they name players, and their visibility rules
+			// are all relative to a viewer.
 			r.Get("/courts/{id}/leaderboard", s.handleCourtLeaderboard)
 			r.Get("/me/circle/leaderboard", s.handleCircleLeaderboard)
 			r.Get("/me/favorites", s.handleListFavorites)
@@ -215,8 +215,7 @@ func (s *Server) Routes() http.Handler {
 			r.Delete("/sessions/{id}", s.handleCancelSession)
 			r.Put("/sessions/{id}/rsvp", s.handleRSVP)
 
-			// Moderation. The first admin is bootstrapped out-of-band (SQL);
-			// every admin after that is promoted through the API below.
+			// Moderation. The first admin is bootstrapped out-of-band (SQL).
 			r.Group(func(r chi.Router) {
 				r.Use(s.requireAdmin)
 				r.Get("/admin/flags", s.handleListFlags)

@@ -25,7 +25,6 @@ func TestGetProfilePublic(t *testing.T) {
 	ts, _ := newTestServer(t)
 	u := registerUser(t, ts, "profile@test.local", "Profile Player")
 
-	// Public read, no bearer.
 	resp := doJSON(t, ts, http.MethodGet, "/users/"+u.User.ID, "", nil)
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("get profile: status %d: %s", resp.StatusCode, readBody(t, resp))
@@ -42,7 +41,6 @@ func TestGetProfilePublic(t *testing.T) {
 		t.Errorf("unexpected profile: %+v", body)
 	}
 
-	// Unknown user → 404.
 	resp = doJSON(t, ts, http.MethodGet, "/users/00000000-0000-0000-0000-000000000000", "", nil)
 	if resp.StatusCode != http.StatusNotFound {
 		t.Errorf("unknown user: status %d, want 404", resp.StatusCode)
@@ -55,21 +53,18 @@ func TestFollowFlow(t *testing.T) {
 	a := registerUser(t, ts, "a@test.local", "A")
 	b := registerUser(t, ts, "b@test.local", "B")
 
-	// Self-follow → 400.
 	resp := doJSON(t, ts, http.MethodPut, "/users/"+a.User.ID+"/follow", a.AccessToken, nil)
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Fatalf("self-follow: status %d, want 400", resp.StatusCode)
 	}
 	resp.Body.Close()
 
-	// Follow b.
 	resp = doJSON(t, ts, http.MethodPut, "/users/"+b.User.ID+"/follow", a.AccessToken, nil)
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("follow: status %d: %s", resp.StatusCode, readBody(t, resp))
 	}
 	resp.Body.Close()
 
-	// b's profile shows follower_count 1, follows_you true for a.
 	resp = doJSON(t, ts, http.MethodGet, "/users/"+b.User.ID, a.AccessToken, nil)
 	p := decodeJSON[struct {
 		FollowerCount int  `json:"follower_count"`
@@ -94,7 +89,6 @@ func TestFollowBlockedRejected(t *testing.T) {
 	a := registerUser(t, ts, "ab@test.local", "A")
 	b := registerUser(t, ts, "bb@test.local", "B")
 
-	// a follows b, then b blocks a → edge severed and re-follow rejected.
 	doJSON(t, ts, http.MethodPut, "/users/"+b.User.ID+"/follow", a.AccessToken, nil).Body.Close()
 	doJSON(t, ts, http.MethodPut, "/users/"+a.User.ID+"/block", b.AccessToken, nil).Body.Close()
 
@@ -133,7 +127,6 @@ func TestAvatarUploadAndClear(t *testing.T) {
 			body.UploadPath, body.UploadAuthorization)
 	}
 
-	// PATCH sets it, DELETE clears it.
 	doJSON(t, ts, http.MethodPatch, "/me", u.AccessToken, map[string]any{"avatar_url": body.AvatarURL}).Body.Close()
 	resp = doJSON(t, ts, http.MethodGet, "/users/"+u.User.ID, "", nil)
 	if p := decodeJSON[struct {
@@ -150,22 +143,16 @@ func TestAvatarUploadAndClear(t *testing.T) {
 	}
 }
 
-// TestAdminClearAvatar regression-tests the admin_actions CHECK constraint:
-// handleAdminClearAvatar writes an audit row with action='clear_avatar',
-// which the original migration's CHECK (action IN ('promote','demote'))
-// rejected. The handler only logs that error (established pattern), so the
-// endpoint still returned 204 while the audit row silently never landed.
-// This asserts the row actually exists, which fails against the
-// pre-00009_admin_action_clear_avatar.sql constraint even though the HTTP
-// response looks fine.
+// TestAdminClearAvatar regression-tests the admin_actions CHECK constraint.
+// The handler only logs a failed audit insert, so the endpoint returns 204
+// even when the row never lands; this asserts the row actually exists.
 func TestAdminClearAvatar(t *testing.T) {
 	ts, st := newTestServer(t)
 	admin := registerUser(t, ts, "clearavataradmin@test.local", "ClearAvatarAdmin")
 	bootstrapAdmin(t, st, admin.User.ID)
 	target := registerUser(t, ts, "clearavatartarget@test.local", "ClearAvatarTarget")
 
-	// Give the target an avatar to clear. The handler requires a pending
-	// upload for the key, so create one via the avatar upload endpoint first.
+	// The handler requires a pending upload for the key.
 	resp := doJSON(t, ts, http.MethodPost, "/me/avatar", target.AccessToken, nil)
 	if resp.StatusCode != http.StatusOK {
 		defer resp.Body.Close()
@@ -185,7 +172,6 @@ func TestAdminClearAvatar(t *testing.T) {
 		t.Fatalf("avatar not set on target before admin clear")
 	}
 
-	// Admin clears it.
 	resp = doJSON(t, ts, http.MethodPost, "/admin/users/"+target.User.ID+"/avatar/clear", admin.AccessToken, nil)
 	if resp.StatusCode != http.StatusNoContent {
 		t.Fatalf("admin clear avatar: status %d: %s", resp.StatusCode, readBody(t, resp))
@@ -199,8 +185,7 @@ func TestAdminClearAvatar(t *testing.T) {
 		t.Errorf("avatar not cleared after admin clear: %v", *p.AvatarURL)
 	}
 
-	// The audit row is the actual point of this test: it must exist, which
-	// requires the admin_actions CHECK constraint to permit 'clear_avatar'.
+	// The point of this test: requires the CHECK to permit 'clear_avatar'.
 	targetID, err := uuid.Parse(target.User.ID)
 	if err != nil {
 		t.Fatalf("parse target id: %v", err)
@@ -228,8 +213,7 @@ func TestFollowerGetsRunNotification(t *testing.T) {
 
 	court := createTestCourt(t, ts, planner.AccessToken, "Notify Court", ruckerLat, ruckerLng)
 
-	// Query the notify set directly (deterministic; avoids asserting on the
-	// real push transport).
+	// Query the notify set directly rather than the real push transport.
 	toks, err := st.Queries.ListSessionNotifyTokens(context.Background(), gen.ListSessionNotifyTokensParams{
 		Actor: mustUUID(t, planner.User.ID), CourtID: mustUUID(t, court.ID),
 	})
@@ -255,7 +239,6 @@ func TestPatchMeProfileFields(t *testing.T) {
 	ts, _ := newTestServer(t)
 	u := registerUser(t, ts, "profilefields@test.local", "Profile Fields")
 
-	// Valid update sets both fields and echoes them back.
 	resp := doJSON(t, ts, http.MethodPatch, "/me", u.AccessToken, map[string]any{
 		"skill_level":  "advanced",
 		"availability": []string{"weekday_evening", "weekend_morning"},
@@ -283,7 +266,6 @@ func TestPatchMeProfileFields(t *testing.T) {
 		t.Errorf("availability clobbered: %v", card.Availability)
 	}
 
-	// Invalid values are rejected.
 	for _, body := range []map[string]any{
 		{"skill_level": "goat"},
 		{"availability": []string{"midnight"}},
@@ -301,7 +283,6 @@ func TestPatchMePlayerCard(t *testing.T) {
 	ts, _ := newTestServer(t)
 	u := registerUser(t, ts, "playercard@test.local", "Player Card")
 
-	// Valid partial update sets all four fields and echoes them back.
 	resp := doJSON(t, ts, http.MethodPatch, "/me", u.AccessToken, map[string]any{
 		"jersey_number": 23, "position": "guard", "height_cm": 185, "style_tags": []string{"shooter", "casual"},
 	})
@@ -322,13 +303,11 @@ func TestPatchMePlayerCard(t *testing.T) {
 		t.Errorf("style_tags = %v, want [shooter casual]", card.StyleTags)
 	}
 
-	// GET /me reflects the same values.
 	resp = doJSON(t, ts, http.MethodGet, "/me", u.AccessToken, nil)
 	if got := decodeJSON[playerCard](t, resp); got.JerseyNumber == nil || *got.JerseyNumber != 23 {
 		t.Errorf("GET /me jersey_number = %v, want 23", got.JerseyNumber)
 	}
 
-	// A partial update touching only one field doesn't clobber the others.
 	doJSON(t, ts, http.MethodPatch, "/me", u.AccessToken, map[string]any{"height_cm": 190}).Body.Close()
 	resp = doJSON(t, ts, http.MethodGet, "/me", u.AccessToken, nil)
 	card = decodeJSON[playerCard](t, resp)
@@ -345,14 +324,12 @@ func TestPatchMePlayerCard(t *testing.T) {
 		t.Errorf("style_tags clobbered by unrelated patch: %v", card.StyleTags)
 	}
 
-	// Invalid position.
 	resp = doJSON(t, ts, http.MethodPatch, "/me", u.AccessToken, map[string]any{"position": "pivot"})
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Errorf("invalid position: status %d, want 400", resp.StatusCode)
 	}
 	resp.Body.Close()
 
-	// Jersey number out of range.
 	resp = doJSON(t, ts, http.MethodPatch, "/me", u.AccessToken, map[string]any{"jersey_number": 100})
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Errorf("jersey_number 100: status %d, want 400", resp.StatusCode)
@@ -364,7 +341,6 @@ func TestPatchMePlayerCard(t *testing.T) {
 	}
 	resp.Body.Close()
 
-	// Height out of range.
 	resp = doJSON(t, ts, http.MethodPatch, "/me", u.AccessToken, map[string]any{"height_cm": 119})
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Errorf("height_cm 119: status %d, want 400", resp.StatusCode)
@@ -376,7 +352,6 @@ func TestPatchMePlayerCard(t *testing.T) {
 	}
 	resp.Body.Close()
 
-	// More than 3 style tags.
 	resp = doJSON(t, ts, http.MethodPatch, "/me", u.AccessToken, map[string]any{
 		"style_tags": []string{"shooter", "casual", "defense", "rim_runner"},
 	})
@@ -385,7 +360,6 @@ func TestPatchMePlayerCard(t *testing.T) {
 	}
 	resp.Body.Close()
 
-	// Unknown style tag.
 	resp = doJSON(t, ts, http.MethodPatch, "/me", u.AccessToken, map[string]any{"style_tags": []string{"dunker"}})
 	if resp.StatusCode != http.StatusBadRequest {
 		t.Errorf("unknown style tag: status %d, want 400", resp.StatusCode)
@@ -423,7 +397,6 @@ func TestSetPrivateFlag(t *testing.T) {
 	ts, _ := newTestServer(t)
 	u := registerUser(t, ts, "private@test.local", "Private User")
 
-	// Default public.
 	resp := doJSON(t, ts, http.MethodGet, "/me", u.AccessToken, nil)
 	if me := decodeJSON[struct {
 		IsPrivate bool `json:"is_private"`
@@ -431,7 +404,6 @@ func TestSetPrivateFlag(t *testing.T) {
 		t.Fatalf("new account should be public")
 	}
 
-	// Toggle private.
 	doJSON(t, ts, http.MethodPatch, "/me", u.AccessToken, map[string]any{"is_private": true}).Body.Close()
 	resp = doJSON(t, ts, http.MethodGet, "/me", u.AccessToken, nil)
 	if me := decodeJSON[struct {
@@ -445,10 +417,8 @@ func TestFollowPrivateAccountRequests(t *testing.T) {
 	ts, _ := newTestServer(t)
 	a := registerUser(t, ts, "reqa@test.local", "A")
 	b := registerUser(t, ts, "reqb@test.local", "B")
-	// B goes private.
 	doJSON(t, ts, http.MethodPatch, "/me", b.AccessToken, map[string]any{"is_private": true}).Body.Close()
 
-	// A follows B → request, not a follow.
 	resp := doJSON(t, ts, http.MethodPut, "/users/"+b.User.ID+"/follow", a.AccessToken, nil)
 	if body := decodeJSON[struct {
 		Requested bool `json:"requested"`
@@ -464,7 +434,6 @@ func TestFollowPrivateAccountRequests(t *testing.T) {
 		t.Errorf("after request: %+v, want count 0 + has_requested", p)
 	}
 
-	// B sees the incoming request and accepts it.
 	resp = doJSON(t, ts, http.MethodGet, "/me/follow-requests", b.AccessToken, nil)
 	if reqs := decodeJSON[struct {
 		Requests []struct {
@@ -479,7 +448,6 @@ func TestFollowPrivateAccountRequests(t *testing.T) {
 	}
 	resp.Body.Close()
 
-	// Now A is an accepted follower.
 	resp = doJSON(t, ts, http.MethodGet, "/users/"+b.User.ID, a.AccessToken, nil)
 	if p := decodeJSON[struct {
 		FollowerCount int  `json:"follower_count"`
@@ -495,7 +463,6 @@ func TestPrivateProfileHidesActivity(t *testing.T) {
 	viewer := registerUser(t, ts, "pviewer@test.local", "Viewer")
 	doJSON(t, ts, http.MethodPatch, "/me", owner.AccessToken, map[string]any{"is_private": true}).Body.Close()
 
-	// Non-follower sees limited profile: is_private true, activity zeroed, list 403.
 	resp := doJSON(t, ts, http.MethodGet, "/users/"+owner.User.ID, viewer.AccessToken, nil)
 	p := decodeJSON[struct {
 		IsPrivate    bool `json:"is_private"`
@@ -511,7 +478,6 @@ func TestPrivateProfileHidesActivity(t *testing.T) {
 	}
 	resp.Body.Close()
 
-	// Owner sees their own full profile (not gated).
 	resp = doJSON(t, ts, http.MethodGet, "/users/"+owner.User.ID, owner.AccessToken, nil)
 	if p := decodeJSON[struct {
 		IsPrivate bool `json:"is_private"`
@@ -526,7 +492,6 @@ func TestBlockClearsPendingRequest(t *testing.T) {
 	b := registerUser(t, ts, "bpb@test.local", "B")
 	doJSON(t, ts, http.MethodPatch, "/me", b.AccessToken, map[string]any{"is_private": true}).Body.Close()
 	doJSON(t, ts, http.MethodPut, "/users/"+b.User.ID+"/follow", a.AccessToken, nil).Body.Close() // request
-	// B blocks A → request cleared.
 	doJSON(t, ts, http.MethodPut, "/users/"+a.User.ID+"/block", b.AccessToken, nil).Body.Close()
 	resp := doJSON(t, ts, http.MethodGet, "/me/follow-requests", b.AccessToken, nil)
 	if reqs := decodeJSON[struct {

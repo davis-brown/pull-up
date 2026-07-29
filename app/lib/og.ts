@@ -78,9 +78,9 @@ export function appBannerTag(cfg: OgConfig): string {
   return `<meta name="apple-itunes-app" content="app-id=${cfg.APPLE_APP_STORE_ID}">`;
 }
 
-// Resolves the preview image: first uploaded photo (via the API origin), else
-// the first external (Commons/Mapillary) photo through the cached read-through
-// route (never the raw image_url — Mapillary's expires), else the fallback.
+// Resolves the preview image: first uploaded photo, else the first external
+// photo via the cached read-through route (never the raw image_url, which
+// expires for Mapillary), else the fallback.
 export function courtImageUrl(
   cfg: OgConfig,
   photos: {

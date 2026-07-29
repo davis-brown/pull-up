@@ -1,10 +1,7 @@
-// Pure, node-safe: bucket math for "looking for a run" (phase 19). Buckets
-// are symbolic (date + availability-window key), matched server-side using
-// UTC calendar days — not each viewer's local timezone — so the date
-// arithmetic here deliberately uses UTC, not local Date methods, even
-// though the rest of the app (e.g. the plan-a-run day picker) works in
-// local time. Matchmaking buckets are symbolic labels, not exact times —
-// see the phase 19 spec for why per-user timezone machinery isn't used.
+// Pure and node-safe: bucket math for "looking for a run". Buckets are
+// symbolic (date + availability-window key) and matched server-side in UTC
+// calendar days, so the date arithmetic here deliberately uses UTC methods
+// even though the rest of the app works in local time.
 import type { RunIntentSeeker } from "./types";
 import { WINDOW_SPANS, type WindowSpan } from "./your-window";
 
@@ -56,18 +53,15 @@ export function intentDayOptions(now: Date): IntentDayOption[] {
   return out;
 }
 
-// The availability windows selectable for a given bucket date (weekday_*
-// windows on weekdays, weekend_* on weekends) — mirrors the server's
-// day-type check in parseIntentBucket.
+// The availability windows selectable for a bucket date. Mirrors the
+// server's day-type check in parseIntentBucket.
 export function windowsForDate(iso: string): WindowSpan[] {
   const dt = dayType(iso);
   return WINDOW_SPANS.filter((w) => w.dayType === dt);
 }
 
-// Maps a bucket's UTC date onto the plan-a-run screen's local "day offset
-// from today" picker so tapping "Plan it" on a bucket lands on roughly the
-// right day, pre-selected but always editable before submitting — an
-// approximation, consistent with buckets being symbolic rather than exact.
+// Maps a bucket's UTC date onto the plan-a-run picker's local day offset.
+// Approximate by design, and always editable before submitting.
 export function dayOffsetFromToday(iso: string, now: Date): number {
   return Math.min(MAX_INTENT_LEAD_DAYS, Math.max(0, daysBetween(iso, now)));
 }

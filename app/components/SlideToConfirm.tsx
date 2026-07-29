@@ -17,15 +17,12 @@ const THUMB_SIZE = 54;
 const THUMB_INSET = 5;
 const CONFIRM_THRESHOLD = 0.8;
 
-// The dark check-in screen's slide-to-confirm control (spec 3d). Always
-// dark — it only ever appears on the always-dark check-in modal, so it
-// pulls its palette straight from darkTheme() rather than useTheme().
+// The check-in screen's slide-to-confirm control. Always dark, so it pulls
+// its palette from darkTheme() rather than useTheme().
 //
-// Drag via PanResponder + an Animated.Value tracking thumb translateX.
-// Releasing past 80% of the track snaps to the end and fires onConfirm;
-// releasing short of that springs back. RN Web supports PanResponder
-// drags, but a plain tap doesn't produce pan deltas, so a Pressable on
-// the thumb also fires onConfirm there.
+// Releasing past 80% of the track fires onConfirm; short of that it springs
+// back. RN Web supports PanResponder drags but a plain tap produces no pan
+// deltas, so a Pressable on the thumb also fires onConfirm there.
 
 export function SlideToConfirm({
   label,
@@ -36,7 +33,7 @@ export function SlideToConfirm({
   label: string;
   onConfirm: () => void;
   disabled?: boolean;
-  /** Spec 3d: a lime "+n XP" reward chip on the right of the track. */
+  /** A lime "+n XP" reward chip on the right of the track. */
   xpReward?: number;
 }) {
   const t = darkTheme();
