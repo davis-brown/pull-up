@@ -31,9 +31,7 @@ func (s *Server) handleGetMe(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, user)
 }
 
-// validStyleTags enumerates the allowed player-card style tags. Exported at
-// package level (rather than inlined) so tests in this package can reference
-// the same set of values.
+// validStyleTags enumerates the allowed player-card style tags.
 var validStyleTags = []string{"shooter", "pass_first", "defense", "rim_runner", "casual", "competitive"}
 
 var validPositions = map[string]bool{"guard": true, "wing": true, "forward": true, "center": true}
@@ -75,9 +73,8 @@ type patchMeRequest struct {
 	StyleTags    []string                 `json:"style_tags"`
 	SkillLevel   optionalNullable[string] `json:"skill_level"`
 	Availability []string                 `json:"availability"`
-	// IANA zone name reported by the device; drives your-window alert
-	// evaluation. Write-only from the app's perspective (never cleared —
-	// a device always has a zone to report).
+	// IANA zone name reported by the device. Never cleared — a device always
+	// has a zone to report.
 	Timezone            *string `json:"timezone"`
 	WindowAlertsEnabled *bool   `json:"window_alerts_enabled"`
 	PlayNudgesEnabled   *bool   `json:"play_nudges_enabled"`

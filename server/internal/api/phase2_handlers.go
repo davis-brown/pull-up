@@ -139,9 +139,8 @@ func (s *Server) handleListFavorites(w http.ResponseWriter, r *http.Request) {
 
 type pushTokenRequest struct {
 	Token string `json:"token"`
-	// Device IANA timezone, best-effort: token registration is the one
-	// moment every notification-capable user passes through, so it doubles
-	// as the timezone capture point for your-window alerts.
+	// Token registration is the one moment every notification-capable user
+	// passes through, so it doubles as the timezone capture point.
 	Timezone string `json:"timezone,omitempty"`
 }
 
@@ -399,13 +398,10 @@ func (s *Server) handleAdminSetPhotoStatus(w http.ResponseWriter, r *http.Reques
 }
 
 // handleAdminSetExternalPhotoStatus hides or restores an auto-fetched
-// external photo (Commons/Mapillary). 'hidden' excludes it from
-// ListExternalPhotos (and the Worker's read-through cache stops resolving it
-// immediately); the row is kept so re-enrichment's ON CONFLICT DO NOTHING
-// can't silently resurrect a photo an admin already hid. Hiding also enqueues
-// the cached R2 object (ext/{source}/{source_id}) for deletion so those bytes
-// are reclaimed; a later restore self-heals because the cache refills on the
-// next read.
+// external photo. The row is KEPT when hidden, so re-enrichment's ON CONFLICT
+// DO NOTHING can't resurrect a photo an admin already hid. Hiding also
+// enqueues the cached R2 object for deletion; a later restore self-heals
+// because the cache refills on the next read.
 func (s *Server) handleAdminSetExternalPhotoStatus(w http.ResponseWriter, r *http.Request) {
 	photoID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {

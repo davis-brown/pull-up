@@ -20,11 +20,10 @@ func (b BBox) String() string {
 	return fmt.Sprintf("%f,%f,%f,%f", b.South, b.West, b.North, b.East)
 }
 
-// FetchCourtElement fetches a single OSM element by type/id and parses it into
-// a Court, for backfilling attributes onto an already-known court. Returns
-// (nil, nil) when the element no longer exists or carries no usable geometry —
-// a stale reference is not an error. Overpass is a shared free service —
-// callers must rate-limit themselves.
+// FetchCourtElement fetches a single OSM element by type/id, for backfilling
+// attributes onto a known court. Returns (nil, nil) when the element no longer
+// exists or has no usable geometry — a stale reference is not an error.
+// Overpass is a shared free service; callers must rate-limit themselves.
 func FetchCourtElement(ctx context.Context, endpoint, osmType string, osmID int64) (*Court, error) {
 	switch osmType {
 	case "node", "way", "relation":

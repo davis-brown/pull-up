@@ -6,10 +6,9 @@ import { useAuth } from "@/lib/auth-context";
 import { useCourtActivity, useRecordGame } from "@/lib/hooks";
 import { useTheme } from "@/lib/theme";
 
-// Recording a game: pick who played from the people currently checked in,
-// split them into two sides, say who won. The result is a claim about
-// other people, so it stays invisible until the losing side confirms it —
-// hence the copy below setting that expectation up front.
+// Recording a game: pick who played from those checked in, split them into
+// two sides, say who won. The result stays invisible until the losing side
+// confirms it, which the copy below sets up front.
 export function RecordGame({ courtId }: { courtId: string }) {
   const t = useTheme();
   const { user } = useAuth();
@@ -25,8 +24,7 @@ export function RecordGame({ courtId }: { courtId: string }) {
   const [scoreLose, setScoreLose] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  // Everyone currently at the court, deduped — the check-in list can hold
-  // several rows for one player across a long session.
+  // Deduped: the check-in list can hold several rows for one player.
   const present = Array.from(
     new Map((activity?.check_ins ?? []).map((c) => [c.user_id, c])).values(),
   );

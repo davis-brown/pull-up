@@ -54,13 +54,10 @@ export function yourWindowHours(availability: string[], now: Date): Set<number> 
   return hours;
 }
 
-// One-liner for the map's court sheet when the player's best window today has
-// historical activity, e.g. "Usually active in your Thursday-evening window"
-// (the forecast's hourly curve is already filtered to today's day of week).
-// Sums the historical baseline only — never today's scheduled runs — so a
-// single planned session can't masquerade as "usually". Null when the player
-// set no windows for today, the court lacks history, or their windows are
-// historically dead here.
+// One-liner for the court sheet, e.g. "Usually active in your
+// Thursday-evening window". Sums the historical baseline ONLY, never today's
+// scheduled runs, so one planned session can't masquerade as "usually".
+// Null when there are no windows today, no history, or no activity.
 export function yourWindowSummary(
   forecast: CourtForecast | undefined,
   availability: string[],

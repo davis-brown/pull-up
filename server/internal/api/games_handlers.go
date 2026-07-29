@@ -21,15 +21,13 @@ const (
 	maxCourtGame = 20 // games returned per court listing
 
 	// xpGamePlayed is granted to every participant of a CONFIRMED game.
-	// Only on confirmation: an unconfirmed result is an unverified claim,
-	// and paying out on those would make game recording the most farmable
-	// action in the app.
+	// Confirmation-only: paying out unverified claims would make game
+	// recording the most farmable action in the app.
 	xpGamePlayed = 10
 )
 
 type recordGameRequest struct {
-	// Team rosters by user id. The recorder must appear in one of them:
-	// you log games you played in, not games you watched.
+	// Team rosters by user id. The recorder must appear in one of them.
 	TeamA       []string `json:"team_a"`
 	TeamB       []string `json:"team_b"`
 	WinningTeam *int     `json:"winning_team"` // 0 = team_a, 1 = team_b
@@ -89,8 +87,8 @@ func (s *Server) handleRecordGame(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "you must be one of the players")
 		return
 	}
-	// Scores are optional, but a partial or self-contradicting score is a
-	// data-entry mistake worth rejecting rather than storing.
+	// Scores are optional, but a partial or self-contradicting one is
+	// rejected rather than stored.
 	var scoreWin, scoreLose *int16
 	if req.ScoreWin != nil || req.ScoreLose != nil {
 		if req.ScoreWin == nil || req.ScoreLose == nil {
@@ -187,8 +185,8 @@ func (s *Server) handleConfirmGame(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, "get game participant", err)
 		return
 	}
-	// Only the losing side settles a result. A winner (or the recorder,
-	// who is auto-confirmed at creation) agreeing proves nothing.
+	// Only the losing side settles a result; the winner and the recorder
+	// (auto-confirmed at creation) agreeing proves nothing.
 	if participant.Team == game.WinningTeam {
 		writeError(w, http.StatusForbidden, "only the other team can confirm a result")
 		return
@@ -212,9 +210,8 @@ func (s *Server) handleConfirmGame(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"status": "confirmed"})
 }
 
-// awardGameXP grants every participant of a newly confirmed game their
-// share. Dedup-keyed per game per user, so the phase 20 ledger absorbs
-// any retry, and subject to the same daily cap as everything else.
+// awardGameXP grants every participant of a newly confirmed game their share.
+// Dedup-keyed per game per user, and subject to the usual daily cap.
 func (s *Server) awardGameXP(gameID uuid.UUID) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -236,9 +233,8 @@ type gamePlayer struct {
 	Team        int16     `json:"team"`
 }
 
-// handleListCourtGames serves a court's recent confirmed games. Public:
-// a confirmed result is a fact about a public court, the same as its
-// crowd reports and planned runs.
+// handleListCourtGames serves a court's recent confirmed games. Public, like
+// its crowd reports and planned runs.
 func (s *Server) handleListCourtGames(w http.ResponseWriter, r *http.Request) {
 	courtID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {

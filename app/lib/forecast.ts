@@ -1,6 +1,5 @@
-// Pure, node-safe: turnout forecast shapes and the scrubber math built on
-// top of them. No react/react-native imports here — see lib/court-filters.ts
-// for the pattern this follows (jest runs these in plain node).
+// Pure and node-safe: turnout forecast shapes and the scrubber math. No
+// react/react-native imports, so jest can run these in plain node.
 
 export interface ForecastSession {
   session_id: string;
@@ -13,26 +12,24 @@ export interface CourtForecast {
   court_id: string;
   hours: number[];
   has_history: boolean;
-  // Distinct weeks of check-in history behind the averages (0-8): a
-  // confidence signal used to caveat a forecast built on thin data.
+  // Distinct weeks of history behind the averages (0-8); a confidence signal.
   weeks: number;
   sessions: ForecastSession[];
 }
 
-// Below this many weeks of history, the forecast is shown with a caveat so a
-// thin sample doesn't read as authoritative. Half the 8-week trailing window.
+// Below this many weeks of history the forecast is captioned as thin.
 export const CONFIDENCE_WEEKS = 4;
 
-// A low-confidence caption ("Based on 2 weeks of check-ins"), or null when the
-// forecast has no history or enough weeks to stand on its own.
+// A low-confidence caption, or null when the forecast has no history or
+// enough weeks to stand on its own.
 export function lowConfidenceLabel(f: CourtForecast | undefined): string | null {
   if (!f || !f.has_history || f.weeks >= CONFIDENCE_WEEKS) return null;
   const w = Math.max(1, f.weeks);
   return `Based on ${w} week${w === 1 ? "" : "s"} of check-ins`;
 }
 
-// Expected turnout at a given hour: the historical/baseline hourly count
-// plus the going-count of every planned session scheduled at that hour.
+// Expected turnout at an hour: the baseline count plus the going-count of
+// every planned session at that hour.
 export function expectedAt(f: CourtForecast | undefined, hour: number): number {
   if (!f) return 0;
   const base = f.hours[hour] ?? 0;
@@ -48,8 +45,7 @@ export function sessionAt(f: CourtForecast | undefined, hour: number): ForecastS
   return f.sessions.find((s) => s.hour === hour) ?? null;
 }
 
-// The busiest contiguous 3-hour window over a 24-length hourly array (sliding
-// window sum), or null when every hour is zero (nothing to highlight).
+// The busiest contiguous 3-hour window, or null when every hour is zero.
 export function busiestWindow(hours: number[]): { start: number; end: number } | null {
   if (hours.every((h) => h === 0)) return null;
   let bestStart = 0;
@@ -64,17 +60,10 @@ export function busiestWindow(hours: number[]): { start: number; end: number } |
   return { start: bestStart, end: bestStart + 2 };
 }
 
-// Builds the deterministic set of court ids to request a forecast for,
-// capped at `cap`. priorityId (the map sheet's currently-selected court, if
-// any) is always kept in the capped set, even when the viewport has more
-// than `cap` courts and priorityId would otherwise sort outside the first
-// `cap` entries lexicographically — without this, the selected court's
-// scrubbed count could silently read 0. When capping is needed, priorityId
-// is pulled to the front of the sorted set before slicing so it survives
-// the cut, then the result is sorted again — sorting AFTER ensuring
-// inclusion keeps the output (and therefore the query cache key)
-// deterministic for a given input set, regardless of array order or which
-// id is priority.
+// The set of court ids to request a forecast for, capped at `cap`.
+// priorityId always survives the cut, or the selected court's scrubbed count
+// could read 0. Sorting happens AFTER that inclusion, so the output — and
+// therefore the query cache key — is deterministic for a given input set.
 export function forecastIdSet(
   ids: string[],
   priorityId: string | null | undefined,
@@ -89,10 +78,8 @@ export function forecastIdSet(
   return capped.sort();
 }
 
-// The scrubbable hour range for "today": from the current hour through
-// closeHour (10 PM default) inclusive. Always returns at least one hour,
-// even when now is already past closeHour (e.g. 11 PM) — the scrubber still
-// needs a valid, non-empty range to render.
+// The scrubbable hour range for today: current hour through closeHour,
+// inclusive. Always non-empty, even when now is past closeHour.
 export function scrubHours(now: Date, closeHour = 22): number[] {
   const currentHour = now.getHours();
   const end = Math.max(currentHour, closeHour);

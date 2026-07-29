@@ -22,7 +22,6 @@ func TestAuthRegisterLoginFlow(t *testing.T) {
 		t.Fatal("register did not return tokens")
 	}
 
-	// Duplicate email is rejected.
 	resp := doJSON(t, ts, http.MethodPost, "/auth/register", "", map[string]string{
 		"email": "alice@test.local", "password": "password123", "display_name": "Alice 2",
 	})
@@ -31,7 +30,6 @@ func TestAuthRegisterLoginFlow(t *testing.T) {
 	}
 	resp.Body.Close()
 
-	// Wrong password is rejected.
 	resp = doJSON(t, ts, http.MethodPost, "/auth/login", "", map[string]string{
 		"email": "alice@test.local", "password": "wrong-password",
 	})
@@ -40,7 +38,6 @@ func TestAuthRegisterLoginFlow(t *testing.T) {
 	}
 	resp.Body.Close()
 
-	// Correct login returns the same user.
 	resp = doJSON(t, ts, http.MethodPost, "/auth/login", "", map[string]string{
 		"email": "alice@test.local", "password": "password123",
 	})
@@ -52,7 +49,6 @@ func TestAuthRegisterLoginFlow(t *testing.T) {
 		t.Fatalf("login returned different user: %s vs %s", login.User.ID, u.User.ID)
 	}
 
-	// GET /me requires the access token.
 	resp = doJSON(t, ts, http.MethodGet, "/me", "", nil)
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("unauthenticated /me: status %d, want 401", resp.StatusCode)
@@ -69,7 +65,6 @@ func TestAuthRegisterLoginFlow(t *testing.T) {
 	}
 	resp.Body.Close()
 
-	// Refresh rotates the token; the old refresh token can't be reused.
 	resp = doJSON(t, ts, http.MethodPost, "/auth/refresh", "", map[string]string{
 		"refresh_token": u.RefreshToken,
 	})
@@ -88,7 +83,6 @@ func TestAuthRegisterLoginFlow(t *testing.T) {
 	}
 	resp.Body.Close()
 
-	// Logout revokes the current refresh token.
 	resp = doJSON(t, ts, http.MethodPost, "/auth/logout", "", map[string]string{
 		"refresh_token": refreshed.RefreshToken,
 	})
@@ -248,7 +242,6 @@ func TestRefreshReuseRevokesOnlyItsFamily(t *testing.T) {
 	ts, _ := newTestServer(t)
 	u := registerUser(t, ts, "families@test.local", "Families")
 
-	// A separate login creates a separate refresh family for another device.
 	resp := doJSON(t, ts, http.MethodPost, "/auth/login", "", map[string]string{
 		"email": "families@test.local", "password": "password123",
 	})
@@ -296,11 +289,9 @@ func TestExpiredRotatedTokenCannotRevokeCurrentFamily(t *testing.T) {
 	resp.Body.Close()
 }
 
-// TestRefreshReplayWithinGraceKeepsFamily covers the grace-window branch: a
-// revoked token replayed within refreshReplayGrace (5s) is rejected but must NOT
-// revoke the family, so the legitimate concurrent request's rotated token still
-// works. Reusing the just-rotated original immediately keeps revoked_at within
-// the window.
+// TestRefreshReplayWithinGraceKeepsFamily: a token replayed within
+// refreshReplayGrace (5s) is rejected but must NOT revoke the family, so a
+// concurrent request's rotated token still works.
 func TestRefreshReplayWithinGraceKeepsFamily(t *testing.T) {
 	ts, _ := newTestServer(t)
 	u := registerUser(t, ts, "grace-keep@test.local", "Grace Keep")
@@ -311,15 +302,13 @@ func TestRefreshReplayWithinGraceKeepsFamily(t *testing.T) {
 	}
 	current := decodeJSON[testUser](t, resp)
 
-	// Replay the consumed token immediately: revoked_at is fresh (< 5s), so this
-	// is treated as a benign concurrent replay — rejected without family revocation.
+	// revoked_at is fresh (< 5s), so this is a benign concurrent replay.
 	resp = doJSON(t, ts, http.MethodPost, "/auth/refresh", "", map[string]string{"refresh_token": u.RefreshToken})
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("in-grace replay: status %d, want 401", resp.StatusCode)
 	}
 	resp.Body.Close()
 
-	// The current rotated token from the same family must still be usable.
 	resp = doJSON(t, ts, http.MethodPost, "/auth/refresh", "", map[string]string{"refresh_token": current.RefreshToken})
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("in-grace replay revoked current family token: status %d, want 200", resp.StatusCode)
@@ -327,9 +316,9 @@ func TestRefreshReplayWithinGraceKeepsFamily(t *testing.T) {
 	resp.Body.Close()
 }
 
-// TestRefreshReplayBeyondGraceRevokesFamily covers the theft branch: a revoked
-// token replayed more than refreshReplayGrace (5s) after rotation is treated as
-// reuse and revokes the entire family, including the current rotated token.
+// TestRefreshReplayBeyondGraceRevokesFamily: a token replayed more than
+// refreshReplayGrace (5s) after rotation is treated as theft and revokes the
+// entire family, including the current rotated token.
 func TestRefreshReplayBeyondGraceRevokesFamily(t *testing.T) {
 	ts, st := newTestServer(t)
 	u := registerUser(t, ts, "grace-revoke@test.local", "Grace Revoke")
@@ -354,7 +343,6 @@ func TestRefreshReplayBeyondGraceRevokesFamily(t *testing.T) {
 	}
 	resp.Body.Close()
 
-	// The whole family is now revoked, so the current rotated token is dead too.
 	resp = doJSON(t, ts, http.MethodPost, "/auth/refresh", "", map[string]string{"refresh_token": current.RefreshToken})
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("beyond-grace replay did not revoke current family token: status %d, want 401", resp.StatusCode)
@@ -409,9 +397,8 @@ func TestConcurrentRefreshOnlyOneRotationSucceeds(t *testing.T) {
 func TestOAuthDisabledWithoutClientIDs(t *testing.T) {
 	ts, _ := newTestServer(t)
 
-	// The test server is configured with no Google/Apple client IDs, so
-	// both providers must report as unconfigured rather than attempt a
-	// network JWKS fetch.
+	// No Google/Apple client IDs are configured, so both must report
+	// unconfigured rather than attempt a network JWKS fetch.
 	resp := doJSON(t, ts, http.MethodPost, "/auth/oauth", "", map[string]string{
 		"provider": "google", "id_token": "whatever",
 	})

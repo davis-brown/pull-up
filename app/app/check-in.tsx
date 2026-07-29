@@ -20,15 +20,12 @@ import { darkTheme } from "@/lib/theme";
 const PLUS_OPTIONS = [0, 1, 2, 3];
 const MAX_AVATARS = 3;
 const SUCCESS_DISMISS_MS = 800;
-// Base check-in award, mirroring XP_SOURCES ("Check in at a court", +10) in
-// lib/levels.ts. Shown as the slide control's reward chip. Deliberately the
-// base, not the first-of-day +15: a repeat check-in can earn less, so this
-// never over-promises on the common path.
+// Base check-in award, mirroring XP_SOURCES in lib/levels.ts. Deliberately
+// the base, not the first-of-day +15, so it never over-promises.
 const CHECK_IN_XP = 10;
 
-// Full-screen dark slide-to-check-in modal (spec 3d). Always dark, so it
-// resolves theme locally via darkTheme() instead of useTheme() — the
-// global theme preference never flips for this screen.
+// Full-screen slide-to-check-in modal. Always dark, so it resolves theme
+// locally via darkTheme() instead of useTheme().
 export default function CheckInScreen() {
   const params = useLocalSearchParams();
   const courtId = parseRouteId(params.courtId);
@@ -236,10 +233,9 @@ function CheckInContent({ courtId, via }: { courtId: string; via?: "gps" }) {
                     style={[
                       t.type.button,
                       styles.bringChipLabel,
-                      // Selected chip is ink text on the electric-accent
-                      // background, not onAccent (white) — t.colors.background
-                      // is the dark palette's near-black, and this screen is
-                      // always dark (darkTheme()).
+                      // Ink on the accent background, not onAccent (white):
+                      // this screen is always dark, so t.colors.background is
+                      // the dark palette's near-black.
                       { color: selected ? t.colors.background : t.colors.textMuted },
                     ]}
                   >

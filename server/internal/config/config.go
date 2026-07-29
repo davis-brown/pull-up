@@ -24,9 +24,8 @@ type Config struct {
 	// map regions the first time anyone views them.
 	AutoSeed         bool
 	OverpassEndpoint string
-	// Enrich enables the background worker that fills missing addresses
-	// (Nominatim) and finds openly-licensed photos (Wikimedia Commons) the
-	// first time a court's detail page is viewed.
+	// Enrich enables the background worker that fills missing addresses and
+	// finds openly-licensed photos on first view of a court's detail page.
 	Enrich bool
 	// OAuth audiences; empty disables the provider. GoogleClientIDs is a
 	// comma-separated list of OAuth client IDs (web + iOS + Android);
@@ -35,15 +34,12 @@ type Config struct {
 	AppleAudiences  string
 	// SentryDSN enables server-side crash/error reporting when set.
 	SentryDSN string
-	// Workers AI credentials for text moderation (Llama Guard). Both must be
-	// set to enable it; with either empty, user text is accepted unscreened,
-	// which is what keeps local development and CI running without
-	// Cloudflare credentials.
+	// Workers AI credentials for text moderation. Both must be set; with
+	// either empty, user text is accepted unscreened (local dev and CI).
 	CloudflareAccountID string
 	CloudflareAIToken   string
-	// MapillaryToken enables the enricher's Mapillary photo source. Optional,
-	// same as CloudflareAIToken: empty leaves Mapillary off (Commons still
-	// runs), so local dev and CI need no Mapillary credential.
+	// MapillaryToken enables the enricher's Mapillary photo source. Optional;
+	// empty leaves it off and Commons still runs.
 	MapillaryToken string
 	// Per-IP rate limits (requests/minute). 0 disables the limiter.
 	RateLimitAuthPerMin      int
@@ -56,9 +52,8 @@ type Config struct {
 	// InternalTaskSecret guards scheduler, email-delivery, and media Worker
 	// integration requests.
 	InternalTaskSecret string
-	// Version and Commit identify the running container image. They are exposed
-	// on /internal/version so deploy workflows can confirm rollout before
-	// turning on new Worker behavior.
+	// Version and Commit identify the running container image, exposed on
+	// /internal/version so deploys can confirm rollout.
 	Version string
 	Commit  string
 }

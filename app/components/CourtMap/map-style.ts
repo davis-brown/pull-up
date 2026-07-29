@@ -1,14 +1,11 @@
 import { useEffect, useState } from "react";
 import { mapStyleURL } from "./types";
 
-// Spec 3a/3b/3f render the map as a flat, light, violet-tinted "paper" surface
-// (base #E7E6F1, lighter streets, green parks) — not positron's neutral gray.
-// Rather than hand-author a full MapLibre style, we fetch OpenFreeMap's
-// positron/dark style (which already carries the whole OpenMapTiles layer set,
-// zoom rules, and labels) and recolor its land/water/parks/roads to the violet
-// palette. Recoloring keys off layer id + source-layer heuristics, so a
-// cosmetic upstream restyle won't silently un-tint the map — and on failure we
-// fall back to the untinted style URL, which is still a valid map.
+// Renders the map as a flat, violet-tinted "paper" surface rather than
+// positron's neutral gray. Instead of hand-authoring a MapLibre style, this
+// fetches OpenFreeMap's positron/dark style and recolors it. Recoloring keys
+// off layer id + source-layer heuristics; on failure it falls back to the
+// untinted style URL, which is still a valid map.
 
 interface MapLayer {
   id?: string;
@@ -45,9 +42,8 @@ const PARK_RE = /park|wood|grass|forest|golf|pitch|meadow|scrub|cemetery|garden|
 const WATER_RE = /water|ocean|sea|lake|river|bay/;
 const ROAD_RE = /road|street|motorway|highway|trunk|primary|secondary|tertiary|bridge|tunnel|transit|rail|path|track/;
 
-// Recolor a style in place-free (returns a deep copy). Only park-like layers go
-// green — general landuse (residential/commercial) is left to the base color so
-// cities don't render as fields.
+// Returns a deep copy. Only park-like layers go green; general landuse is
+// left to the base color so cities don't render as fields.
 function tint(style: MapStyle, c: Tint): MapStyle {
   const clone: MapStyle = JSON.parse(JSON.stringify(style));
   for (const layer of clone.layers) {
@@ -75,10 +71,9 @@ function tint(style: MapStyle, c: Tint): MapStyle {
 // Module-level cache: fetch + tint each scheme's style at most once per session.
 const cache = new Map<string, MapStyle>();
 
-// Returns the tinted style object, falling back to the plain positron/dark URL
-// until the fetch+tint resolves (a brief neutral flash on the first ever load
-// of each scheme; instant on subsequent mounts, since the cache is read during
-// render). The effect only fetches uncached schemes and re-renders when done.
+// Returns the tinted style object, falling back to the plain positron/dark
+// URL until the fetch+tint resolves. The cache is read during render, so only
+// the first load of each scheme flashes neutral.
 export function useMapStyle(scheme: "light" | "dark"): MapStyle | string {
   const [, bump] = useState(0);
   useEffect(() => {

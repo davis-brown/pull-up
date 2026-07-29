@@ -12,9 +12,7 @@ import (
 	"github.com/davisbrown/pull-up/server/internal/store/gen"
 )
 
-// Badge thresholds, per the brief. Kept as named constants (rather than
-// inlined in deriveBadges) so the response shape's rules are legible in
-// one place.
+// Badge thresholds.
 const (
 	badgeFirstRunCheckIns  = 1  // first_run: at least one check-in ever.
 	badgeExplorerCourts    = 5  // explorer: distinct courts checked into.
@@ -24,18 +22,15 @@ const (
 	badgeHostSessions      = 3  // host: sessions created.
 )
 
-// badge is one entry in the /me/stats badges array; unearned badges are
-// included with earned:false so the client can render a locked state.
-// EarnedAt is set once the badge has been observed (phase 21b) and is null
-// for unearned badges and for earned ones not yet recorded.
+// badge is one entry in the /me/stats badges array. Unearned badges are
+// included with earned:false; EarnedAt is null until the badge is recorded.
 type badge struct {
 	ID       string     `json:"id"`
 	Earned   bool       `json:"earned"`
 	EarnedAt *time.Time `json:"earned_at"`
 }
 
-// statsBadgeInputs is the pure-function input to deriveBadges: every
-// number a badge rule reads, computed upstream from queries + weekStreak.
+// statsBadgeInputs is the input to deriveBadges.
 type statsBadgeInputs struct {
 	Games         int // total check-ins ("first_run").
 	Courts        int // distinct courts checked into ("explorer").
@@ -45,9 +40,8 @@ type statsBadgeInputs struct {
 	SessionsCount int // sessions the user created ("host").
 }
 
-// deriveBadges applies the brief's exact thresholds. Order matches the
-// brief's example response and is part of the API contract, so badges
-// are always returned in this fixed order regardless of earned state.
+// deriveBadges applies the badge thresholds. The returned order is part of
+// the API contract and is fixed regardless of earned state.
 func deriveBadges(in statsBadgeInputs) []badge {
 	return []badge{
 		{ID: "first_run", Earned: in.Games >= badgeFirstRunCheckIns},
@@ -63,17 +57,9 @@ func deriveBadges(in statsBadgeInputs) []badge {
 // first time and returns the slugs the player hasn't been shown yet. It
 // mutates `badges` in place, filling in EarnedAt.
 //
-// Badges stay derived — this only dates them. The subtlety is the BASELINE:
-// every existing player already satisfies several rules, so recording them
-// naively would celebrate six badges they won a month ago. The first call
-// for a player (badges_synced_at IS NULL) therefore records whatever is
-// already earned as ALREADY SEEN and stamps the baseline; only badges
-// earned after that are new. A brand-new player's baseline is empty, so
-// their genuine first badge still gets its moment.
-//
-// This is a write on a read path, which is why it is careful to be a no-op
-// in the common case: with the baseline taken and no new badge earned,
-// there is nothing to insert and it costs one indexed SELECT.
+// The first call for a player (badges_synced_at IS NULL) records everything
+// already earned as ALREADY SEEN, so an existing player is not shown badges
+// they won long ago; only badges earned after that baseline count as new.
 func (s *Server) syncBadgeEarnedAt(ctx context.Context, uid uuid.UUID, badges []badge) ([]string, error) {
 	stored, err := s.store.Queries.ListUserBadges(ctx, uid)
 	if err != nil {
@@ -114,8 +100,6 @@ func (s *Server) syncBadgeEarnedAt(ctx context.Context, uid uuid.UUID, badges []
 		if err != nil {
 			return nil, err
 		}
-		// Fill in the dates just assigned, so the response that first
-		// records a badge reports its earn date rather than null.
 		dates := make(map[string]time.Time, len(recorded))
 		for _, row := range recorded {
 			dates[row.Slug] = row.EarnedAt
@@ -135,9 +119,7 @@ func (s *Server) syncBadgeEarnedAt(ctx context.Context, uid uuid.UUID, badges []
 		return []string{}, nil
 	}
 
-	// Unseen = previously recorded but never shown, plus anything just
-	// recorded. Ordered by the fixed badge order so the client celebrates
-	// them predictably rather than in map order.
+	// Returned in the fixed badge order, not map order.
 	newBadges := make([]string, 0, len(badges))
 	for i := range badges {
 		if !badges[i].Earned {
@@ -152,9 +134,7 @@ func (s *Server) syncBadgeEarnedAt(ctx context.Context, uid uuid.UUID, badges []
 }
 
 // handleAckBadges clears the unseen mark on every badge a player has, once
-// the app has shown them. Mirrors the level-up ack, and for the same
-// reason: /me/stats is refetched in the background, so a read-clears-it
-// design would spend the moment on a fetch nobody saw.
+// the app has shown them.
 func (s *Server) handleAckBadges(w http.ResponseWriter, r *http.Request) {
 	if err := s.store.Queries.MarkBadgesSeen(r.Context(), userID(r)); err != nil {
 		s.internalError(w, "ack badges", err)
@@ -163,10 +143,9 @@ func (s *Server) handleAckBadges(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// mondayWeekStart returns the Monday 00:00 UTC that begins the ISO week
-// containing t, matching Postgres's date_trunc('week', …) semantics (used
-// by the UserCheckInWeeks query) so Go and SQL agree on which week is
-// "current" when deriving the streak.
+// mondayWeekStart returns the Monday 00:00 UTC beginning the ISO week
+// containing t. Must match Postgres date_trunc('week', …), which
+// UserCheckInWeeks relies on.
 func mondayWeekStart(t time.Time) time.Time {
 	t = t.UTC()
 	wd := int(t.Weekday())      // Sunday=0 .. Saturday=6
@@ -175,13 +154,10 @@ func mondayWeekStart(t time.Time) time.Time {
 	return d.AddDate(0, 0, -sinceMonday)
 }
 
-// weekStreak counts consecutive weeks with at least one check-in, ending
-// at nowWeekStart or, if nothing has happened yet this week, at the
-// previous week — an active streak isn't broken mid-week just because the
-// user hasn't checked in yet today. weekStarts are distinct week-start
-// dates (Monday 00:00), e.g. from UserCheckInWeeks; time math (not string
-// arithmetic on ISO week labels) keeps this correct across year
-// boundaries.
+// weekStreak counts consecutive weeks with at least one check-in, ending at
+// nowWeekStart or, if nothing has happened yet this week, at the previous
+// week — a streak is not broken mid-week. weekStarts are distinct Monday
+// 00:00 dates.
 func weekStreak(weekStarts []time.Time, nowWeekStart time.Time) int {
 	have := make(map[string]bool, len(weekStarts))
 	for _, w := range weekStarts {
@@ -204,9 +180,8 @@ func weekStreak(weekStarts []time.Time, nowWeekStart time.Time) int {
 	return streak
 }
 
-// homeCourt is one entry in /me/stats' home_courts: a court the user
-// frequents, with its live party-size headcount (matching the party-size-
-// sum convention used everywhere else, e.g. forecast.sql).
+// homeCourt is one entry in /me/stats' home_courts. LiveCount is a
+// party-size sum, matching the convention used elsewhere.
 type homeCourt struct {
 	CourtID   uuid.UUID `json:"court_id"`
 	Name      string    `json:"name"`
@@ -214,67 +189,52 @@ type homeCourt struct {
 	LiveCount int       `json:"live_count"`
 }
 
-// meStatsResponse is the /me/stats payload: lifetime stats, the week
-// streak, all six badges (earned or not), and up to 3 home courts.
+// meStatsResponse is the /me/stats payload.
 type meStatsResponse struct {
-	Games      int         `json:"games"`
-	Courts     int         `json:"courts"`
-	WeekStreak int         `json:"week_streak"`
-	Badges     []badge     `json:"badges"`
-	HomeCourts []homeCourt `json:"home_courts"`
-	// Phase 20: XP and level, flattened in so the player card renders
-	// from one request.
-	Level          int    `json:"level"`
-	Tier           string `json:"tier"`
-	XP             int    `json:"xp"`
-	XPIntoLevel    int    `json:"xp_into_level"`
-	XPForNextLevel int    `json:"xp_for_next_level"`
-	// Phase 18: W-L across confirmed games. Shown as a fact on the player
-	// card; deliberately not fed into XP or badges, since recording is
-	// voluntary and rewarding win RATE would just reward logging wins.
+	Games          int         `json:"games"`
+	Courts         int         `json:"courts"`
+	WeekStreak     int         `json:"week_streak"`
+	Badges         []badge     `json:"badges"`
+	HomeCourts     []homeCourt `json:"home_courts"`
+	Level          int         `json:"level"`
+	Tier           string      `json:"tier"`
+	XP             int         `json:"xp"`
+	XPIntoLevel    int         `json:"xp_into_level"`
+	XPForNextLevel int         `json:"xp_for_next_level"`
+	// W-L across confirmed games. Deliberately not fed into XP or badges.
 	Wins   int `json:"wins"`
 	Losses int `json:"losses"`
-	// Phase 21: what the recent XP is made of, and a level crossing the
-	// player hasn't been shown yet (null when there is nothing to celebrate).
+
 	XPBreakdown    []xpBreakdownEntry `json:"xp_breakdown"`
 	LevelUpPending *int               `json:"level_up_pending"`
-	// Phase 21b: badge slugs earned since the last time the app showed
-	// them. Empty (never null) so the client can iterate unconditionally.
+	// Badges earned since the app last showed them. Empty, never null.
 	NewBadges []string `json:"new_badges"`
-	// Phase 22b: this quarter's standing. Level/Tier above stay LIFETIME —
-	// they are the player's identity and never reset. Season is the part
+	// Level/Tier above are LIFETIME and never reset; Season is the part
 	// that does.
 	Season seasonStats `json:"season"`
 }
 
-// seasonStats is the current season's window plus what the player has done
-// inside it. SeasonTier applies the same tier table to season XP, so "Q3
-// Rookie, lifetime All-Star" is a coherent thing to say about someone.
+// seasonStats is the current season's window plus the player's standing in
+// it. Tier applies the same tier table to season XP.
 type seasonStats struct {
 	seasonInfo
 	XP   int    `json:"xp"`
 	Tier string `json:"tier"`
 }
 
-// xpBreakdownWindowDays bounds the "what have I earned lately" view. Long
-// enough that an occasional player still sees themselves in it, short
-// enough that it reads as recent rather than lifetime (users.xp already
-// carries lifetime).
+// xpBreakdownWindowDays bounds the recent-XP view; users.xp carries lifetime.
 const xpBreakdownWindowDays = 30
 
-// xpBreakdownEntry is one award kind's contribution over the window. Kind
-// is the raw award kind from the ledger ("check_in", "showed_up", …); the
-// client owns the display name, so adding an award kind server-side needs
-// no client release to stop showing it as unlabelled.
+// xpBreakdownEntry is one award kind's contribution over the window. Kind is
+// the raw ledger kind ("check_in", "showed_up", …); the client owns display
+// names.
 type xpBreakdownEntry struct {
 	Kind   string `json:"kind"`
 	Points int    `json:"points"`
 	Events int    `json:"events"`
 }
 
-// handleMeStats serves the profile player card's stats: total games and
-// distinct courts, the current week streak, all badges (earned or not),
-// and the user's top-3 home courts by check-in count.
+// handleMeStats serves the profile player card's stats.
 func (s *Server) handleMeStats(w http.ResponseWriter, r *http.Request) {
 	offsetMinutes, ok := parseTzOffsetMinutes(r.URL.Query().Get("tz_offset_minutes"))
 	if !ok {
@@ -418,19 +378,13 @@ func (s *Server) handleMeStats(w http.ResponseWriter, r *http.Request) {
 		Season: seasonStats{
 			seasonInfo: season,
 			XP:         int(seasonXP),
-			// levelFor/tierFor are the same curve the lifetime level uses,
-			// applied to the season total — so a season tier means the same
-			// amount of play a lifetime tier ever did.
-			Tier: tierFor(levelFor(int(seasonXP))),
+			Tier:       tierFor(levelFor(int(seasonXP))),
 		},
 	})
 }
 
 // handleAckLevelUp clears a pending level crossing once the app has shown
-// it. Explicit rather than clearing inside /me/stats: the app refetches
-// stats on resume and in the background, so a read-clears-it design would
-// routinely spend the celebration on a fetch the player never saw.
-// Idempotent — acking nothing is a no-op, so a retry is safe.
+// it. Idempotent.
 func (s *Server) handleAckLevelUp(w http.ResponseWriter, r *http.Request) {
 	if err := s.store.Queries.AckLevelUp(r.Context(), userID(r)); err != nil {
 		s.internalError(w, "ack level up", err)

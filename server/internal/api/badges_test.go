@@ -35,12 +35,9 @@ func contains(hay []string, needle string) bool {
 	return false
 }
 
-// The baseline is the whole reason phase 21b needs a synced-at marker.
-// Every existing player already satisfies several badge rules, so recording
-// earn dates naively would celebrate badges they won a month ago the first
-// time they opened the app after deploy. The first stats read must record
-// what is already earned as ALREADY SEEN, and only later earnings count as
-// new.
+// Existing players already satisfy several badge rules, so the first stats
+// read must record what is already earned as ALREADY SEEN; only later
+// earnings count as new.
 func TestBadgeBaselineThenNewBadgeIsCelebrated(t *testing.T) {
 	ts, _ := newTestServer(t)
 	u := registerUser(t, ts, "badge-baseline@test.local", "BadgeBaseline")
@@ -80,7 +77,6 @@ func TestBadgeBaselineThenNewBadgeIsCelebrated(t *testing.T) {
 	if _, earnedAt := baseline.badge(t, "first_run"); earnedAt == nil {
 		t.Error("first_run earned_at is null after the baseline recorded it")
 	}
-	// An unearned badge carries no date.
 	if _, earnedAt := baseline.badge(t, "explorer"); earnedAt != nil {
 		t.Errorf("explorer earned_at = %v, want null while unearned", *earnedAt)
 	}
@@ -100,8 +96,7 @@ func TestBadgeBaselineThenNewBadgeIsCelebrated(t *testing.T) {
 	if !contains(after.NewBadges, "explorer") {
 		t.Errorf("new_badges = %v, want to include explorer", after.NewBadges)
 	}
-	// The badge that existed at baseline stays quiet — this is the assertion
-	// that the baseline actually suppressed it rather than merely delaying it.
+	// The baseline badge stays quiet: suppressed, not merely delayed.
 	if contains(after.NewBadges, "first_run") {
 		t.Errorf("new_badges = %v, want first_run suppressed by the baseline", after.NewBadges)
 	}

@@ -8,9 +8,9 @@ export function signInHref(next?: string | null): string {
   return `/login?next=${encodeURIComponent(safeNext)}`;
 }
 
-// Dynamic API/router ids are opaque, but they must be one path segment. This
-// accepts UUIDs and the short slug-like ids used by fixtures while rejecting
-// arrays, traversal, separators, query delimiters, and control characters.
+// Dynamic ids are opaque but must be one path segment. Accepts UUIDs and
+// fixture slugs; rejects arrays, traversal, separators, query delimiters,
+// and control characters.
 export function parseRouteId(value: unknown): string | undefined {
   return typeof value === "string" &&
     value.length > 0 &&

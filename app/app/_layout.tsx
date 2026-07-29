@@ -76,9 +76,8 @@ const queryClient = new QueryClient({
   },
 });
 
-// Hold the splash screen until Barlow is loaded so the type scale never
-// flashes system fonts — but never hang forever: fall back to system fonts
-// after 3s if the font fetch stalls (slow network, offline first launch).
+// Hold the splash until Barlow loads so the type scale never flashes system
+// fonts, but fall back after 3s if the fetch stalls.
 void SplashScreen.preventAutoHideAsync().catch(() => {});
 const FONT_LOAD_TIMEOUT_MS = 3000;
 
@@ -120,14 +119,12 @@ function ThemedApp() {
     if (!geofencingSupported) return;
     // Keep the monitored courts current with wherever the user is now.
     void refreshGeofences().catch(() => {});
-    // Tapping a geofence notification opens that court — except the
-    // "looks like you're at X" prompt, which deep-links straight to the
-    // slide-to-check-in screen instead.
+    // Geofence notifications open that court, except the "looks like you're
+    // at X" prompt, which deep-links to the slide-to-check-in screen.
     const sub = Notifications.addNotificationResponseReceivedListener((response) => {
       const data = response.notification.request.content.data;
-      // Phase 20 pushes carry no court: a level-up opens the profile
-      // (where the new level is), a streak nudge opens the map (where you
-      // go do something about it).
+      // These pushes carry no court: a level-up opens the profile, a streak
+      // nudge opens the map.
       if (data?.action === "view_profile") {
         router.push("/profile");
         return;
@@ -142,10 +139,9 @@ function ThemedApp() {
         router.push(`/check-in?courtId=${courtId}&via=gps`);
         return;
       }
-      // "Looking to play" pushes (phase 19): the threshold push opens the
-      // plan screen prefilled from the bucket; the conversion push opens
-      // the court with the newly-planned run highlighted (same ?run=
-      // path shared links use).
+      // "Looking to play": the threshold push opens the plan screen prefilled
+      // from the bucket; the conversion push opens the court with the new run
+      // highlighted, via the same ?run= path shared links use.
       if (data?.action === "plan_run" && typeof data.runDate === "string" && typeof data.windowKey === "string") {
         const span = WINDOW_SPANS.find((w) => w.key === data.windowKey);
         const dayOffset = dayOffsetFromToday(data.runDate, new Date());
@@ -201,9 +197,8 @@ function ThemedApp() {
           name="profile-settings"
           options={{
             title: "Profile settings",
-            // Reachable via deep link / direct URL / notification with no
-            // prior history — fall back to home instead of a dead-end
-            // screen with no back button.
+            // Reachable by deep link with no prior history; fall back to home
+            // instead of a dead-end screen with no back button.
             headerLeft: () => (
               <Pressable
                 onPress={() => (router.canGoBack() ? router.back() : router.replace("/"))}
@@ -233,8 +228,8 @@ function ThemedApp() {
 
 function RootLayout() {
   const ready = useAppReady();
-  // Native splash screen is still showing until hideAsync() fires above, so
-  // rendering nothing here just avoids a flash of unstyled content.
+  // The native splash is still up until hideAsync() fires above, so rendering
+  // nothing avoids a flash of unstyled content.
   if (!ready) return null;
 
   return (

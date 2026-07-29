@@ -32,11 +32,9 @@ function windowLabel(win: { start: number; end: number }): string {
     : `${to12(win.start)} ${startP}–${to12(endHour)} ${endP}`;
 }
 
-// Right-aligned mini bar chart of a court's historical hourly turnout, paired
-// with its busiest-window label. Hours inside the player's own availability
-// windows (the "your window" lens) get an accent tick under the bar. Without
-// history there is nothing meaningful to plot, so the section says so
-// honestly — popular times fill in as check-ins accumulate.
+// Mini bar chart of a court's historical hourly turnout with its
+// busiest-window label. Hours inside the player's availability windows get an
+// accent tick. With no history the section says so rather than plotting zeros.
 export function PopularTimes({
   forecast,
   availability = [],

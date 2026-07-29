@@ -1,13 +1,10 @@
 // Package moderation screens user-submitted text with Llama Guard on
 // Cloudflare Workers AI.
 //
-// Scope, deliberately: TEXT ONLY. Llama Guard is a text classifier and
-// cannot look at an image — user photo uploads are NOT covered by anything
-// in this package. Cloudflare's CSAM Scanning Tool does not cover them
-// either, because it hashes images as they enter the Cloudflare cache and
-// court photos are served `private, no-store` behind a per-request
-// authorization check, so they never enter it. Photo moderation remains the
-// court_photos pending/flagged/removed state machine plus human review.
+// TEXT ONLY. Photo uploads are not covered here, nor by Cloudflare's CSAM
+// Scanning Tool (court photos are served `private, no-store` and never enter
+// the cache it hashes from). Photo moderation is the court_photos
+// pending/flagged/removed state machine plus human review.
 package moderation
 
 import (
@@ -24,29 +21,24 @@ import (
 // "safe", or "unsafe" followed by the violated category codes.
 const Model = "@cf/meta/llama-guard-3-8b"
 
-// requestTimeout bounds how long a poster waits on the classifier. Chat has
-// to feel immediate; a slow verdict is worse than the fail-open below,
-// because a user who thinks the app is broken retries and posts twice.
+// requestTimeout bounds how long a poster waits on the classifier.
 const requestTimeout = 3 * time.Second
 
-// maxTextBytes caps what is sent for classification. Every surface this
-// guards is already length-limited in the schema (notes are <=280 chars),
-// so this only bounds a pathological caller, and truncating is safe: the
-// classifier sees the opening of the message, which is where a violation
-// realistically appears.
+// maxTextBytes caps what is sent for classification; every guarded surface is
+// already length-limited in the schema, so this only bounds a bad caller.
 const maxTextBytes = 4000
 
 // Verdict is the classifier's answer. Categories carries Llama Guard's
-// violated-category codes (S1…S13) when Safe is false; it is informational
-// — the block decision is Safe alone.
+// violated-category codes (S1…S13) when Safe is false and is informational —
+// the block decision is Safe alone.
 type Verdict struct {
 	Safe       bool
 	Categories []string
 }
 
 // Client screens text. A zero Client (or one built with an empty token) is
-// disabled and passes everything, which is what keeps local development and
-// the integration tests running without Cloudflare credentials.
+// disabled and passes everything, so local dev and tests run without
+// Cloudflare credentials.
 type Client struct {
 	accountID string
 	token     string
@@ -69,7 +61,6 @@ func (c *Client) WithEndpoint(endpoint string) *Client {
 }
 
 // Enabled reports whether the client will actually classify anything.
-// Callers use it to skip building a request when moderation is off.
 func (c *Client) Enabled() bool {
 	return c != nil && c.accountID != "" && c.token != ""
 }
@@ -95,14 +86,9 @@ type aiResponse struct {
 
 // Check classifies text.
 //
-// FAIL-OPEN: any transport error, timeout, or unparseable response returns
-// a safe verdict together with the error. A classifier outage must not take
-// down posting on a pickup-basketball app — the failure mode of blocking
-// every message is worse for a solo operator than briefly missing one. The
-// error is returned rather than swallowed so callers log it; if the balance
-// ever changes, this is the single place to flip it.
-//
-// A disabled client returns safe with no error.
+// FAIL-OPEN: any transport error, timeout, or unparseable response returns a
+// safe verdict together with the error, so callers can log it. A disabled
+// client returns safe with no error.
 func (c *Client) Check(ctx context.Context, text string) (Verdict, error) {
 	if !c.Enabled() {
 		return Verdict{Safe: true}, nil
@@ -154,13 +140,9 @@ func (c *Client) Check(ctx context.Context, text string) (Verdict, error) {
 	return parseVerdict(parsed.Result.Response), nil
 }
 
-// parseVerdict reads Llama Guard's output, which is a short completion:
-// "safe", or "unsafe" on the first line followed by comma-separated
-// category codes on the next.
-//
-// Anything unrecognised is treated as SAFE, consistent with the fail-open
-// stance: a model that answers in an unexpected shape is a broken
-// classifier, not evidence against the user.
+// parseVerdict reads Llama Guard's output: "safe", or "unsafe" on the first
+// line followed by comma-separated category codes on the next. Anything
+// unrecognised is treated as SAFE, per the fail-open stance.
 func parseVerdict(raw string) Verdict {
 	lines := strings.Split(strings.TrimSpace(strings.ToLower(raw)), "\n")
 	if len(lines) == 0 {

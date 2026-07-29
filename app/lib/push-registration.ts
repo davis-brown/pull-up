@@ -70,8 +70,8 @@ export async function registerPushToken(opts?: {
     if (!projectId) return;
     const perms = await Notifications.getPermissionsAsync();
     if (!perms.granted) {
-      // Only prompt when the caller has just primed the user (first
-      // favorite). Sign-in must not fire a surprise permission dialog.
+      // Only prompt when the caller primed the user; sign-in must not fire a
+      // surprise permission dialog.
       if (!opts?.requestPermission) return;
       const req = await Notifications.requestPermissionsAsync();
       if (!req.granted) return;
@@ -87,8 +87,7 @@ export async function registerPushToken(opts?: {
     }
     await api<void>("/me/push-token", {
       method: "POST",
-      // The device timezone rides along so the server can evaluate
-      // "is now inside this player's availability window" for alerts.
+      // The device timezone rides along for availability-window alerts.
       body: JSON.stringify({ token: token.data, timezone: deviceTimezone() }),
     });
   } catch {

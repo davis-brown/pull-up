@@ -12,10 +12,8 @@ import (
 	"github.com/davisbrown/pull-up/server/internal/moderation"
 )
 
-// screenText decides whether user text is ever written, so its contract is
-// worth pinning independently of the classifier's own tests: it must block
-// only on a definite unsafe verdict, and let the post through in every
-// other case including outages.
+// screenText must block only on a definite unsafe verdict, and let the post
+// through in every other case including outages.
 func newScreeningServer(t *testing.T, handler http.HandlerFunc) (*Server, func()) {
 	t.Helper()
 	upstream := httptest.NewServer(handler)
@@ -116,8 +114,7 @@ func containsAny(haystack string, needles ...string) bool {
 }
 
 // A broken classifier fails on every post, so the outage alert must report
-// promptly and then stay quiet — otherwise one bad token burns the Sentry
-// quota restating a single fact.
+// promptly and then stay quiet.
 func TestOutageThrottle(t *testing.T) {
 	var th outageThrottle
 	base := time.Now()

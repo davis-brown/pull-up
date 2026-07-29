@@ -155,9 +155,8 @@ func TestMapillaryPhotosDataLimitPersists(t *testing.T) {
 	}
 }
 
-// A non-data-limit API error (e.g. auth) must surface as a typed
-// *mapillaryAPIError — the enricher pages Sentry only on that type, so this is
-// what keeps the silent-token-failure guard wired.
+// A non-data-limit API error must surface as a typed *mapillaryAPIError; the
+// enricher pages Sentry only on that type.
 func TestMapillaryPhotosApiErrorSurfaces(t *testing.T) {
 	e := serveMapillary(t, func(w http.ResponseWriter, r *http.Request) {
 		io.WriteString(w, `{"error":{"code":190,"message":"invalid token"}}`)

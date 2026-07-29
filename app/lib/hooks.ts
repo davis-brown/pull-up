@@ -123,14 +123,9 @@ export function useDiscoverySearch(
   });
 }
 
-// Forecast lookups are batched by id set, not per-court — the scrubber reads
-// the response locally (see lib/forecast.ts) so dragging it never refetches.
-// Ids are deduped and sorted (via forecastIdSet) before joining, keeping the
-// query key (and therefore the cache entry) stable regardless of array
-// order; capping at 50 keeps the query string bounded for very large
-// viewports. priorityId (the map sheet's selected court, if any) is
-// guaranteed a slot in the capped set even if it would otherwise sort
-// outside it — see forecastIdSet's doc comment.
+// Forecast lookups are batched by id set, not per-court, so dragging the
+// scrubber never refetches. forecastIdSet dedupes, sorts, and caps the ids,
+// keeping the query key stable regardless of array order.
 const MAX_FORECAST_IDS = 50;
 
 export function useForecasts(
@@ -380,8 +375,7 @@ export function useCourtSessions(courtId: string | undefined) {
   });
 }
 
-// Phase 19: looking-for-a-run. Public — no `enabled: !!user` gate, since
-// guests benefit from seeing demand before deciding whether to sign in.
+// Looking-for-a-run. Public: deliberately no `enabled: !!user` gate.
 export function useRunIntents(courtId: string | undefined) {
   return useQuery({
     queryKey: ["courts", courtId, "run-intents"],
@@ -409,8 +403,7 @@ export function useSetRunIntent(courtId: string) {
   });
 }
 
-// Phase 18: recorded games. Public listing — a confirmed result is a
-// fact about a public court, like its crowd reports.
+// Recorded games. Public listing, like a court's crowd reports.
 export function useCourtGames(courtId: string | undefined) {
   return useQuery({
     queryKey: ["courts", courtId, "games"],
@@ -702,11 +695,8 @@ export function useMeStats() {
 }
 
 // Clears a pending level crossing after the app has shown it. Deliberately
-// separate from reading /me/stats: stats refetch on resume and in the
-// background, so clearing on read would spend the celebration on a fetch
-// the player never saw. Settles the stats cache either way — a failed ack
-// just means the celebration shows again next time, which is the harmless
-// direction to fail.
+// separate from reading /me/stats, which refetches in the background.
+// Settles the cache either way; a failed ack just replays the celebration.
 export function useAckLevelUp() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -715,9 +705,7 @@ export function useAckLevelUp() {
   });
 }
 
-// Marks every unseen badge as shown. Same shape and rationale as
-// useAckLevelUp: stats refetch in the background, so the moment has to be
-// spent explicitly rather than by reading.
+// Marks every unseen badge as shown. Same shape as useAckLevelUp.
 export function useAckBadges() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -845,9 +833,8 @@ export function useClearAvatar() {
   });
 }
 
-// Upcoming runs at any court near the given point — public discovery, no
-// account needed (phase 17). Same 10km radius as the Activity tab's court
-// list so the two rails describe the same neighborhood.
+// Upcoming runs near a point. Public, and the same 10km radius as the
+// Activity tab's court list so the two rails cover the same neighborhood.
 export function useNearbyRuns(pos: { lat: number; lng: number } | null) {
   return useQuery({
     queryKey: ["runs", "nearby", pos],
@@ -896,9 +883,8 @@ export function useVoteCourt(courtId: string) {
   });
 }
 
-// Phase 22: scoped leaderboards. Both are authenticated — the visibility
-// rules they enforce are all relative to a viewer — so both stay disabled
-// until there is a signed-in user.
+// Scoped leaderboards. Both enforce viewer-relative visibility rules, so
+// both stay disabled until there is a signed-in user.
 export function useCourtLeaderboard(courtId: string | undefined) {
   const { user } = useAuth();
   return useQuery({

@@ -10,15 +10,13 @@ import (
 )
 
 const (
-	// leaderboardMaxEntries bounds the response. A pickup court's board is
-	// interesting at the top; past a screenful it is a directory.
+	// leaderboardMaxEntries bounds the response.
 	leaderboardMaxEntries = 25
 )
 
-// leaderboardEntry is one ranked player. Rank is 1-based and assigned by
-// the server so every client agrees on ties (dense ordering by the query's
-// ORDER BY, not by score equality — two players on the same score keep
-// distinct ranks, ordered by name).
+// leaderboardEntry is one ranked player. Rank is 1-based, server-assigned,
+// and dense over the query's ORDER BY: two players on the same score keep
+// distinct ranks, ordered by name.
 type leaderboardEntry struct {
 	Rank        int       `json:"rank"`
 	UserID      uuid.UUID `json:"user_id"`
@@ -32,16 +30,11 @@ type leaderboardEntry struct {
 
 type leaderboardResponse struct {
 	Metric string `json:"metric"`
-	// Both boards rank over the current SEASON rather than a rolling
-	// window (phase 22b). A rolling window never ends, so standing just
-	// drifts; a season closes, which is what makes a board worth topping.
+	// Both boards rank over the current SEASON, not a rolling window.
 	Season  seasonInfo         `json:"season"`
 	Entries []leaderboardEntry `json:"entries"`
 	// ViewerRank is the viewer's own position, or null when they do not
-	// appear. On a court board that means they have not checked in here
-	// during the window; it is also null when they rank past the returned
-	// slice, so the client can say "not ranked yet" rather than implying
-	// they are absent from the sport.
+	// appear — including when they rank past the returned slice.
 	ViewerRank *int `json:"viewer_rank"`
 }
 

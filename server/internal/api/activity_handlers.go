@@ -12,8 +12,7 @@ import (
 	"github.com/davisbrown/pull-up/server/internal/store/gen"
 )
 
-// checkInRadiusM is the geo-verification tolerance. Generous on purpose:
-// GPS drift and indoor gyms make tight radii reject real players. This is
+// checkInRadiusM is the geo-verification tolerance. Generous on purpose —
 // friction against spam, not security.
 const checkInRadiusM = 150.0
 
@@ -128,14 +127,13 @@ func (s *Server) handleCheckIn(w http.ResponseWriter, r *http.Request) {
 	} else if !recent {
 		s.awardReputation(r.Context(), uid, repCheckIn)
 	}
-	// XP (phase 20) rides the same gate but is a separate track — see
-	// internal/api/xp.go. Off the request path: gamification must never
-	// slow down or fail a check-in.
+	// XP rides the same gate but is a separate track (see xp.go). Off the
+	// request path: gamification must never slow down or fail a check-in.
 	s.runBackground("award check-in xp", func() { s.awardCheckInXP(uid, courtID, checkIn.ID, recent) })
 	// If this started a run (0 → 1 active), ping the court's favoriters.
 	s.runBackground("notify run started", func() { s.notifyRunStarted(courtID, uid) })
 	// If this pushed the headcount over the alert threshold, ping favoriters
-	// whose availability window covers right now (phase 16).
+	// whose availability window covers right now.
 	s.runBackground("notify window alerts", func() { s.notifyWindowAlerts(courtID, uid, partySize) })
 	writeJSON(w, http.StatusCreated, checkIn)
 }

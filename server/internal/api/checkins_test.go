@@ -29,8 +29,6 @@ func TestCheckInDistanceGuard(t *testing.T) {
 		t.Error("422 response should include distance_m")
 	}
 
-	// At the court succeeds and promotes a pending court (strongest
-	// real-world signal it exists).
 	resp = doJSON(t, ts, http.MethodPost, "/courts/"+court.ID+"/check-ins", u.AccessToken, map[string]any{
 		"lat": ruckerLat, "lng": ruckerLng,
 	})
@@ -109,7 +107,6 @@ func TestCheckInOneActivePerUserAndHistory(t *testing.T) {
 		t.Errorf("older history entry = %+v, want checked-out court A", history.CheckIns[1])
 	}
 
-	// Explicit check-out clears the current check-in.
 	resp = doJSON(t, ts, http.MethodDelete, "/check-ins/current", u.AccessToken, nil)
 	if resp.StatusCode != http.StatusNoContent {
 		t.Fatalf("check out: status %d", resp.StatusCode)
@@ -131,7 +128,6 @@ func TestCheckInPartySize(t *testing.T) {
 	u := registerUser(t, ts, "partysize@test.local", "PartySize")
 	court := createTestCourt(t, ts, u.AccessToken, "Party Court", ruckerLat, ruckerLng)
 
-	// Valid party size + ball status: 201, echoed back in the response.
 	resp := doJSON(t, ts, http.MethodPost, "/courts/"+court.ID+"/check-ins", u.AccessToken, map[string]any{
 		"lat": ruckerLat, "lng": ruckerLng, "party_size": 3, "has_ball": true,
 	})
