@@ -13,21 +13,16 @@ import (
 )
 
 const (
-	// forecastMaxIDs caps how many courts a single forecast request can
-	// batch (the client-side time scrubber fetches once for the courts
-	// visible in the current viewport).
+	// forecastMaxIDs caps how many courts one forecast request can batch.
 	forecastMaxIDs = 50
-	// forecastWeeks is the trailing window (in weeks) the hourly averages
-	// are computed over; bucket totals are divided by this to get an
-	// average concurrent headcount per local hour.
+	// forecastWeeks is the trailing window the hourly averages cover.
 	forecastWeeks = 8.0
-	// tzOffsetClampMinutes bounds tz_offset_minutes to a plausible range
-	// (UTC-14..UTC+14, the widest real-world UTC offsets).
+	// tzOffsetClampMinutes bounds tz_offset_minutes to UTC-14..UTC+14.
 	tzOffsetClampMinutes = 840
 )
 
 // forecastSession is a today-scheduled, non-canceled run for a court, in the
-// caller's local time; the client overlays these onto the hourly forecast.
+// caller's local time.
 type forecastSession struct {
 	SessionID uuid.UUID `json:"session_id"`
 	Hour      int       `json:"hour"`
@@ -35,11 +30,8 @@ type forecastSession struct {
 	Going     int       `json:"going"`
 }
 
-// courtForecast is the per-court forecast payload: average concurrent
-// headcount per local hour today (over the trailing 8 weeks), plus today's
-// scheduled sessions. Weeks is how many distinct weeks of check-in history
-// back the averages (0-8) — a confidence signal the client uses to caveat a
-// forecast built on thin data.
+// courtForecast is the per-court forecast payload. Weeks is how many
+// distinct weeks of history back the averages (0-8), a confidence signal.
 type courtForecast struct {
 	CourtID    uuid.UUID         `json:"court_id"`
 	Hours      [24]int           `json:"hours"`
@@ -49,10 +41,8 @@ type courtForecast struct {
 }
 
 // parseForecastIDs parses the comma-separated ids query param into 1-50
-// UUIDs. ok is false when the value is missing/empty, exceeds 50 ids, or
-// contains any invalid UUID — all of which the caller maps to a 400.
-// Duplicate ids are dropped, keeping the first occurrence's position, so the
-// ids-order-preserving response never repeats a court's forecast.
+// UUIDs. ok is false when the value is missing, exceeds 50 ids, or contains
+// an invalid UUID. Duplicates are dropped, keeping first-occurrence order.
 func parseForecastIDs(raw string) (ids []uuid.UUID, ok bool) {
 	if strings.TrimSpace(raw) == "" {
 		return nil, false
@@ -97,9 +87,8 @@ func parseTzOffsetMinutes(raw string) (minutes int, ok bool) {
 	return n, true
 }
 
-// forecastDayBounds computes the Postgres-style day-of-week (0=Sunday..
-// 6=Saturday) and the [start, end) UTC instants spanning "today" in the
-// caller's local offset, as of now.
+// forecastDayBounds computes the Postgres-style day-of-week (0=Sunday) and
+// the [start, end) UTC instants spanning "today" in the caller's offset.
 func forecastDayBounds(now time.Time, offsetMinutes int) (dow int, dayStart, dayEnd time.Time) {
 	offset := time.Duration(offsetMinutes) * time.Minute
 	local := now.UTC().Add(offset)
@@ -117,13 +106,9 @@ func localHour(t time.Time, offsetMinutes int) int {
 }
 
 // averageHeads turns a bucket total into an average concurrent headcount,
-// rounded to the nearest int (not truncated). weeks is the number of
-// distinct local weeks the court actually has check-in history for within
-// the trailing window (see CourtHistoryWeeks) — a court with only a few
-// weeks of history is divided by that smaller count instead of always by 8,
-// so it doesn't read as artificially quiet. weeks is clamped to [1,
-// forecastWeeks] so missing/bogus data (0 or negative) can't divide by zero
-// or inflate the divisor past the actual trailing window.
+// rounded not truncated. Divides by the court's actual distinct-week count
+// (see CourtHistoryWeeks), not a flat 8, so a young court doesn't read as
+// artificially quiet. weeks is clamped to [1, forecastWeeks].
 func averageHeads(total int32, weeks int) int {
 	divisor := weeks
 	if divisor < 1 {
@@ -135,11 +120,9 @@ func averageHeads(total int32, weeks int) int {
 	return int(math.Round(float64(total) / float64(divisor)))
 }
 
-// buildForecasts assembles the per-court forecast payloads in ids order.
-// A court with no matching history rows gets has_history:false and
-// all-zero hours; sessions are attached independently of history. weeksRows
-// supplies each court's actual distinct-week count (see CourtHistoryWeeks),
-// used as averageHeads' divisor instead of a flat 8 weeks.
+// buildForecasts assembles the per-court forecast payloads in ids order. A
+// court with no history rows gets has_history:false and all-zero hours;
+// sessions are attached independently of history.
 func buildForecasts(
 	ids []uuid.UUID,
 	historyRows []gen.CourtHourlyCheckInHistoryRow,
@@ -185,9 +168,8 @@ func buildForecasts(
 	return out
 }
 
-// handleForecast serves the hourly turnout forecast for a batch of courts:
-// per-court average concurrent headcount per local hour today (trailing 8
-// weeks), plus today's scheduled sessions. Public, unauthenticated.
+// handleForecast serves the hourly turnout forecast for a batch of courts.
+// Public, unauthenticated.
 func (s *Server) handleForecast(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 

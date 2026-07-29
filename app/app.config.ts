@@ -1,7 +1,7 @@
 import type { ExpoConfig } from "expo/config";
 
-// Node builtin, typed locally: the app tsconfig has no node types, and this
-// config file only ever executes under Node (expo-cli / EAS).
+// Typed locally: the app tsconfig has no node types, and this file only ever
+// executes under Node (expo-cli / EAS).
 declare const require: (id: string) => unknown;
 const { existsSync } = require("fs") as { existsSync: (path: string) => boolean };
 
@@ -45,8 +45,7 @@ const config: ExpoConfig = {
   },
   android: {
     package: "com.pullup.app",
-    // FCM config for push notifications. Committed once Firebase is set up;
-    // guarded so builds work before the file exists.
+    // Guarded so builds work before the Firebase file exists.
     ...(existsSync("./google-services.json")
       ? { googleServicesFile: "./google-services.json" }
       : {}),
@@ -119,8 +118,8 @@ const config: ExpoConfig = {
     [
       "@sentry/react-native/expo",
       {
-        // Source-map upload happens in EAS builds when SENTRY_AUTH_TOKEN is
-        // present in the build env; local dev builds skip it silently.
+        // Source maps upload in EAS builds when SENTRY_AUTH_TOKEN is set;
+        // local dev builds skip it silently.
         organization: process.env.SENTRY_ORG ?? "",
         project: process.env.SENTRY_PROJECT ?? "pull-up",
       },

@@ -51,9 +51,8 @@ func (s *Server) handleGetProfile(w http.ResponseWriter, r *http.Request) {
 
 	// Private accounts hide their activity aggregates from non-followers.
 	checkInCount, courtsAdded, streakDays := stats.CheckInCount, stats.CourtsAddedCount, streak
-	// Level is an activity aggregate too (phase 20), so it hides with the
-	// rest of them — null rather than 0, since "Level 1 Rookie" would be a
-	// wrong answer where "not shown" is the true one.
+	// Level is an activity aggregate too, so it hides with the rest — null
+	// rather than 0, which would read as a real "Level 1 Rookie".
 	progress := progressFor(int(stats.Xp))
 	var level *int
 	var tier *string

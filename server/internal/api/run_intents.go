@@ -17,12 +17,9 @@ import (
 )
 
 const (
-	// intentThreshold is the seeker count that turns a "looking to play"
-	// bucket into a push: enough players said the same thing that it's
-	// worth interrupting them to suggest planning it. Same number as the
-	// check-in window-alert crossing (windowAlertThreshold) — both encode
-	// "this is clearly real now" — but kept as a separate constant since
-	// the two features could reasonably diverge later.
+	// intentThreshold is the seeker count that turns a bucket into a push.
+	// Deliberately a separate constant from windowAlertThreshold, which
+	// happens to share its value.
 	intentThreshold = 4
 	// maxIntentLeadDays bounds how far ahead a seeker can mark intent.
 	maxIntentLeadDays = 7
@@ -53,12 +50,9 @@ type runIntentRequest struct {
 	WindowKey string `json:"window_key"`
 }
 
-// parseIntentBucket validates a (run_date, window_key) pair: window_key
-// must be a real availability window, run_date must parse and fall within
-// [today, today+maxIntentLeadDays] using UTC calendar days (the same
-// server-time convention the forecast bucketing already documents), and
-// the date's actual weekday/weekend must match the window's — a player
-// can't mark "weekend_morning" against a Tuesday.
+// parseIntentBucket validates a (run_date, window_key) pair: a real
+// availability window, a date within [today, today+maxIntentLeadDays] in UTC
+// calendar days, and a weekday/weekend that matches the window's.
 func parseIntentBucket(req runIntentRequest, now time.Time) (time.Time, error) {
 	span, ok := windowSpanByKey(req.WindowKey)
 	if !ok {
@@ -81,10 +75,9 @@ func parseIntentBucket(req runIntentRequest, now time.Time) (time.Time, error) {
 	return date, nil
 }
 
-// bucketForSessionTime maps a planned run's start time onto the intent
-// bucket it falls in, using the same UTC calendar-day/hour convention as
-// parseIntentBucket (approximate, not per-user-timezone — matchmaking
-// buckets are symbolic labels, not exact times; see the phase 19 spec).
+// bucketForSessionTime maps a planned run's start time onto its intent
+// bucket, using the same UTC convention as parseIntentBucket. Approximate,
+// not per-user-timezone: buckets are symbolic labels, not exact times.
 func bucketForSessionTime(t time.Time) (date time.Time, windowKey string, ok bool) {
 	u := t.UTC()
 	d := u.Truncate(24 * time.Hour)
@@ -201,9 +194,7 @@ type runIntentSeeker struct {
 	SkillLevel  *string `json:"skill_level"`
 }
 
-// handleListRunIntents is public: seeing who wants to run where is the
-// point of the feature (same precedent as public RSVP/attendee lists), and
-// a guest deciding whether to sign in benefits from seeing it too.
+// handleListRunIntents is public, matching the public RSVP/attendee lists.
 func (s *Server) handleListRunIntents(w http.ResponseWriter, r *http.Request) {
 	courtID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
@@ -220,8 +211,8 @@ func (s *Server) handleListRunIntents(w http.ResponseWriter, r *http.Request) {
 	out := make([]runIntentSeeker, 0, len(rows))
 	for _, row := range rows {
 		date := row.RunDate.Time
-		// Same-day buckets whose window has already ended are expired —
-		// read-time filtering, the same pattern check-ins use.
+		// Same-day buckets past their window are expired; filtered at read
+		// time, as check-ins are.
 		if date.Equal(today) {
 			if span, ok := windowSpanByKey(row.WindowKey); ok && now.Hour() >= span.end {
 				continue
@@ -237,9 +228,8 @@ func (s *Server) handleListRunIntents(w http.ResponseWriter, r *http.Request) {
 }
 
 // notifyRunIntentThreshold pushes everyone in a bucket once it hits
-// intentThreshold: "N players want to run — plan it?" Fire-and-forget,
-// gated so it sends exactly once per bucket no matter how membership
-// churns afterward.
+// intentThreshold. Fire-and-forget, gated to send exactly once per bucket
+// however membership churns afterward.
 func (s *Server) notifyRunIntentThreshold(courtID uuid.UUID, courtName string, date time.Time, windowKey string, count int32) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -280,8 +270,7 @@ func (s *Server) notifyRunIntentThreshold(courtID uuid.UUID, courtName string, d
 }
 
 // notifyRunIntentConverted pushes a bucket's seekers (except the planner)
-// when a session lands inside their window: matchmaking's payoff is a
-// planned run, not a chat. Gated the same way as the threshold push.
+// when a session lands inside their window. Gated like the threshold push.
 func (s *Server) notifyRunIntentConverted(courtID uuid.UUID, courtName string, date time.Time, windowKey string, actor, sessionID uuid.UUID) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()

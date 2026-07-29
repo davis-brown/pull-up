@@ -1,13 +1,10 @@
-// Passive court geofencing (native only — background location does not exist
-// on web). The OS monitors regions around the ~15 nearest courts; on entry we
-// either prompt ("Looks like you're at X — check in?") or check in silently,
-// per the user's Auto check-in setting. Exit auto-checks-out automatic
-// check-ins. Uses OS-level region monitoring, not continuous GPS.
+// Passive court geofencing, native only. The OS monitors regions around the
+// ~15 nearest courts and on entry either prompts or checks in silently, per
+// the user's Auto check-in setting. Region monitoring, not continuous GPS.
 //
 // iOS caps monitored regions at 20 per app, hence nearest-15 with
 // re-registration on each refresh. The server re-verifies every check-in is
-// within 150 m, so a drive-by geofence entry with a stale fix cannot create
-// a bogus check-in far from the court.
+// within 150 m, so a stale-fix entry cannot create a bogus check-in.
 import * as Location from "expo-location";
 import * as Notifications from "expo-notifications";
 import * as TaskManager from "expo-task-manager";
@@ -150,8 +147,8 @@ async function onEnter(courtId: string, mode: GeofenceMode, leaseUser: string | 
     return;
   }
 
-  // Automatic: take a fresh fix and check in. The server enforces the 150 m
-  // radius, so a spurious entry event can't check us in from afar.
+  // The server enforces the 150 m radius, so a spurious entry event can't
+  // check us in from afar.
   const pos = await Location.getCurrentPositionAsync({
     accuracy: Location.Accuracy.High,
   });
@@ -176,8 +173,8 @@ async function onEnter(courtId: string, mode: GeofenceMode, leaseUser: string | 
 
 async function onExit(courtId: string, leaseUser: string | null): Promise<void> {
   checkAccountLease(leaseUser);
-  // Only automatic check-ins are auto-closed; a manual check-in is the
-  // user's own statement and stays until they leave it or it expires.
+  // Only automatic check-ins are auto-closed; a manual one stays until the
+  // user ends it or it expires.
   const res = await api<{ check_in: CheckIn | null }>("/me/check-ins/current");
   checkAccountLease(leaseUser);
   const current = res.check_in;
@@ -186,9 +183,9 @@ async function onExit(courtId: string, leaseUser: string | null): Promise<void> 
   }
 }
 
-// Re-registers geofences around the nearest courts. Call after enabling,
-// and opportunistically on app launch/foreground — iOS's 20-region cap
-// means the monitored set must follow the user around.
+// Re-registers geofences around the nearest courts. Call after enabling and
+// on launch/foreground: iOS's 20-region cap means the monitored set must
+// follow the user around.
 export async function refreshGeofences(): Promise<void> {
   if (!geofencingSupported) return;
   const generation = geofenceGeneration;

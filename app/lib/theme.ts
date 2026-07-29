@@ -1,14 +1,9 @@
-// pull-up design system.
+// pull-up design system: the single source of truth for color, spacing,
+// radius, type, shadows, and fonts. Components read tokens from useTheme()
+// rather than hardcoding values.
 //
-// Single source of truth for color, spacing, radius, type, shadows, and
-// fonts. Components never hardcode values — they read tokens from
-// useTheme(), which resolves the light or dark palette from the OS setting
-// automatically.
-//
-// Palette rationale (spec 3a–3f, "electric" set): near-white paper and
-// violet-tinted neutrals with an electric-violet brand accent (#5A3FF0) and
-// an electric-lime accent (#C4F52E) reserved for the leveling system. Green
-// is reserved exclusively for live activity.
+// Electric violet (#5A3FF0) is the brand accent; electric lime (#C4F52E) is
+// reserved for the leveling system, and green exclusively for live activity.
 import {
   createContext,
   createElement,
@@ -36,8 +31,8 @@ export interface ThemeColors {
   accentSurface: string;
   accentSoft: string;
   onAccent: string;
-  // Electric lime, reserved for the leveling system (XP bars, level badges,
-  // streak accents — spec 3d/3e). Never a general CTA color; that's `accent`.
+  // Reserved for the leveling system. Never a general CTA color — use
+  // `accent` for that.
   xp: string;
   onXp: string;
   chipBorder: string;
@@ -49,10 +44,9 @@ export interface ThemeColors {
   warningBorder: string;
   danger: string;
   overlay: string;
-  // Machined-metal finish. Neutral surfaces use metalTop→metalBottom
-  // gradients with a metalEdge top highlight (the "milled edge"); the
-  // accent CTA uses accentMetalTop→accentMetalBottom. sheen is the
-  // translucent band swept across buttons on press.
+  // Machined-metal finish: metalTop→metalBottom for neutral surfaces,
+  // accentMetalTop→accentMetalBottom for the accent CTA. sheen is the band
+  // swept across buttons on press.
   metalTop: string;
   metalBottom: string;
   metalEdge: string;
@@ -64,9 +58,8 @@ export interface ThemeColors {
 const light: ThemeColors = {
   background: "#FAF9FE",
   surface: "#FFFFFF",
-  // A muted gray one step darker than the paper background, so chips, badge
-  // tiles, and inactive track fills read without needing a border (spec's
-  // #ECEAF5 chip/style-tag gray).
+  // One step darker than the paper background, so chips and inactive track
+  // fills read without needing a border.
   surfaceMuted: "#ECEAF5",
   border: "#E7E5F2",
   textPrimary: "#161326",
@@ -147,9 +140,8 @@ export const radius = {
   full: 999,
 } as const;
 
-// Loaded font family names (see app/_layout.tsx for useFonts wiring). Body
-// copy is Barlow; display/condensed headings and buttons are Barlow
-// Condensed, always uppercase.
+// Loaded font family names (useFonts wiring is in app/_layout.tsx). Barlow
+// Condensed headings and buttons are always uppercase.
 export const fonts = {
   body: "Barlow_400Regular",
   bodyMedium: "Barlow_500Medium",
@@ -231,8 +223,7 @@ export const shadows = {
     shadowOffset: { width: 0, height: 6 },
     elevation: 6,
   },
-  // Spec 3a: live pins carry the brand violet glow (0 6px 16px
-  // rgba(90,63,240,.45)).
+  // Live pins carry the brand violet glow.
   pin: {
     shadowColor: "#5A3FF0",
     shadowOpacity: 0.45,
@@ -324,10 +315,9 @@ export function useTheme(): Theme {
   };
 }
 
-// A handful of screens (the slide-to-check-in modal, spec 3d) are always
-// dark, regardless of the user's theme preference or OS setting. This
-// resolves the dark palette into a full Theme object without touching the
-// global preference — callers use it locally instead of useTheme().
+// A few screens (the slide-to-check-in modal) are always dark regardless of
+// preference. Resolves the dark palette without touching global state;
+// callers use this locally instead of useTheme().
 export function darkTheme(): Theme {
   return {
     scheme: "dark",

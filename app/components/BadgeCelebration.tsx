@@ -4,17 +4,9 @@ import { Button } from "@/components/ui";
 import { BADGES } from "@/lib/player";
 import { useTheme } from "@/lib/theme";
 
-// The moment for a newly-earned badge (phase 21b). Badges have existed
-// since the player card shipped, but silently — they simply appeared
-// unlocked the next time someone scrolled their profile.
-//
-// Handles several at once: a single check-in can satisfy two rules (a
-// fifth distinct court that is also a fourth straight week), and showing
-// two modals in a row would be worse than one that names both.
-//
-// Mounted on the profile screen for the same reason as the level-up
-// celebration: it belongs where the badges are, and off the map home's
-// overlay layout.
+// The moment for a newly-earned badge. Handles several at once, since one
+// check-in can satisfy two rules. Mounted on the profile screen, where the
+// badges are and off the map home's overlay layout.
 export function BadgeCelebration({
   slugs,
   onDismiss,
@@ -23,9 +15,8 @@ export function BadgeCelebration({
   onDismiss: () => void;
 }) {
   const t = useTheme();
-  // An id with no catalog entry is a badge the server shipped ahead of the
-  // app; drop it rather than render a blank row. If that leaves nothing,
-  // the modal stays closed and the ack still clears it.
+  // An id with no catalog entry is a badge shipped ahead of the app; drop it
+  // rather than render a blank row. The ack still clears it.
   const earned = slugs
     .map((slug) => BADGES.find((b) => b.id === slug))
     .filter((b): b is (typeof BADGES)[number] => !!b);

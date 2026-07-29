@@ -14,9 +14,8 @@ function shortHourLabel(hour: number): string {
 }
 
 // Draggable time scrubber over a contiguous set of hours (see
-// lib/forecast.ts#scrubHours). Snaps to whole-hour steps and never fetches —
-// onChange just moves a local index; PanResponder works with both touch and
-// (via react-native-web) mouse drag.
+// lib/forecast.ts#scrubHours). Snaps to whole hours and never fetches;
+// onChange just moves a local index.
 export function TimeScrubber({
   hours,
   value,
@@ -45,9 +44,8 @@ export function TimeScrubber({
     if (hour !== value) onChange(hour);
   };
 
-  // The PanResponder is created once, so its callbacks would otherwise close
-  // over the first render's applyX (trackWidth 0, stale value/hours). Route
-  // through a ref that always points at the latest closure.
+  // The PanResponder is created once, so its callbacks would close over the
+  // first render's applyX (trackWidth 0). Route through a ref instead.
   const applyXRef = useRef(applyX);
   applyXRef.current = applyX;
 

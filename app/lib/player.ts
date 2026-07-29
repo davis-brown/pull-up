@@ -1,5 +1,5 @@
-// Pure helpers for the shareable player card (profile screen, spec 3e).
-// No react-native import — jest exercises these in the node environment.
+// Pure helpers for the shareable player card. No react-native import, so
+// jest exercises these in the node environment.
 
 const CM_PER_INCH = 2.54;
 
@@ -67,8 +67,7 @@ export const SKILL_LEVELS: { key: string; label: string }[] = [
   { key: "elite", label: "Elite" },
 ];
 
-// Structured availability windows (server allowlist) — when a player usually
-// pulls up, without free-text scheduling.
+// Structured availability windows, mirroring the server allowlist.
 export const AVAILABILITY_WINDOWS: { key: string; label: string }[] = [
   { key: "weekday_morning", label: "Weekday mornings" },
   { key: "weekday_lunch", label: "Weekday lunch" },

@@ -116,8 +116,7 @@ func (s *Server) handleCreateSession(w http.ResponseWriter, r *http.Request) {
 	s.runBackground("notify session planned", func() {
 		s.notifySessionPlanned(courtID, court.Name, uid, session.StartsAt)
 	})
-	// This run may be exactly what a "looking for a run" bucket was
-	// waiting on (phase 19) — notify its seekers if so.
+	// Notify seekers whose bucket this run lands in.
 	if date, windowKey, ok := bucketForSessionTime(session.StartsAt); ok {
 		s.runBackground("notify run intent converted", func() {
 			s.notifyRunIntentConverted(courtID, court.Name, date, windowKey, uid, session.ID)
@@ -151,9 +150,8 @@ func (s *Server) handleListSessions(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"sessions": rows})
 }
 
-// handleNearbyRuns serves the Activity tab's "runs near you" rail: upcoming
-// sessions at any non-rejected court in the radius, for everyone — a player
-// with zero follows still discovers organized runs (phase 17).
+// handleNearbyRuns serves upcoming sessions at any non-rejected court in the
+// radius, so a player with zero follows still discovers organized runs.
 func (s *Server) handleNearbyRuns(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
 	lat, errLat := strconv.ParseFloat(q.Get("lat"), 64)
@@ -253,8 +251,8 @@ func (s *Server) handleRSVP(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, "count attendees", err)
 		return
 	}
-	// A run that drew real attendance pays its planner (phase 20). Keyed
-	// on the session, so it lands once however the RSVP count churns.
+	// Keyed on the session, so the planner is paid once however the RSVP
+	// count churns.
 	if req.Status == "going" && int(goingCount) >= hostedRunMinAttendees && session.CreatedBy != userID(r) {
 		s.runBackground("award hosted-run xp", func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
@@ -339,9 +337,8 @@ func (s *Server) handleCreateMessage(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusTooManyRequests, "slow down — one message every few seconds")
 		return
 	}
-	// Screened after the cooldown check so a flooder can't spend the
-	// classifier budget, and before the write so nothing unsafe is ever
-	// stored, even briefly.
+	// After the cooldown check so a flooder can't spend the classifier
+	// budget, and before the write so nothing unsafe is ever stored.
 	if !s.screenText(w, r, "court_message", body) {
 		return
 	}

@@ -186,9 +186,8 @@ func (s *Server) handleRefresh(w http.ResponseWriter, r *http.Request) {
 	}
 	if row.RevokedAt != nil {
 		// A revoked token presented again is either a benign concurrent replay
-		// (e.g., two tabs racing) or an attacker replaying a stolen token. We
-		// allow a short grace window before treating it as theft and revoking
-		// the whole family. In either case we refuse the refresh.
+		// or a stolen token. A short grace window separates the two; the
+		// refresh is refused either way.
 		if now.Sub(*row.RevokedAt) > refreshReplayGrace {
 			if err := q.RevokeRefreshTokenFamily(r.Context(), row.FamilyID); err != nil {
 				s.internalError(w, "revoke refresh token family", err)
@@ -235,9 +234,8 @@ func (s *Server) handleRefresh(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, "store rotated refresh token", err)
 		return
 	}
-	// Record which token replaced this one as a forensic audit trail of the
-	// rotation chain. Benign-vs-malicious replay detection itself is handled by
-	// the revoked_at grace window above, not by this column.
+	// Forensic audit trail of the rotation chain. Replay detection itself is
+	// the revoked_at grace window above, not this column.
 	if row.RevokedAt == nil {
 		replacementHash := &refreshHash
 		if err := q.SetRefreshTokenReplacement(r.Context(), gen.SetRefreshTokenReplacementParams{
@@ -330,9 +328,8 @@ func (s *Server) handleRequestEmailVerification(w http.ResponseWriter, r *http.R
 	if !readJSON(w, r, &req) {
 		return
 	}
-	// This route is only reachable from the API Worker, which forwards the
-	// public resend request after applying its own rate limits. The internal
-	// secret gate is defense-in-depth against direct container access.
+	// Only reachable from the API Worker, which applies its own rate limits.
+	// The internal secret gate is defense-in-depth against direct access.
 	if !s.internalSecretValid(r) {
 		writeJSON(w, http.StatusAccepted, map[string]string{
 			"status": "if the account is eligible, a verification message will be sent",
@@ -369,9 +366,8 @@ func (s *Server) createEmailVerificationToken(r *http.Request, email string) (st
 	if err != nil {
 		return "", time.Time{}, false, err
 	}
-	// A resend creates a fresh token. Invalidate any unconsumed token so the
-	// unique one-active-token-per-user constraint is satisfied and the latest
-	// emailed token is the only one that can be verified.
+	// Invalidate any unconsumed token to satisfy the one-active-token-per-user
+	// constraint, leaving the latest emailed token the only verifiable one.
 	if err := q.InvalidateEmailVerificationTokens(r.Context(), uid); err != nil {
 		return "", time.Time{}, false, err
 	}

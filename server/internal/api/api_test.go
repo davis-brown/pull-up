@@ -20,15 +20,12 @@ import (
 	"github.com/davisbrown/pull-up/server/internal/store"
 )
 
-// These are full-stack HTTP tests: a real Postgres/PostGIS-backed Server
-// wired the same way cmd/api does, driven over HTTP. Skipped unless
-// TEST_DATABASE_URL is set (see internal/store/store_integration_test.go).
+// Full-stack HTTP tests against a real Postgres/PostGIS-backed Server.
+// Skipped unless TEST_DATABASE_URL is set.
 //
-// internal/store's integration tests point at the same database and
-// truncate the same tables between tests; `go test ./...` runs different
-// packages' test binaries concurrently, so both packages take this same
-// Postgres advisory lock around setup+truncate to keep one package's
-// reset from clobbering another package's in-flight test.
+// internal/store's tests truncate the same tables, and `go test ./...` runs
+// package binaries concurrently, so both take this same Postgres advisory
+// lock around setup+truncate.
 const testDBLockKey = 0x7075_6c6c_7570 // "pullup" — arbitrary, just needs to match internal/store's
 
 func acquireTestDBLock(t *testing.T, ctx context.Context, databaseURL string) {

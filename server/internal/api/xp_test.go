@@ -108,7 +108,6 @@ func TestCheckInAwardsXPIdempotentlyAndLevelsUp(t *testing.T) {
 		t.Fatalf("repeat check-in farmed xp: %d, want 25", got)
 	}
 
-	// /me/stats reports the level derived from that total.
 	resp = doJSON(t, ts, http.MethodGet, "/me/stats?tz_offset_minutes=0", u.AccessToken, nil)
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("me stats: status %d", resp.StatusCode)
@@ -245,7 +244,6 @@ func TestPlayNudgeToggleAndProfileLevel(t *testing.T) {
 	ts, _ := newTestServer(t)
 	u := registerUser(t, ts, "xp-toggle@test.local", "XPToggle")
 
-	// Nudges default on and can be turned off through PATCH /me.
 	resp := doJSON(t, ts, http.MethodPatch, "/me", u.AccessToken, map[string]any{
 		"play_nudges_enabled": false,
 	})
@@ -258,7 +256,6 @@ func TestPlayNudgeToggleAndProfileLevel(t *testing.T) {
 		t.Errorf("play_nudges_enabled = %v, want false", me["play_nudges_enabled"])
 	}
 
-	// A public profile carries level and tier.
 	resp = doJSON(t, ts, http.MethodGet, "/users/"+u.User.ID, "", nil)
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("profile: status %d", resp.StatusCode)

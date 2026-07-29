@@ -13,8 +13,7 @@ import (
 )
 
 // eveningZoneForNow picks a whole-hour Etc/GMT zone where local time is
-// currently 6 PM, plus the availability key matching that zone's local day
-// type — letting the alert path run against real "now" deterministically.
+// currently 6 PM, so the alert path runs against real "now" deterministically.
 func eveningZoneForNow(t *testing.T) (zone string, availabilityKey string) {
 	t.Helper()
 	now := time.Now()
@@ -49,9 +48,8 @@ type pushSink struct {
 	bodies []string
 }
 
-// windowAlertPhrase is the copy unique to window-alert pushes: every push to
-// this sink also carries the recipient token in "to", so matching must use
-// the message body's phrasing, never a substring a token could contain.
+// windowAlertPhrase is copy unique to window-alert pushes. Match on the body,
+// never a substring the recipient token in "to" could also contain.
 const windowAlertPhrase = "A run is on during your"
 
 func (p *pushSink) windowAlertCount() int {
@@ -84,8 +82,6 @@ func TestWindowAlertCrossingCooldownAndToggle(t *testing.T) {
 
 	zone, availabilityKey := eveningZoneForNow(t)
 
-	// Favoriter: favorite the court, register a token (carrying the device
-	// timezone), and advertise the evening window.
 	resp := doJSON(t, ts, http.MethodPut, "/courts/"+court.ID+"/favorite", favoriter.AccessToken, nil)
 	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusOK {
 		t.Fatalf("favorite: status %d", resp.StatusCode)

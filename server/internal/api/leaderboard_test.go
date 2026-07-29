@@ -31,10 +31,8 @@ func (b leaderboardBody) names() []string {
 	return out
 }
 
-// The court board must never make someone more visible than the court's
-// activity list already does. Same rule, same predicate: yourself, public
-// accounts, and accounts you follow — never a private stranger, never
-// either side of a block.
+// The court board uses the same visibility predicate as the court's activity
+// list: yourself, public accounts, and accounts you follow.
 func TestCourtLeaderboardHidesPrivateStrangersAndBlocks(t *testing.T) {
 	ts, _ := newTestServer(t)
 	viewer := registerUser(t, ts, "lb-viewer@test.local", "Viewer")
@@ -99,14 +97,12 @@ func TestCourtLeaderboardHidesPrivateStrangersAndBlocks(t *testing.T) {
 	if board.Metric != "check_ins" {
 		t.Errorf("metric = %q, want check_ins", board.Metric)
 	}
-	// The board is season-scoped, so it must say which season it covers.
 	if board.Season.Key == "" || board.Season.Label == "" || board.Season.StartedAt == "" {
 		t.Errorf("season = %+v, want a populated window", board.Season)
 	}
 	if board.ViewerRank == nil {
 		t.Error("viewer_rank is null, but the viewer checked in here")
 	}
-	// Ranks are 1-based and dense over the returned slice.
 	for i, e := range board.Entries {
 		if e.Rank != i+1 {
 			t.Errorf("entries[%d].rank = %d, want %d", i, e.Rank, i+1)
@@ -114,16 +110,14 @@ func TestCourtLeaderboardHidesPrivateStrangersAndBlocks(t *testing.T) {
 	}
 }
 
-// The circle board needs no privacy predicate beyond blocks — `follows`
-// only ever holds accepted follows — but it must not spill outside the
-// viewer's circle.
+// The circle board needs no privacy predicate beyond blocks, since `follows`
+// only ever holds accepted follows.
 func TestCircleLeaderboardCoversOnlyTheViewerAndTheirFollows(t *testing.T) {
 	ts, _ := newTestServer(t)
 	viewer := registerUser(t, ts, "circle-viewer@test.local", "CircleViewer")
 	followed := registerUser(t, ts, "circle-followed@test.local", "Followed")
 	stranger := registerUser(t, ts, "circle-stranger@test.local", "Stranger")
 
-	// Everyone earns XP so nobody is excluded merely for being idle.
 	court := createTestCourt(t, ts, viewer.AccessToken, "Circle Court", ruckerLat, ruckerLng)
 	for _, token := range []string{viewer.AccessToken, followed.AccessToken, stranger.AccessToken} {
 		resp := doJSON(t, ts, http.MethodPost, "/courts/"+court.ID+"/check-ins", token, map[string]any{
@@ -158,9 +152,7 @@ func TestCircleLeaderboardCoversOnlyTheViewerAndTheirFollows(t *testing.T) {
 	}
 }
 
-// A player the viewer follows who earned nothing this window still appears,
-// at zero — the board should show where you stand, not silently drop the
-// people you are ahead of.
+// A followed player who earned nothing this window still appears, at zero.
 func TestCircleLeaderboardKeepsIdleFollowsAtZero(t *testing.T) {
 	ts, _ := newTestServer(t)
 	viewer := registerUser(t, ts, "idle-viewer@test.local", "IdleViewer")

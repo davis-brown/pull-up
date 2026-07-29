@@ -1,11 +1,10 @@
 import { backgroundStorage as storage, platformOS } from "./storage";
 import type { User } from "./types";
 
-// Web is always same-origin (the web Worker proxies /api). Native builds get
-// EXPO_PUBLIC_API_URL baked in from eas.json; if that's ever missing, dev
-// bundles fall back to the local server and release bundles to the production
-// API origin — never localhost in a shipped app. Native talks to the API
-// Worker directly (the canonical web origin sits behind Cloudflare Access).
+// Web is always same-origin (the web Worker proxies /api). Native gets
+// EXPO_PUBLIC_API_URL from eas.json; if missing, dev bundles fall back to the
+// local server and release bundles to the production API origin — never
+// localhost in a shipped app.
 const DEV_API_URL = "http://localhost:8080";
 const PROD_API_URL = "https://pull-up-api.davisbrown245.workers.dev";
 const isDevBundle = typeof __DEV__ !== "undefined" && __DEV__;
@@ -85,9 +84,8 @@ export function photoURLFromAPIBase(baseURL: string, storageKey: string): string
   return photoURL(baseURL, storageKey);
 }
 
-// Auto-fetched Commons/Mapillary photos are served through the Worker's
-// read-through R2 cache, not hotlinked from the provider — the raw image_url
-// (a signed, expiring URL for Mapillary) must never be rendered directly.
+// Auto-fetched photos go through the Worker's read-through R2 cache. The raw
+// image_url (signed and expiring for Mapillary) must never be rendered.
 const EXTERNAL_SOURCE_ID_RE = /^[0-9]{1,20}$/;
 
 export function externalPhotoURLFromAPIBase(
@@ -145,9 +143,8 @@ function advanceSessionEpoch(): number {
   return sessionEpoch;
 }
 
-// Changes request ownership without changing the current credentials. Auth UI
-// calls this exactly when an identity becomes visible/hidden so requests that
-// began under the prior identity cannot repopulate a freshly cleared cache.
+// Changes request ownership without changing credentials, so requests begun
+// under a prior identity cannot repopulate a freshly cleared cache.
 export function cancelSessionRequests(): void {
   const wasKnownEmpty = knownEmptyEpoch === sessionEpoch;
   const epoch = advanceSessionEpoch();
@@ -498,10 +495,9 @@ export function onSessionExpired(listener: SessionExpiredListener): () => void {
 
 let expectedUserId: string | null = null;
 
-// Set the user identity that the current credential session is expected to
-// represent. Refresh results that return a different user are treated as a
-// session mismatch and trigger expiration, preventing one tab/account from
-// silently inheriting another's refreshed token.
+// Sets the identity the current credential session must represent. A refresh
+// returning a different user expires the session, so one tab cannot inherit
+// another's refreshed token.
 export function setExpectedUserId(id: string | null): void {
   expectedUserId = id;
 }
@@ -598,9 +594,8 @@ async function performRefresh(epoch: number): Promise<RefreshResult> {
 
 function refreshSession(epoch: number): Promise<RefreshResult> {
   if (!refreshState || refreshState.epoch !== epoch) {
-    // A successful refresh rotates the HttpOnly refresh cookie via Set-Cookie,
-    // so it must share the cookie mutex with login/logout to avoid a background
-    // refresh racing an explicit auth transition. On native this is a no-op.
+    // A successful refresh rotates the HttpOnly cookie, so it shares the
+    // cookie mutex with login/logout. No-op on native.
     const promise = runCookieMutating(() => performRefresh(epoch)).finally(() => {
       if (refreshState?.epoch === epoch) refreshState = null;
     });
@@ -609,9 +604,9 @@ function refreshSession(epoch: number): Promise<RefreshResult> {
   return refreshState.promise;
 }
 
-// Attaches the current access token and retries once after a collapsed,
-// epoch-scoped refresh. Only definitive refresh rejection expires a session;
-// transport errors, 429s, and 5xx responses leave it intact for later retry.
+// Attaches the access token and retries once after a collapsed, epoch-scoped
+// refresh. Only definitive refresh rejection expires a session; transport
+// errors, 429s, and 5xx leave it intact.
 export async function api<T>(path: string, options: RequestInit = {}): Promise<T> {
   const epoch = sessionEpoch;
   const tokens = await getTokens(epoch);
@@ -749,9 +744,9 @@ export async function logout(options: LogoutOptions = {}): Promise<void> {
     clearMemorySession();
     const clearPromise = queueStoredTokenClear();
 
-    // These calls deliberately use the captured credentials outside the new
-    // epoch. Local state is already gone; server revocation is bounded and
-    // best-effort so a bad network can never trap the user in a signed-in UI.
+    // Deliberately uses the captured credentials outside the new epoch.
+    // Server revocation is best-effort so a bad network can never trap the
+    // user in a signed-in UI.
     const serverCalls: Promise<unknown>[] = [];
     if (tokens?.accessToken && options.pushToken !== undefined) {
       serverCalls.push(
