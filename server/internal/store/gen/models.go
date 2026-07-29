@@ -71,6 +71,9 @@ type Court struct {
 	EnrichAttempts    int32      `json:"enrich_attempts"`
 	RimType           *string    `json:"rim_type"`
 	NetType           *string    `json:"net_type"`
+	FeeAmountCents    *int32     `json:"fee_amount_cents"`
+	FeeCurrency       *string    `json:"fee_currency"`
+	FeeNote           *string    `json:"fee_note"`
 }
 
 type CourtAttributeEdit struct {

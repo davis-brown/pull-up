@@ -6,6 +6,7 @@ SELECT
     c.address, c.hoop_count, c.indoor, c.surface, c.lighting, c.is_public,
     c.drinking_water, c.toilets, c.parking, c.fenced,
     c.covered, c.fee, c.access,
+    c.fee_amount_cents, c.fee_currency, c.fee_note,
     c.rim_type, c.net_type,
     c.source, c.status,
     ac.active_count,
@@ -42,8 +43,16 @@ WHERE c.status <> 'rejected'
   AND (sqlc.narg('indoor')::bool   IS NULL OR c.indoor = sqlc.narg('indoor'))
   AND (sqlc.narg('lit')::bool      IS NULL OR c.lighting = sqlc.narg('lit'))
   AND (sqlc.narg('has_hoops')::bool IS NULL OR (sqlc.narg('has_hoops') = false) OR c.hoop_count > 0)
-  AND (sqlc.narg('public')::bool   IS NULL OR (sqlc.narg('public') = false) OR (c.is_public = true AND (c.access IS NULL OR c.access = 'public')))
-  AND (sqlc.narg('free')::bool     IS NULL OR (sqlc.narg('free') = false) OR c.fee IS NULL OR c.fee = false)
+  -- public/free are tri-state: true keeps only open-to-all/no-charge courts,
+  -- false keeps only the restricted/pay-to-play ones, NULL is unfiltered.
+  -- Unknown (NULL) access and fee read as public and free respectively, so a
+  -- court with no data surfaces under `true` and is excluded by `false`.
+  AND (sqlc.narg('public')::bool IS NULL
+       OR (sqlc.narg('public') = true  AND c.is_public = true AND (c.access IS NULL OR c.access = 'public'))
+       OR (sqlc.narg('public') = false AND (c.is_public = false OR c.access IN ('private','customers'))))
+  AND (sqlc.narg('free')::bool IS NULL
+       OR (sqlc.narg('free') = true  AND (c.fee IS NULL OR c.fee = false))
+       OR (sqlc.narg('free') = false AND c.fee = true))
   AND (sqlc.narg('covered')::bool  IS NULL OR c.covered = sqlc.narg('covered'))
   AND (sqlc.narg('surface')::text  IS NULL OR c.surface = sqlc.narg('surface'))
   AND (sqlc.narg('water')::bool    IS NULL OR (sqlc.narg('water') = false) OR c.drinking_water = true)
@@ -61,6 +70,7 @@ SELECT
     c.address, c.hoop_count, c.indoor, c.surface, c.lighting, c.is_public,
     c.drinking_water, c.toilets, c.parking, c.fenced,
     c.covered, c.fee, c.access,
+    c.fee_amount_cents, c.fee_currency, c.fee_note,
     c.rim_type, c.net_type,
     c.source, c.status,
     ST_Distance(c.location, ST_SetSRID(ST_MakePoint(sqlc.arg(lng)::float8, sqlc.arg(lat)::float8), 4326)::geography)::float8 AS distance_m,
@@ -96,8 +106,16 @@ WHERE c.status <> 'rejected'
   AND (sqlc.narg('indoor')::bool   IS NULL OR c.indoor = sqlc.narg('indoor'))
   AND (sqlc.narg('lit')::bool      IS NULL OR c.lighting = sqlc.narg('lit'))
   AND (sqlc.narg('has_hoops')::bool IS NULL OR (sqlc.narg('has_hoops') = false) OR c.hoop_count > 0)
-  AND (sqlc.narg('public')::bool   IS NULL OR (sqlc.narg('public') = false) OR (c.is_public = true AND (c.access IS NULL OR c.access = 'public')))
-  AND (sqlc.narg('free')::bool     IS NULL OR (sqlc.narg('free') = false) OR c.fee IS NULL OR c.fee = false)
+  -- public/free are tri-state: true keeps only open-to-all/no-charge courts,
+  -- false keeps only the restricted/pay-to-play ones, NULL is unfiltered.
+  -- Unknown (NULL) access and fee read as public and free respectively, so a
+  -- court with no data surfaces under `true` and is excluded by `false`.
+  AND (sqlc.narg('public')::bool IS NULL
+       OR (sqlc.narg('public') = true  AND c.is_public = true AND (c.access IS NULL OR c.access = 'public'))
+       OR (sqlc.narg('public') = false AND (c.is_public = false OR c.access IN ('private','customers'))))
+  AND (sqlc.narg('free')::bool IS NULL
+       OR (sqlc.narg('free') = true  AND (c.fee IS NULL OR c.fee = false))
+       OR (sqlc.narg('free') = false AND c.fee = true))
   AND (sqlc.narg('covered')::bool  IS NULL OR c.covered = sqlc.narg('covered'))
   AND (sqlc.narg('surface')::text  IS NULL OR c.surface = sqlc.narg('surface'))
   AND (sqlc.narg('water')::bool    IS NULL OR (sqlc.narg('water') = false) OR c.drinking_water = true)
@@ -144,6 +162,7 @@ SELECT
     c.address, c.hoop_count, c.indoor, c.surface, c.lighting, c.is_public,
     c.drinking_water, c.toilets, c.parking, c.fenced,
     c.access, c.fee, c.covered, c.rim_type, c.net_type,
+    c.fee_amount_cents, c.fee_currency, c.fee_note,
     c.opening_hours, c.website, c.description,
     c.source, c.osm_type, c.osm_id, c.status, c.submitted_by, c.created_at,
     c.enriched_at,
@@ -176,25 +195,31 @@ ORDER BY distance_m
 LIMIT 10;
 
 -- name: CreateCourt :one
-INSERT INTO courts (name, location, address, hoop_count, indoor, surface, lighting, is_public, source, status, submitted_by)
+INSERT INTO courts (name, location, address, hoop_count, indoor, surface, lighting, is_public,
+    access, fee, fee_amount_cents, fee_currency, fee_note,
+    source, status, submitted_by)
 VALUES (
     sqlc.arg(name),
     ST_SetSRID(ST_MakePoint(sqlc.arg(lng)::float8, sqlc.arg(lat)::float8), 4326)::geography,
     sqlc.narg(address), sqlc.narg(hoop_count), sqlc.arg(indoor), sqlc.narg(surface), sqlc.narg(lighting),
-    sqlc.arg(is_public), 'user', 'pending', sqlc.arg(submitted_by)
+    sqlc.arg(is_public),
+    sqlc.narg(access), sqlc.narg(fee), sqlc.narg(fee_amount_cents), sqlc.narg(fee_currency), sqlc.narg(fee_note),
+    'user', 'pending', sqlc.arg(submitted_by)
 )
 RETURNING id, name, ST_Y(location::geometry)::float8 AS lat, ST_X(location::geometry)::float8 AS lng,
-    address, hoop_count, indoor, surface, lighting, is_public, source, status, submitted_by, created_at;
+    address, hoop_count, indoor, surface, lighting, is_public,
+    access, fee, fee_amount_cents, fee_currency, fee_note,
+    source, status, submitted_by, created_at;
 
 -- name: UpsertOSMCourt :one
 INSERT INTO courts (name, location, hoop_count, indoor, surface, lighting,
-    access, fee, covered, opening_hours, website, description, fenced,
+    access, fee, fee_amount_cents, fee_currency, covered, opening_hours, website, description, fenced,
     source, osm_type, osm_id, status)
 VALUES (
     sqlc.arg(name),
     ST_SetSRID(ST_MakePoint(sqlc.arg(lng)::float8, sqlc.arg(lat)::float8), 4326)::geography,
     sqlc.narg(hoop_count), sqlc.arg(indoor), sqlc.narg(surface), sqlc.narg(lighting),
-    sqlc.narg(access), sqlc.narg(fee), sqlc.narg(covered),
+    sqlc.narg(access), sqlc.narg(fee), sqlc.narg(fee_amount_cents), sqlc.narg(fee_currency), sqlc.narg(covered),
     sqlc.narg(opening_hours), sqlc.narg(website), sqlc.narg(description), sqlc.narg(fenced),
     'osm', sqlc.arg(osm_type), sqlc.arg(osm_id), 'pending'
 )
@@ -207,6 +232,11 @@ ON CONFLICT (osm_type, osm_id) DO UPDATE SET
     lighting      = EXCLUDED.lighting,
     access        = EXCLUDED.access,
     fee           = EXCLUDED.fee,
+    -- Coalesced, unlike the columns above: a re-import of a court whose OSM
+    -- charge=* tag is missing or unparseable must not wipe a price a player
+    -- typed in. Both move together or the amount/currency check fails.
+    fee_amount_cents = coalesce(EXCLUDED.fee_amount_cents, courts.fee_amount_cents),
+    fee_currency     = coalesce(EXCLUDED.fee_currency, courts.fee_currency),
     covered       = EXCLUDED.covered,
     opening_hours = EXCLUDED.opening_hours,
     website       = EXCLUDED.website,
@@ -254,6 +284,9 @@ UPDATE courts SET
     hoop_count     = coalesce(sqlc.narg('hoop_count'), hoop_count),
     access         = coalesce(sqlc.narg('access'), access),
     fee            = coalesce(sqlc.narg('fee'), fee),
+    fee_amount_cents = coalesce(sqlc.narg('fee_amount_cents'), fee_amount_cents),
+    fee_currency     = coalesce(sqlc.narg('fee_currency'), fee_currency),
+    fee_note         = coalesce(sqlc.narg('fee_note'), fee_note),
     drinking_water = coalesce(sqlc.narg('drinking_water'), drinking_water),
     toilets        = coalesce(sqlc.narg('toilets'), toilets),
     parking        = coalesce(sqlc.narg('parking'), parking),
