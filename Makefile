@@ -7,7 +7,7 @@ DEV_JWT_SECRET := local-development-jwt-secret-0000000000000001
 DEV_UPLOAD_SECRET := local-development-upload-secret-00000000001
 DEV_INTERNAL_SECRET := local-development-internal-secret-0000000001
 
-.PHONY: dev db-up db-down api test test-int test-app vet generate seed-osm app app-web typecheck
+.PHONY: dev dev-worker db-up db-down api test test-int test-app smoke smoke-worker vet generate seed-osm app app-web typecheck
 
 ## Backend ---------------------------------------------------------------
 
@@ -26,6 +26,15 @@ api:
 		go run ./cmd/api
 
 dev: db-up api
+
+# Run the deployed shape locally: the real API Worker (workerd) proxying into
+# the Go container, on :8787. Covers what `make dev` cannot — the container
+# proxy, R2 and EMAIL bindings, the Worker's HMAC upload guard, and the cron
+# drain handler — with no Cloudflare account and nothing deployed.
+# Needs Docker with buildx; secrets come from deploy/api/.dev.vars.
+# See docs/LOCAL_WORKER.md.
+dev-worker: db-up
+	cd deploy/api && npm install && npx wrangler dev --port 8787
 
 # Fast path: unit tests only. The DB-backed store/API integration tests skip
 # themselves unless TEST_DATABASE_URL is set (see `make test-int`).
@@ -46,6 +55,18 @@ test-int: db-up
 
 test-app:
 	cd app && npm test
+
+# Smoke an already-running server over HTTP. Neither starts anything: run
+# `make dev` (:8080) or `make dev-worker` (:8787) in another terminal first.
+# Both spend auth requests against RATE_LIMIT_AUTH_PER_MIN, so a rapid series
+# of runs will be throttled on purpose.
+smoke:
+	scripts/smoke.sh
+
+# The Worker layer specifically: container proxy, EMAIL binding, HMAC upload
+# guard, cron drain. See docs/LOCAL_WORKER.md.
+smoke-worker:
+	scripts/smoke-worker.sh
 
 vet:
 	cd server && go vet ./...
