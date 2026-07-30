@@ -6,7 +6,16 @@ services:
       POSTGRES_PASSWORD: pullup
       POSTGRES_DB: pullup
     ports:
+      # Host loopback: `make dev`, `make test-int`, scripts/dbq.
       - "127.0.0.1:5432:5432"
+      # Docker bridge gateway, for the API container under `wrangler dev`
+      # (deploy/api): that container resolves host.docker.internal to this
+      # address, and the loopback publish above is not reachable from it.
+      # Deliberately the bridge gateway and not 0.0.0.0 — docker0 is a
+      # host-local interface, so this does not expose Postgres to the LAN.
+      # Override if your docker0 subnet is not Docker's 172.17.0.0/16 default
+      # (`ip -4 addr show docker0`).
+      - "${PULLUP_DB_BRIDGE_BIND:-172.17.0.1}:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
