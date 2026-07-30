@@ -141,8 +141,8 @@ comes from geo-verified check-ins and crowd reports.
 
 ## Local development
 
-Requirements: Go 1.23+, Node 20+, Docker (for Postgres+PostGIS), and
-[sqlc](https://docs.sqlc.dev) if you edit SQL queries.
+Requirements: Go 1.25.7+ (per `server/go.mod`), Node 20+, Docker (for
+Postgres+PostGIS), and [sqlc](https://docs.sqlc.dev) if you edit SQL queries.
 
 ```sh
 make dev            # start postgres+postgis and run the API on :8080
@@ -150,14 +150,34 @@ make seed-osm BBOX=30.19,-97.87,30.40,-97.65   # import OSM courts for a bbox (S
 
 cd app && npm install
 npx expo run:ios    # dev build — Expo Go does NOT work (MapLibre is a native module)
-npx expo start --web
+npx expo start --web    # needs app/.env with EXPO_PUBLIC_API_URL=http://localhost:8080
 ```
+
+`make dev` runs the Go API directly, which skips everything the deployed API
+Worker does around it. To run that layer locally instead — the real Worker on
+workerd proxying into the Go container, with local R2 and email bindings, no
+Cloudflare account and nothing deployed:
+
+```sh
+make dev-worker     # http://localhost:8787 (needs Docker with buildx)
+```
+
+See [docs/LOCAL_WORKER.md](docs/LOCAL_WORKER.md).
 
 ### Tests
 
 ```sh
 make test           # server: unit tests only (DB-backed tests skip without TEST_DATABASE_URL)
 make test-app       # app: jest unit tests (lib/api.ts token refresh & auth client)
+
+# End-to-end smoke over HTTP against a server you already started. `make smoke`
+# drives `make dev` on :8080; `make smoke-worker` drives `make dev-worker` on
+# :8787 and additionally asserts the Worker's own guarantees (the verification
+# token never reaches the client, unsigned photo uploads get a 403, the cron
+# drain runs). Both spend requests against RATE_LIMIT_AUTH_PER_MIN, so several
+# runs in a row will be throttled on purpose.
+make smoke
+make smoke-worker
 
 # Server integration tests (store queries + full HTTP API) need a scratch
 # Postgres with PostGIS. `make test-int` brings up the compose database,
