@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/davisbrown/pull-up/server/internal/auth"
+	"github.com/davisbrown/pull-up/server/internal/rules"
 	"github.com/davisbrown/pull-up/server/internal/store/gen"
 )
 
@@ -175,34 +176,33 @@ func (s *Server) handleRefresh(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, "lock refresh token", err)
 		return
 	}
-	const refreshReplayGrace = 5 * time.Second
 	now := time.Now()
-	// Expiry is checked before reuse. An expired, previously rotated token is
-	// inert and cannot be used to force-log-out the still-current family.
-	if !now.Before(row.ExpiresAt) {
+	// A revoked token presented again is either a benign concurrent replay or
+	// a stolen one, and an expired token must be inert either way. The rule is
+	// in internal/rules so it can be tested without a database; see
+	// TestRefreshExpiryIsCheckedBeforeReuse for why the order matters.
+	switch rules.DecideRefresh(row.ExpiresAt, row.RevokedAt, now) {
+	case rules.RefreshExpired:
 		s.clearRefreshCookie(w, r)
 		writeError(w, http.StatusUnauthorized, "refresh token expired")
 		return
-	}
-	if row.RevokedAt != nil {
-		// A revoked token presented again is either a benign concurrent replay
-		// or a stolen token. A short grace window separates the two; the
-		// refresh is refused either way.
-		if now.Sub(*row.RevokedAt) > refreshReplayGrace {
-			if err := q.RevokeRefreshTokenFamily(r.Context(), row.FamilyID); err != nil {
-				s.internalError(w, "revoke refresh token family", err)
-				return
-			}
-			if err := tx.Commit(r.Context()); err != nil {
-				s.internalError(w, "commit refresh family revocation", err)
-				return
-			}
-			s.clearRefreshCookie(w, r)
-			writeError(w, http.StatusUnauthorized, "refresh token reuse detected; please log in again")
+	case rules.RefreshReplayRevokeFamily:
+		// Probable theft: cut every device loose. The revocation has to commit
+		// even though the request is refused.
+		if err := q.RevokeRefreshTokenFamily(r.Context(), row.FamilyID); err != nil {
+			s.internalError(w, "revoke refresh token family", err)
 			return
 		}
-		// Within the grace window: reject without revoking the family so the
-		// legitimate concurrent request's rotated token remains valid.
+		if err := tx.Commit(r.Context()); err != nil {
+			s.internalError(w, "commit refresh family revocation", err)
+			return
+		}
+		s.clearRefreshCookie(w, r)
+		writeError(w, http.StatusUnauthorized, "refresh token reuse detected; please log in again")
+		return
+	case rules.RefreshReplayWithinGrace:
+		// Reject without revoking the family, so the legitimate concurrent
+		// request's rotated token remains valid.
 		s.clearRefreshCookie(w, r)
 		writeError(w, http.StatusUnauthorized, "refresh token reuse detected")
 		return
@@ -282,7 +282,7 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	}
 	// Only the current, unexpired token may log out its device family. Old or
 	// expired leaked tokens cannot be turned into a forced-logout primitive.
-	if row.RevokedAt == nil && time.Now().Before(row.ExpiresAt) {
+	if rules.CanLogoutFamily(row.ExpiresAt, row.RevokedAt, time.Now()) {
 		if err := q.RevokeRefreshTokenFamily(r.Context(), row.FamilyID); err != nil {
 			s.internalError(w, "revoke logout token family", err)
 			return
