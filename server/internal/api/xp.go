@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/davisbrown/pull-up/server/internal/push"
+	"github.com/davisbrown/pull-up/server/internal/rules"
 	"github.com/davisbrown/pull-up/server/internal/store/gen"
 )
 
@@ -130,9 +131,7 @@ func (s *Server) awardXP(ctx context.Context, userID uuid.UUID, kind, dedupKey s
 	if row.Awarded == 0 {
 		return 0 // deduped, or the daily cap is already spent
 	}
-	before := levelFor(int(row.TotalXp) - int(row.Awarded))
-	after := levelFor(int(row.TotalXp))
-	if after > before {
+	if after, crossed := rules.CrossedLevel(int(row.TotalXp), int(row.Awarded), levelFor); crossed {
 		// Persist the crossing before pushing: most awards land off the
 		// request path, so this flag is how the app shows it in-app.
 		if err := s.store.Queries.MarkLevelUpPending(ctx, gen.MarkLevelUpPendingParams{

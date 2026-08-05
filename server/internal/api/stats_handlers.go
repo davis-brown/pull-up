@@ -9,6 +9,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/davisbrown/pull-up/server/internal/rules"
 	"github.com/davisbrown/pull-up/server/internal/store/gen"
 )
 
@@ -65,13 +66,9 @@ func (s *Server) syncBadgeEarnedAt(ctx context.Context, uid uuid.UUID, badges []
 	if err != nil {
 		return nil, err
 	}
-	type badgeState struct {
-		earnedAt time.Time
-		seen     bool
-	}
-	known := make(map[string]badgeState, len(stored))
+	known := make(map[string]rules.BadgeState, len(stored))
 	for _, row := range stored {
-		known[row.Slug] = badgeState{earnedAt: row.EarnedAt, seen: row.SeenAt != nil}
+		known[row.Slug] = rules.BadgeState{EarnedAt: row.EarnedAt, Seen: row.SeenAt != nil}
 	}
 
 	syncedAt, err := s.store.Queries.GetBadgesSyncedAt(ctx, uid)
@@ -80,18 +77,21 @@ func (s *Server) syncBadgeEarnedAt(ctx context.Context, uid uuid.UUID, badges []
 	}
 	baseline := syncedAt == nil
 
-	unrecorded := make([]string, 0, len(badges))
+	// The decision about what to persist and what to celebrate is in
+	// internal/rules, tested without a database; this loop only fills in the
+	// earn dates it already knows.
+	earned := make([]string, 0, len(badges))
 	for i := range badges {
 		if !badges[i].Earned {
 			continue
 		}
+		earned = append(earned, badges[i].ID)
 		if state, ok := known[badges[i].ID]; ok {
-			earnedAt := state.earnedAt
+			earnedAt := state.EarnedAt
 			badges[i].EarnedAt = &earnedAt
-			continue
 		}
-		unrecorded = append(unrecorded, badges[i].ID)
 	}
+	unrecorded, newBadges := rules.ReconcileBadges(earned, known, baseline)
 
 	if len(unrecorded) > 0 {
 		recorded, err := s.store.Queries.RecordUserBadges(ctx, gen.RecordUserBadgesParams{
@@ -114,20 +114,6 @@ func (s *Server) syncBadgeEarnedAt(ctx context.Context, uid uuid.UUID, badges []
 	if baseline {
 		if err := s.store.Queries.MarkBadgesSynced(ctx, uid); err != nil {
 			return nil, err
-		}
-		// Everything recorded in the baseline pass counts as already seen.
-		return []string{}, nil
-	}
-
-	// Returned in the fixed badge order, not map order.
-	newBadges := make([]string, 0, len(badges))
-	for i := range badges {
-		if !badges[i].Earned {
-			continue
-		}
-		state, ok := known[badges[i].ID]
-		if !ok || !state.seen {
-			newBadges = append(newBadges, badges[i].ID)
 		}
 	}
 	return newBadges, nil
