@@ -12,6 +12,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/davisbrown/pull-up/server/internal/push"
+	"github.com/davisbrown/pull-up/server/internal/rules"
 	"github.com/davisbrown/pull-up/server/internal/store/gen"
 )
 
@@ -56,7 +57,7 @@ func (s *Server) handleGetProfile(w http.ResponseWriter, r *http.Request) {
 	progress := progressFor(int(stats.Xp))
 	var level *int
 	var tier *string
-	if stats.IsPrivate && !isSelf && !isFollowing {
+	if rules.HidesActivity(stats.IsPrivate, isSelf, isFollowing) {
 		checkInCount, courtsAdded, streakDays = 0, 0, 0
 	} else {
 		level, tier = &progress.Level, &progress.Tier
@@ -187,7 +188,7 @@ func (s *Server) listFollowRows(w http.ResponseWriter, r *http.Request, follower
 				following, _ = s.store.Queries.IsFollowing(r.Context(),
 					gen.IsFollowingParams{FollowerID: viewer, FolloweeID: targetID})
 			}
-			if !following {
+			if !rules.CanListConnections(true, false, following) {
 				writeError(w, http.StatusForbidden, "this account is private")
 				return
 			}
