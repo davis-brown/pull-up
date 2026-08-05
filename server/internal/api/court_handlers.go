@@ -16,6 +16,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/davisbrown/pull-up/server/internal/geocode"
+	"github.com/davisbrown/pull-up/server/internal/rules"
 	"github.com/davisbrown/pull-up/server/internal/store/gen"
 )
 
@@ -386,74 +387,6 @@ type createCourtRequest struct {
 	IgnoreDuplicates bool    `json:"ignore_duplicates"`
 }
 
-// maxFeeAmountCents mirrors the courts_fee_amount_cents CHECK, so an
-// out-of-range price is a 400 rather than a constraint violation turned 500.
-const maxFeeAmountCents = 1_000_000
-
-// maxFeeNoteLen mirrors the fee_note CHECK.
-const maxFeeNoteLen = 80
-
-// normalizeFee validates the pay-to-play triple in place and returns a client
-// error message, or "" when the input is acceptable. Shared by create and
-// patch so both reject the same shapes the courts table would.
-//
-// It also applies the fee implication: a price is itself an assertion that the
-// court charges, so an amount with no explicit fee flag sets fee=true. The
-// reverse is never inferred — fee=false with an amount is a contradiction the
-// caller has to resolve.
-//
-// existingCurrency is the court's stored fee_currency (nil on create). A patch
-// that sets only an amount is valid when the court already has a currency,
-// since the UPDATE coalesces the unset column and the CHECK still holds.
-func normalizeFee(fee **bool, amount **int32, currency **string, note **string, existingCurrency *string) string {
-	if *note != nil {
-		trimmed := strings.TrimSpace(**note)
-		if len(trimmed) > maxFeeNoteLen {
-			return fmt.Sprintf("fee_note must be %d characters or fewer", maxFeeNoteLen)
-		}
-		if trimmed == "" {
-			*note = nil
-		} else {
-			*note = &trimmed
-		}
-	}
-	if *currency != nil {
-		code := strings.ToUpper(strings.TrimSpace(**currency))
-		if !isCurrencyCode(code) {
-			return "fee_currency must be a 3-letter ISO 4217 code"
-		}
-		*currency = &code
-	}
-	if *amount != nil {
-		if **amount < 0 || **amount > maxFeeAmountCents {
-			return fmt.Sprintf("fee_amount_cents must be between 0 and %d", maxFeeAmountCents)
-		}
-		if *currency == nil && existingCurrency == nil {
-			return "fee_currency is required when fee_amount_cents is set"
-		}
-		if *fee != nil && !**fee {
-			return "fee_amount_cents cannot be set when fee is false"
-		}
-		if *fee == nil {
-			charged := true
-			*fee = &charged
-		}
-	}
-	return ""
-}
-
-func isCurrencyCode(v string) bool {
-	if len(v) != 3 {
-		return false
-	}
-	for _, r := range v {
-		if r < 'A' || r > 'Z' {
-			return false
-		}
-	}
-	return true
-}
-
 func (s *Server) handleCreateCourt(w http.ResponseWriter, r *http.Request) {
 	var req createCourtRequest
 	if !readJSON(w, r, &req) {
@@ -480,7 +413,7 @@ func (s *Server) handleCreateCourt(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "access must be one of public, private, customers")
 		return
 	}
-	if msg := normalizeFee(&req.Fee, &req.FeeAmountCents, &req.FeeCurrency, &req.FeeNote, nil); msg != "" {
+	if msg := rules.NormalizeFee(&req.Fee, &req.FeeAmountCents, &req.FeeCurrency, &req.FeeNote, nil); msg != "" {
 		writeError(w, http.StatusBadRequest, msg)
 		return
 	}
@@ -578,14 +511,17 @@ func (s *Server) handleVoteCourt(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, "weighted vote stats", err)
 		return
 	}
-	status := court.Status
-	if weighted.NetWeighted <= rejectNetVotes && status != "rejected" {
+	// The threshold rule lives in internal/rules so it can be tested without a
+	// database: rejection is evaluated first, and only a pending court is
+	// promoted (re-promoting would re-award its submitter).
+	status, changed := rules.DecideCourtStatus(court.Status,
+		int(weighted.WeightedUpvotes), int(weighted.NetWeighted))
+	if changed && status == rules.CourtRejected {
 		if err := s.store.Queries.SetCourtStatus(r.Context(), gen.SetCourtStatusParams{ID: courtID, Status: "rejected"}); err != nil {
 			s.internalError(w, "reject court", err)
 			return
 		}
-		status = "rejected"
-	} else if weighted.WeightedUpvotes >= verifyUpvotes && status == "pending" {
+	} else if changed && status == rules.CourtVerified {
 		submitter, err := s.store.Queries.PromoteCourtIfPending(r.Context(), courtID)
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			s.internalError(w, "promote court", err)
@@ -595,7 +531,6 @@ func (s *Server) handleVoteCourt(w http.ResponseWriter, r *http.Request) {
 			s.awardReputation(r.Context(), *submitter, repCourtVerified)
 			s.awardXP(r.Context(), *submitter, "court_verified", "court:"+courtID.String(), xpCourtVerified)
 		}
-		status = "verified"
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"net_votes": stats.NetVotes, "status": status})
 }
@@ -692,7 +627,7 @@ func (s *Server) handlePatchCourtAttributes(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	// Needs `current`: an amount-only edit is valid against a stored currency.
-	if msg := normalizeFee(&req.Fee, &req.FeeAmountCents, &req.FeeCurrency, &req.FeeNote,
+	if msg := rules.NormalizeFee(&req.Fee, &req.FeeAmountCents, &req.FeeCurrency, &req.FeeNote,
 		current.FeeCurrency); msg != "" {
 		writeError(w, http.StatusBadRequest, msg)
 		return
@@ -723,104 +658,52 @@ func (s *Server) logAttributeEdits(ctx context.Context, courtID, editorID uuid.U
 			s.log.Error("insert court attribute edit", "field", field, "court_id", courtID, "err", err)
 		}
 	}
-	strOf := func(v *string) string {
-		if v == nil {
-			return ""
-		}
-		return *v
-	}
-	boolOf := func(v *bool) string {
-		if v == nil {
-			return ""
-		}
-		return fmt.Sprint(*v)
-	}
-	int16Of := func(v *int16) string {
-		if v == nil {
-			return ""
-		}
-		return fmt.Sprint(*v)
-	}
-	int32Of := func(v *int32) string {
-		if v == nil {
-			return ""
-		}
-		return fmt.Sprint(*v)
-	}
 
 	if req.Surface != nil {
-		logField("surface", !strPtrEq(req.Surface, current.Surface), strOf(current.Surface), *req.Surface)
+		logField("surface", !rules.StrPtrEq(req.Surface, current.Surface), rules.StrOf(current.Surface), *req.Surface)
 	}
 	if req.Lighting != nil {
-		logField("lighting", !boolPtrEq(req.Lighting, current.Lighting), boolOf(current.Lighting), fmt.Sprint(*req.Lighting))
+		logField("lighting", !rules.BoolPtrEq(req.Lighting, current.Lighting), rules.BoolOf(current.Lighting), fmt.Sprint(*req.Lighting))
 	}
 	if req.Indoor != nil {
 		logField("indoor", *req.Indoor != current.Indoor, fmt.Sprint(current.Indoor), fmt.Sprint(*req.Indoor))
 	}
 	if req.Covered != nil {
-		logField("covered", !boolPtrEq(req.Covered, current.Covered), boolOf(current.Covered), fmt.Sprint(*req.Covered))
+		logField("covered", !rules.BoolPtrEq(req.Covered, current.Covered), rules.BoolOf(current.Covered), fmt.Sprint(*req.Covered))
 	}
 	if req.HoopCount != nil {
-		logField("hoop_count", !int16PtrEq(req.HoopCount, current.HoopCount), int16Of(current.HoopCount), fmt.Sprint(*req.HoopCount))
+		logField("hoop_count", !rules.Int16PtrEq(req.HoopCount, current.HoopCount), rules.Int16Of(current.HoopCount), fmt.Sprint(*req.HoopCount))
 	}
 	if req.Access != nil {
-		logField("access", !strPtrEq(req.Access, current.Access), strOf(current.Access), *req.Access)
+		logField("access", !rules.StrPtrEq(req.Access, current.Access), rules.StrOf(current.Access), *req.Access)
 	}
 	if req.Fee != nil {
-		logField("fee", !boolPtrEq(req.Fee, current.Fee), boolOf(current.Fee), fmt.Sprint(*req.Fee))
+		logField("fee", !rules.BoolPtrEq(req.Fee, current.Fee), rules.BoolOf(current.Fee), fmt.Sprint(*req.Fee))
 	}
 	if req.FeeAmountCents != nil {
-		logField("fee_amount_cents", !int32PtrEq(req.FeeAmountCents, current.FeeAmountCents),
-			int32Of(current.FeeAmountCents), fmt.Sprint(*req.FeeAmountCents))
+		logField("fee_amount_cents", !rules.Int32PtrEq(req.FeeAmountCents, current.FeeAmountCents),
+			rules.Int32Of(current.FeeAmountCents), fmt.Sprint(*req.FeeAmountCents))
 	}
 	if req.FeeCurrency != nil {
-		logField("fee_currency", !strPtrEq(req.FeeCurrency, current.FeeCurrency),
-			strOf(current.FeeCurrency), *req.FeeCurrency)
+		logField("fee_currency", !rules.StrPtrEq(req.FeeCurrency, current.FeeCurrency),
+			rules.StrOf(current.FeeCurrency), *req.FeeCurrency)
 	}
 	if req.FeeNote != nil {
-		logField("fee_note", !strPtrEq(req.FeeNote, current.FeeNote),
-			strOf(current.FeeNote), *req.FeeNote)
+		logField("fee_note", !rules.StrPtrEq(req.FeeNote, current.FeeNote),
+			rules.StrOf(current.FeeNote), *req.FeeNote)
 	}
 	if req.DrinkingWater != nil {
-		logField("drinking_water", !boolPtrEq(req.DrinkingWater, current.DrinkingWater), boolOf(current.DrinkingWater), fmt.Sprint(*req.DrinkingWater))
+		logField("drinking_water", !rules.BoolPtrEq(req.DrinkingWater, current.DrinkingWater), rules.BoolOf(current.DrinkingWater), fmt.Sprint(*req.DrinkingWater))
 	}
 	if req.Toilets != nil {
-		logField("toilets", !boolPtrEq(req.Toilets, current.Toilets), boolOf(current.Toilets), fmt.Sprint(*req.Toilets))
+		logField("toilets", !rules.BoolPtrEq(req.Toilets, current.Toilets), rules.BoolOf(current.Toilets), fmt.Sprint(*req.Toilets))
 	}
 	if req.Parking != nil {
-		logField("parking", !boolPtrEq(req.Parking, current.Parking), boolOf(current.Parking), fmt.Sprint(*req.Parking))
+		logField("parking", !rules.BoolPtrEq(req.Parking, current.Parking), rules.BoolOf(current.Parking), fmt.Sprint(*req.Parking))
 	}
 	if req.Fenced != nil {
-		logField("fenced", !boolPtrEq(req.Fenced, current.Fenced), boolOf(current.Fenced), fmt.Sprint(*req.Fenced))
+		logField("fenced", !rules.BoolPtrEq(req.Fenced, current.Fenced), rules.BoolOf(current.Fenced), fmt.Sprint(*req.Fenced))
 	}
-}
-
-func strPtrEq(a, b *string) bool {
-	if a == nil || b == nil {
-		return a == b
-	}
-	return *a == *b
-}
-
-func boolPtrEq(a, b *bool) bool {
-	if a == nil || b == nil {
-		return a == b
-	}
-	return *a == *b
-}
-
-func int16PtrEq(a, b *int16) bool {
-	if a == nil || b == nil {
-		return a == b
-	}
-	return *a == *b
-}
-
-func int32PtrEq(a, b *int32) bool {
-	if a == nil || b == nil {
-		return a == b
-	}
-	return *a == *b
 }
 
 func validLatLng(lat, lng float64) bool {

@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/davisbrown/pull-up/server/internal/rules"
 	"github.com/davisbrown/pull-up/server/internal/store/gen"
 )
 
@@ -89,20 +90,12 @@ func (s *Server) handleRecordGame(w http.ResponseWriter, r *http.Request) {
 	}
 	// Scores are optional, but a partial or self-contradicting one is
 	// rejected rather than stored.
+	if msg := rules.ValidateGameScore(req.ScoreWin, req.ScoreLose); msg != "" {
+		writeError(w, http.StatusBadRequest, msg)
+		return
+	}
 	var scoreWin, scoreLose *int16
-	if req.ScoreWin != nil || req.ScoreLose != nil {
-		if req.ScoreWin == nil || req.ScoreLose == nil {
-			writeError(w, http.StatusBadRequest, "give both score_win and score_lose, or neither")
-			return
-		}
-		if *req.ScoreWin < 0 || *req.ScoreWin > 200 || *req.ScoreLose < 0 || *req.ScoreLose > 200 {
-			writeError(w, http.StatusBadRequest, "scores must be between 0 and 200")
-			return
-		}
-		if *req.ScoreWin <= *req.ScoreLose {
-			writeError(w, http.StatusBadRequest, "the winning score must be higher")
-			return
-		}
+	if req.ScoreWin != nil {
 		win, lose := int16(*req.ScoreWin), int16(*req.ScoreLose)
 		scoreWin, scoreLose = &win, &lose
 	}
