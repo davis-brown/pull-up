@@ -1,6 +1,7 @@
 import { Container, getContainer } from "@cloudflare/containers";
 
 import { drainInBatches } from "./background-drain";
+import { corsPreflightResponse, isCorsPreflight } from "./cors-preflight";
 import {
   MAX_PHOTO_BYTES,
   hasJpegMagic,
@@ -76,7 +77,12 @@ const EMAIL_PATHS = new Set([
 
 export class ApiContainer extends Container<RuntimeEnv> {
   defaultPort = 8080;
-  sleepAfter = "15m";
+  // Must stay longer than the */15 cron interval in wrangler.jsonc. The cron
+  // drain wakes the container every 15 minutes anyway; at an equal 15m lease
+  // the two raced and roughly half of user requests paid a cold start (the
+  // ~1.2s p99 on the stateless view). A 20m lease is always re-upped by the
+  // next cron, so the container stays warm without any extra wake-ups.
+  sleepAfter = "20m";
 
   constructor(ctx: DurableObjectState<{}>, env: RuntimeEnv) {
     super(ctx, env);
@@ -945,6 +951,13 @@ export default {
       timingSafeEqualStrings(providedTaskSecret, env.INTERNAL_TASK_SECRET);
     if (url.pathname.startsWith(INTERNAL_PREFIX) && !isVersionCheck) {
       return jsonResponse({ error: "not found" }, 404);
+    }
+
+    // Answered at the edge so a preflight never wakes the container. Placed
+    // after the internal-route guard so internal paths still 404 rather than
+    // advertising their methods.
+    if (isCorsPreflight(request)) {
+      return corsPreflightResponse(request, allowedCorsOrigin(request, env));
     }
 
     try {

@@ -80,10 +80,28 @@ Name the view **Drain · object deletion**. Keep `outcome`, `objects_deleted`,
 queue was drained. `saturated=true` means all 20 bounded claim passes were full,
 so backlog may remain; a repeated saturated or error result needs investigation.
 
+## Baseline
+
+Taken from **API · stateless fetches** over the seven days to 2026-07-27, before
+the performance pass: **n=790**, all `ok`, median **189ms**, p95 **616ms**, p99
+**1268ms**. Read it as a shape, not a number — that week is almost entirely
+developer traffic, event counts bucket to units of ten, and the tail was
+dominated by container cold starts rather than load.
+
+Two things changed right after this reading, so a later comparison is not
+like-for-like: `ApiContainer.sleepAfter` went to 20m (longer than the 15-minute
+cron that wakes it, so the container no longer sleeps between drains), and
+browser preflights are now answered at the edge instead of proxying to the
+container. Expect the tail to fall and `OPTIONS` rows to drop out of the
+container's share entirely.
+
 ## Triage
 
 - For elevated edge latency, start with **API · stateless fetches**, then compare
   the matching Durable Object invocation and Go `http request` duration.
+- `OPTIONS` rows on that view are now edge-only and should sit in single-digit
+  milliseconds. If they climb back toward ~100ms, something is falling through
+  to the container — check `isCorsPreflight` against the request's headers.
 - For `court_enrichment` errors, inspect nearby Go warnings for Nominatim,
   Commons, Mapillary, or Overpass and check the Sentry enrichment fingerprint.
 - For `object_deletion` errors, identify whether claim, R2 deletion, or

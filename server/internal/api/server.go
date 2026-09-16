@@ -95,12 +95,16 @@ func (s *Server) Routes() http.Handler {
 	r.Use(sentryReporter)
 	r.Use(securityHeaders)
 	r.Use(authCachePolicy)
+	// Browser preflights are normally answered by the Worker before they reach
+	// the container (deploy/api/src/cors-preflight.ts); this stays authoritative
+	// for real requests and for any bare OPTIONS. The two must agree — keep the
+	// method, header and max-age values in sync with that module.
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   s.cfg.CORSOrigins,
 		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
 		AllowedHeaders:   []string{"Authorization", "Content-Type", "X-Pull-Up-Platform"},
 		AllowCredentials: true,
-		MaxAge:           600,
+		MaxAge:           7200,
 	}))
 
 	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) {

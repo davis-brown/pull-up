@@ -1,7 +1,16 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { useEffect, useState } from "react";
-import { Image, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { memo, useCallback, useEffect, useState } from "react";
+import {
+  FlatList,
+  Image,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  type ListRenderItemInfo,
+} from "react-native";
 import { RunRow } from "@/components/court/RunRow";
 import { useSignInDetour } from "@/components/SignInCta";
 import { Button, ErrorText, Overline } from "@/components/ui";
@@ -70,6 +79,60 @@ function attributeChips(court: CourtSummary | CourtDetail): string[] {
   return attributeParts(court);
 }
 
+// Memoized so panning the map re-renders only the rows whose court actually
+// changed. onSelect/onHover are the map screen's setState functions, which are
+// referentially stable, so the comparison holds.
+const CourtRow = memo(function CourtRow({
+  court,
+  onSelect,
+  onHover,
+}: {
+  court: CourtSummary;
+  onSelect: (id: string | null) => void;
+  onHover: (id: string | null) => void;
+}) {
+  const t = useTheme();
+  return (
+    <Pressable
+      onPress={() => onSelect(court.id)}
+      onHoverIn={() => onHover(court.id)}
+      onHoverOut={() => onHover(null)}
+      accessibilityRole="button"
+      accessibilityLabel={
+        court.active_count > 0
+          ? `${court.name}, ${court.active_count} playing now`
+          : court.name
+      }
+      style={({ pressed }) => [
+        styles.row,
+        {
+          borderBottomColor: t.colors.border,
+          backgroundColor: pressed ? t.colors.background : "transparent",
+        },
+      ]}
+    >
+      <View style={styles.rowBody}>
+        <Text style={[t.type.heading, { color: t.colors.textPrimary }]} numberOfLines={1}>
+          {court.name}
+        </Text>
+        <Text
+          style={[t.type.caption, styles.rowAttrs, { color: t.colors.textSecondary }]}
+          numberOfLines={1}
+        >
+          {attributeLine(court)}
+        </Text>
+      </View>
+      {court.active_count > 0 && (
+        <Text
+          style={[styles.rowCount, { fontFamily: t.fonts.condensedHeavy, color: t.colors.accent }]}
+        >
+          {court.active_count}
+        </Text>
+      )}
+    </Pressable>
+  );
+});
+
 function ListLevel({
   courts,
   onSelect,
@@ -80,54 +143,34 @@ function ListLevel({
   onHover: (id: string | null) => void;
 }) {
   const t = useTheme();
+  // Virtualized: a dense city viewport can load hundreds of courts, and the
+  // previous ScrollView + .map() mounted a Pressable for every one of them.
+  const renderItem = useCallback(
+    ({ item }: ListRenderItemInfo<CourtSummary>) => (
+      <CourtRow court={item} onSelect={onSelect} onHover={onHover} />
+    ),
+    [onSelect, onHover],
+  );
   return (
-    <ScrollView contentContainerStyle={styles.listContent}>
-      <Text style={[t.type.displayCondensed, styles.header, { color: t.colors.textPrimary }]}>
-        Courts near you
-      </Text>
-      {courts.map((court) => (
-        <Pressable
-          key={court.id}
-          onPress={() => onSelect(court.id)}
-          onHoverIn={() => onHover(court.id)}
-          onHoverOut={() => onHover(null)}
-          style={({ pressed }) => [
-            styles.row,
-            {
-              borderBottomColor: t.colors.border,
-              backgroundColor: pressed ? t.colors.background : "transparent",
-            },
-          ]}
-        >
-          <View style={styles.rowBody}>
-            <Text style={[t.type.heading, { color: t.colors.textPrimary }]} numberOfLines={1}>
-              {court.name}
-            </Text>
-            <Text
-              style={[t.type.caption, styles.rowAttrs, { color: t.colors.textSecondary }]}
-              numberOfLines={1}
-            >
-              {attributeLine(court)}
-            </Text>
-          </View>
-          {court.active_count > 0 && (
-            <Text
-              style={[
-                styles.rowCount,
-                { fontFamily: t.fonts.condensedHeavy, color: t.colors.accent },
-              ]}
-            >
-              {court.active_count}
-            </Text>
-          )}
-        </Pressable>
-      ))}
-      {courts.length === 0 && (
+    <FlatList
+      data={courts}
+      keyExtractor={(court) => court.id}
+      renderItem={renderItem}
+      contentContainerStyle={styles.listContent}
+      initialNumToRender={12}
+      windowSize={7}
+      removeClippedSubviews
+      ListHeaderComponent={
+        <Text style={[t.type.displayCondensed, styles.header, { color: t.colors.textPrimary }]}>
+          Courts near you
+        </Text>
+      }
+      ListEmptyComponent={
         <Text style={[t.type.caption, styles.empty, { color: t.colors.textMuted }]}>
           No courts in view yet — pan or zoom the map to find some.
         </Text>
-      )}
-    </ScrollView>
+      }
+    />
   );
 }
 

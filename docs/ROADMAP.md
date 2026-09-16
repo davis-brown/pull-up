@@ -52,19 +52,13 @@ So items below don't re-propose shipped work.
 
 ## Now
 
-Highest-leverage, well-aligned, ready to start.
-
-### 8. Performance & accessibility pass · *reliability* · M
-Map/list perf, container cold starts, and an a11y audit across screens. Now
-that **API · stateless fetches** separates user-facing edge latency from the
-Durable Object half of each request, there is a trustworthy baseline to measure
-against — take a percentile reading before changing anything.
+*(Empty — pick the next item from Later.)*
 
 ---
 
 ## Next
 
-*(Promote an item from Later when the performance pass is picked up.)*
+*(Empty.)*
 
 ---
 
@@ -84,6 +78,28 @@ against — take a percentile reading before changing anything.
 
 ## Recently shipped
 
+- **Performance & accessibility pass** (item 8) — baseline first, recorded in
+  `docs/OBSERVABILITY.md`: median 189ms / p95 616ms / p99 1268ms over the prior
+  week. Four fixes came out of it. `ApiContainer.sleepAfter` was exactly equal
+  to the `*/15` cron interval, so the cron that wakes the container every 15
+  minutes raced the 15-minute sleep and roughly half of requests paid a cold
+  start; a 20m lease is always re-upped, at the cost of the container now
+  billing as warm ~100% of the time rather than ~50%. Browser preflights were
+  proxying all the way to the container — the Worker logged *more* `OPTIONS`
+  than actual searches — and are now answered at the edge from a mirror of the
+  Go CORS config, with `Access-Control-Max-Age` raised 600 → 7200. On the
+  client, `useCourtsInBBox` gained `keepPreviousData` (every pan was blanking
+  the pin layer while the new bbox loaded) and a 30s `staleTime`, and the
+  desktop court list moved from an unvirtualized `ScrollView` + `.map()` to a
+  `FlatList` with a memoized row. A11y went in at the primitive level:
+  `Button`, `Chip`, `SegmentedToggle`, `Field`, `FullScreenLoader` and
+  `ErrorText` had no roles, labels or state at all, which is most of the app's
+  controls transitively; sub-44pt targets on `Chip` and the segmented control
+  were fixed with `hitSlop` rather than by inflating a deliberately dense
+  design. Two things were deliberately left out — bbox quantization for cache
+  reuse (needs coarse enough rounding to visibly clip the viewport before it
+  pays), and component tests for the a11y props, which this repo has no harness
+  for (`testEnvironment: "node"`, no testing-library). Shipped 2026-07-27.
 - **Observability cleanup** (item 7) — structured per-queue `background_drain`
   cron events, JSON container logs, and a runbook in `docs/OBSERVABILITY.md`.
   Verified live: each cron emits one event per queue, filterable on `event`,
