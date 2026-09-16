@@ -308,3 +308,11 @@ attribution must remain visible in the app, and the OSM-derived subset of the
 courts database is kept separable via the `source`/`osm_id` columns to honor
 share-alike. Map tiles are served by OpenFreeMap (also OSM-derived); the map's
 attribution control must stay visible.
+
+## License
+
+The pull-up source code is released under the [MIT License](LICENSE).
+
+That covers this repository's own code only. Court data carries the separate
+OpenStreetMap terms described above — the ODbL share-alike obligation on the
+OSM-derived subset is not waived by the MIT grant.
