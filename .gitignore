@@ -32,3 +32,5 @@ app/android/
 
 # Local-only Claude working notes (specs, plans, task reports/diffs) —
 # not meant for every repo collaborator to see.
+.claude/settings.local.json
+.claude/notes/
