@@ -127,6 +127,9 @@ export function Button({
         <Pressable
           onPress={onPress}
           disabled={disabled || busy}
+          accessibilityRole="button"
+          accessibilityLabel={title}
+          accessibilityState={{ disabled: disabled || busy, busy }}
           onPressIn={pressIn}
           onPressOut={pressOut}
           style={({ pressed }) => [
@@ -151,6 +154,9 @@ export function Button({
       <Pressable
         onPress={onPress}
         disabled={disabled || busy}
+        accessibilityRole="button"
+        accessibilityLabel={title}
+        accessibilityState={{ disabled: disabled || busy, busy }}
         onHoverIn={hoverIn}
         onHoverOut={hoverOut}
         onPressIn={pressIn}
@@ -218,6 +224,10 @@ export function Field(props: TextInputProps & { label: string }) {
         {label}
       </Text>
       <TextInput
+        // The visible <Text> above is a sibling, not a native label, so a
+        // screen reader would otherwise read the input as unlabelled. Callers
+        // can still override via inputProps.
+        accessibilityLabel={label}
         style={[
           t.type.body,
           styles.input,
@@ -239,7 +249,11 @@ export function Field(props: TextInputProps & { label: string }) {
 export function FullScreenLoader() {
   const t = useTheme();
   return (
-    <View style={[styles.fullScreenLoader, { backgroundColor: t.colors.background }]}>
+    <View
+      accessibilityRole="progressbar"
+      accessibilityLabel="Loading"
+      style={[styles.fullScreenLoader, { backgroundColor: t.colors.background }]}
+    >
       <ActivityIndicator size="large" color={t.colors.accent} />
     </View>
   );
@@ -249,7 +263,13 @@ export function ErrorText({ message }: { message: string | null }) {
   const t = useTheme();
   if (!message) return null;
   return (
-    <Text style={[t.type.caption, { color: t.colors.danger, marginVertical: t.spacing.sm }]}>
+    // Errors appear after an action (a failed submit), so they need to be
+    // announced rather than waiting to be swiped to.
+    <Text
+      accessibilityRole="alert"
+      accessibilityLiveRegion="polite"
+      style={[t.type.caption, { color: t.colors.danger, marginVertical: t.spacing.sm }]}
+    >
       {message}
     </Text>
   );
@@ -268,6 +288,14 @@ export function Chip({
   return (
     <Pressable
       onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ selected }}
+      // The chip's painted height (~30pt) is deliberate — the filter sheet
+      // packs many of them. hitSlop lifts the *touch* target past the 44pt
+      // minimum without inflating the design; the horizontal slop stays inside
+      // the 8pt margin so neighbouring chips never overlap.
+      hitSlop={{ top: 8, bottom: 8, left: 4, right: 4 }}
       style={[
         styles.chip,
         {
@@ -341,6 +369,7 @@ export function SegmentedToggle({
   const t = useTheme();
   return (
     <View
+      accessibilityRole="tablist"
       style={[
         styles.segmented,
         t.shadows.chrome,
@@ -356,6 +385,12 @@ export function SegmentedToggle({
           <Pressable
             key={option.key}
             onPress={() => onChange(option.key)}
+            accessibilityRole="tab"
+            accessibilityLabel={option.label}
+            accessibilityState={{ selected: active }}
+            // ~34pt painted; slop only vertically, since segments sit flush
+            // against each other with no margin to borrow.
+            hitSlop={{ top: 6, bottom: 6 }}
             style={[
               styles.segment,
               {

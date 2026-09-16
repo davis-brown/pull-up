@@ -129,6 +129,10 @@ comes from geo-verified check-ins and crowd reports.
 - Structured Worker/container logs and source-controlled Cloudflare saved-view
   definitions separate stateless API latency from container invocations and
   track both background drains (`docs/OBSERVABILITY.md`)
+- Warm by construction — the container's sleep lease is deliberately longer
+  than the 15-minute drain cron that wakes it, so it stays up rather than
+  cold-starting between crons; browser CORS preflights are answered at the
+  Worker edge instead of being proxied into the container at all
 
 ## Stack
 
@@ -141,8 +145,9 @@ comes from geo-verified check-ins and crowd reports.
 
 ## Local development
 
-Requirements: Go 1.25.7+ (per `server/go.mod`), Node 20+, Docker (for
-Postgres+PostGIS), and [sqlc](https://docs.sqlc.dev) if you edit SQL queries.
+Requirements: Go 1.25.7+ (per `server/go.mod`), Node 22 (what CI uses), Docker
+(for Postgres+PostGIS), and [sqlc](https://docs.sqlc.dev) if you edit SQL
+queries.
 
 ```sh
 make dev            # start postgres+postgis and run the API on :8080
@@ -168,7 +173,8 @@ See [docs/LOCAL_WORKER.md](docs/LOCAL_WORKER.md).
 
 ```sh
 make test           # server: unit tests only (DB-backed tests skip without TEST_DATABASE_URL)
-make test-app       # app: jest unit tests (lib/api.ts token refresh & auth client)
+make test-app       # app: jest unit tests across lib/ (pure logic — no component harness)
+npm --prefix deploy/api test   # API Worker: vitest (photo security, drain batching, CORS preflight)
 
 # End-to-end smoke over HTTP against a server you already started. `make smoke`
 # drives `make dev` on :8080; `make smoke-worker` drives `make dev-worker` on
@@ -196,8 +202,13 @@ The API integration tests in `server/internal/api` spin up the real router
 against the test database and drive it over HTTP: auth (register/login/
 refresh rotation/logout), courts (create/dupe-detect/vote thresholds),
 geo-verified check-ins, crowd reports, photos, favorites, push tokens,
-flags, and the whole admin/moderation flow. CI runs all of this plus the
-app's typecheck and jest suite on every push.
+flags, and the whole admin/moderation flow. CI runs all of this on every push,
+plus the app's typecheck, lint, jest suite and web export, and the API Worker's
+generated-bindings check, typecheck, vitest suite and container dry-run build.
+
+The app's jest suite covers `lib/` logic only — there is no component-test
+harness (`testEnvironment: "node"`, no testing-library), so anything that has
+to render a component is currently verified by hand.
 
 The API runs its migrations automatically on startup. Config is env-based —
 see `server/internal/config/config.go`. Runtime secrets are `DATABASE_URL`,
@@ -205,7 +216,12 @@ see `server/internal/config/config.go`. Runtime secrets are `DATABASE_URL`,
 secrets must be distinct and at least 32 bytes.
 
 Maps need no API keys: tiles come from [OpenFreeMap](https://openfreemap.org).
-The only app config is `EXPO_PUBLIC_API_URL` — see `app/.env.example`.
+`EXPO_PUBLIC_API_URL` is the only app config you need to set; the rest are
+optional and fall back to sensible defaults — `EXPO_PUBLIC_WEB_URL` (deep-link
+origin, defaults to `https://pull-up.davisbrown.dev`),
+`EXPO_PUBLIC_SENTRY_DSN` (error reporting, disabled when unset), and
+`EXPO_PUBLIC_IOS_STORE_URL` / `EXPO_PUBLIC_ANDROID_STORE_URL` (the
+get-the-app banner, hidden when unset). See `app/.env.example`.
 
 ## How live activity works
 

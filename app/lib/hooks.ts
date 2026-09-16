@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import {
+  keepPreviousData,
   useMutation,
   useQuery,
   useQueryClient,
@@ -78,6 +79,17 @@ export function useCourtsInBBox(bbox: BBox | null, filters?: CourtFilters) {
   return useQuery({
     queryKey: ["courts", "bbox", bbox, filters],
     enabled: bbox != null,
+    // Every pan writes a new bbox, and therefore a new query key. Without a
+    // placeholder the hook drops to `pending`, `data` goes undefined, and the
+    // whole pin layer unmounts and re-mounts once the fetch lands — the map
+    // visibly blanks mid-gesture. Keeping the previous region's courts on
+    // screen while the new ones load makes panning continuous; they are
+    // replaced, not merged, as soon as the response arrives.
+    placeholderData: keepPreviousData,
+    // Survives a remount at an unchanged viewport (tab switch, opening and
+    // closing the filter sheet) without a refetch. Liveness is unaffected:
+    // refetchInterval below fires on its own schedule regardless of staleness.
+    staleTime: 30_000,
     // Poll every 5s while the region is still importing courts, else every 45s.
     refetchInterval: (q) => (q.state.data?.seeding ? 5_000 : 45_000),
     refetchIntervalInBackground: false,
