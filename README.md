@@ -128,7 +128,7 @@ comes from geo-verified check-ins and crowd reports.
   Trigger, so backlogged imports/enrichment finish even with no traffic
 - Structured Worker/container logs and source-controlled Cloudflare saved-view
   definitions separate stateless API latency from container invocations and
-  track both background drains (`docs/OBSERVABILITY.md`)
+  track both background drains
 - Warm by construction — the container's sleep lease is deliberately longer
   than the 15-minute drain cron that wakes it, so it stays up rather than
   cold-starting between crons; browser CORS preflights are answered at the
@@ -166,8 +166,6 @@ Cloudflare account and nothing deployed:
 ```sh
 make dev-worker     # http://localhost:8787 (needs Docker with buildx)
 ```
-
-See [docs/LOCAL_WORKER.md](docs/LOCAL_WORKER.md).
 
 ### Tests
 
