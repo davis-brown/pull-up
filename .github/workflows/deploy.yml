@@ -25,11 +25,11 @@ jobs:
     timeout-minutes: 30
     environment: production
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
           persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
           cache: npm
@@ -140,32 +140,29 @@ jobs:
       - name: Smoke web app and security headers
         env:
           WEB_ORIGIN: ${{ vars.WEB_ORIGIN }}
-        # The origin may sit behind Cloudflare Access (private beta): accept
-        # either the worker's security headers or an Access login redirect.
+        # The origin is public, so these assertions are unconditional. An
+        # interstitial that 3xxs away from the app (an Access gate, say) fails
+        # here rather than being waved through — a skipped check is how the
+        # blank-map deploy reached production unnoticed.
         run: |
           curl --silent --show-error --retry 12 --retry-all-errors --retry-delay 5 --retry-max-time 120 --connect-timeout 10 --max-time 20 --dump-header "$RUNNER_TEMP/web-headers" --output /dev/null "${WEB_ORIGIN%/}/"
-          if grep -qi '^content-security-policy:' "$RUNNER_TEMP/web-headers"; then
-            grep -qi '^x-content-type-options: nosniff' "$RUNNER_TEMP/web-headers"
-          elif grep -qi '^location: https://[a-z0-9.-]*\.cloudflareaccess\.com/' "$RUNNER_TEMP/web-headers"; then
-            echo "Web origin is behind Cloudflare Access; header assertions run post-login."
-          else
-            echo "Web origin returned neither security headers nor an Access redirect:"
+          if ! grep -qi '^content-security-policy:' "$RUNNER_TEMP/web-headers"; then
+            echo "Web origin did not return the Worker's security headers:"
             cat "$RUNNER_TEMP/web-headers"
             exit 1
           fi
+          grep -qi '^x-content-type-options: nosniff' "$RUNNER_TEMP/web-headers"
       - name: Smoke MapLibre worker
         env:
           WEB_ORIGIN: ${{ vars.WEB_ORIGIN }}
         # MapLibre 6 loads its tile worker as a separate module. If it is not
         # served, the SPA fallback returns index.html in its place and the map
         # renders no tiles while every other check passes — so assert the
-        # worker comes back as JavaScript. Same Access allowance as above.
+        # worker comes back as JavaScript.
         run: |
           version="$(node -p "require('./app/node_modules/maplibre-gl/package.json').version")"
           curl --silent --show-error --retry 6 --retry-all-errors --retry-delay 5 --connect-timeout 10 --max-time 20 --dump-header "$RUNNER_TEMP/worker-headers" --output /dev/null "${WEB_ORIGIN%/}/maplibre/${version}/maplibre-gl-worker.mjs"
-          if grep -qi '^location: https://[a-z0-9.-]*\.cloudflareaccess\.com/' "$RUNNER_TEMP/worker-headers"; then
-            echo "Web origin is behind Cloudflare Access; worker check skipped."
-          elif ! grep -qiE '^content-type: (text|application)/javascript' "$RUNNER_TEMP/worker-headers"; then
+          if ! grep -qiE '^content-type: (text|application)/javascript' "$RUNNER_TEMP/worker-headers"; then
             echo "MapLibre ${version} worker was not served as JavaScript:"
             cat "$RUNNER_TEMP/worker-headers"
             exit 1
