@@ -32,7 +32,6 @@ dev: db-up api
 # proxy, R2 and EMAIL bindings, the Worker's HMAC upload guard, and the cron
 # drain handler — with no Cloudflare account and nothing deployed.
 # Needs Docker with buildx; secrets come from deploy/api/.dev.vars.
-# See docs/LOCAL_WORKER.md.
 dev-worker: db-up
 	cd deploy/api && npm install && npx wrangler dev --port 8787
 
@@ -64,7 +63,7 @@ smoke:
 	scripts/smoke.sh
 
 # The Worker layer specifically: container proxy, EMAIL binding, HMAC upload
-# guard, cron drain. See docs/LOCAL_WORKER.md.
+# guard, cron drain.
 smoke-worker:
 	scripts/smoke-worker.sh
 

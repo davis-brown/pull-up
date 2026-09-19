@@ -5,7 +5,6 @@
 # adds in production and `make dev` has no equivalent for: the container proxy,
 # the EMAIL binding that turns a registration into a verification email, the
 # Worker-level HMAC guard on photo uploads, and the cron drain handler.
-# See docs/LOCAL_WORKER.md.
 set -euo pipefail
 
 ORIGIN=${ORIGIN:-http://localhost:8787}
