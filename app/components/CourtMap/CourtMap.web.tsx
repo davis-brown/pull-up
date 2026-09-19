@@ -103,8 +103,21 @@ export default function CourtMap({
       onMoveEnd={(evt) => emitRegion(evt.target, onRegionChange)}
     >
       {/* OSM attribution must stay visible; the position prop keeps it out
-          of whichever corner the host layout occupies. */}
-      <AttributionControl compact position={attributionPosition} />
+          of whichever corner the host layout occupies. The bottom-left corner
+          is the mobile map home, where the Add-court FAB holds the opposite
+          corner: below ~360pt the expanded attribution spanned nearly the full
+          width and ran under the FAB. Capping the width keeps the two clear at
+          any line count — the text wraps rather than truncating, so the
+          attribution stays legible as ODbL requires. */}
+      <AttributionControl
+        compact
+        position={attributionPosition}
+        style={
+          attributionPosition === "bottom-left"
+            ? { maxWidth: "calc(100% - 172px)" }
+            : undefined
+        }
+      />
       {/* Top-left: the one corner the app's own chrome reserves but never
           fills (the toggle row's spacer slot), so the locate button can't
           collide with the filter button (top-right) or the FAB. */}
