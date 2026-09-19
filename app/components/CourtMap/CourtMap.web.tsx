@@ -14,6 +14,17 @@ import { useMapStyle } from "./map-style";
 import { CourtPinMarker } from "./pin";
 import { type CourtMapProps } from "./types";
 
+// MapLibre 6 resolves its tile worker relative to its own module file, which
+// Metro renames on export and never emits alongside it — the default URL falls
+// through to the SPA's index.html and the map renders no tiles. The export step
+// (scripts/copy-maplibre-worker.mjs) ships the worker under a versioned path;
+// point MapLibre at it before the first map is created. Passed to <Map> as a
+// promise so maplibre-gl stays out of the entry bundle.
+const mapLib = import("maplibre-gl").then((lib) => {
+  lib.setWorkerUrl(`/maplibre/${lib.getVersion()}/maplibre-gl-worker.mjs`);
+  return lib;
+});
+
 // Reports the map's current viewport as a bbox. Shared by the load and
 // move-end handlers so both report the region identically.
 function emitRegion(
@@ -74,6 +85,7 @@ export default function CourtMap({
   return (
     <Map
       ref={mapRef}
+      mapLib={mapLib}
       initialViewState={{
         longitude: initialCenter.lng,
         latitude: initialCenter.lat,

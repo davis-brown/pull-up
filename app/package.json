@@ -57,7 +57,7 @@
     "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.worker.json",
     "lint": "eslint .",
     "test": "jest",
-    "export:web": "expo export --platform web"
+    "export:web": "expo export --platform web && node scripts/copy-maplibre-worker.mjs"
   },
   "overrides": {
     "uuid": "^11.1.1"
