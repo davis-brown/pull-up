@@ -1,0 +1,42 @@
+name: Bug report
+description: Something behaves differently than it should
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Security vulnerabilities do not belong here — please use
+        [private reporting](https://github.com/davis-brown/pull-up/security/advisories/new).
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you saw, and what you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open the map at ...
+        2. ...
+    validations:
+      required: true
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Where
+      options: [web, iOS, Android, API / server, not sure]
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version or commit
+      description: App version, or the commit if you are running it locally.
+  - type: textarea
+    id: extra
+    attributes:
+      label: Logs or screenshots
+      description: Console output, a screenshot, or a failing request. Please redact tokens.
