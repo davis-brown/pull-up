@@ -153,3 +153,20 @@ jobs:
             cat "$RUNNER_TEMP/web-headers"
             exit 1
           fi
+      - name: Smoke MapLibre worker
+        env:
+          WEB_ORIGIN: ${{ vars.WEB_ORIGIN }}
+        # MapLibre 6 loads its tile worker as a separate module. If it is not
+        # served, the SPA fallback returns index.html in its place and the map
+        # renders no tiles while every other check passes — so assert the
+        # worker comes back as JavaScript. Same Access allowance as above.
+        run: |
+          version="$(node -p "require('./app/node_modules/maplibre-gl/package.json').version")"
+          curl --silent --show-error --retry 6 --retry-all-errors --retry-delay 5 --connect-timeout 10 --max-time 20 --dump-header "$RUNNER_TEMP/worker-headers" --output /dev/null "${WEB_ORIGIN%/}/maplibre/${version}/maplibre-gl-worker.mjs"
+          if grep -qi '^location: https://[a-z0-9.-]*\.cloudflareaccess\.com/' "$RUNNER_TEMP/worker-headers"; then
+            echo "Web origin is behind Cloudflare Access; worker check skipped."
+          elif ! grep -qiE '^content-type: (text|application)/javascript' "$RUNNER_TEMP/worker-headers"; then
+            echo "MapLibre ${version} worker was not served as JavaScript:"
+            cat "$RUNNER_TEMP/worker-headers"
+            exit 1
+          fi
