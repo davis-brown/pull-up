@@ -279,7 +279,7 @@ export default function MapScreen() {
               </View>
             )}
           </Pressable>
-          <View style={[styles.chromeCentered, { top: 12 }]}>
+          <View style={[styles.chromeCenteredRow, { top: 12 }]}>
             <SegmentedToggle
               options={[
                 { key: "now", label: "Now" },
@@ -562,6 +562,18 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     alignItems: "center",
+  },
+  // SegmentedToggle sets alignSelf: "flex-start" so it hugs the spacer in the
+  // mobile chrome row. That also defeats alignItems on any centring parent,
+  // which pinned the desktop toggle to the map pane's left edge — directly
+  // under the geolocate control, hiding the "Now" segment behind it. Centring
+  // on the main axis instead is something alignSelf cannot override.
+  chromeCenteredRow: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    flexDirection: "row",
+    justifyContent: "center",
   },
   fab: {
     position: "absolute",

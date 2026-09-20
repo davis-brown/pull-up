@@ -1,7 +1,12 @@
 // Web implementation of CourtMap: the native MapLibre module does not run on
 // Expo web, so Metro resolves this file instead (.web.tsx).
 import "maplibre-gl/dist/maplibre-gl.css";
-import type { StyleSpecification } from "maplibre-gl";
+// The ref is the underlying maplibre control; aliased so it does not collide
+// with the react-map-gl component of the same name imported below.
+import type {
+  GeolocateControl as GeolocateControlInstance,
+  StyleSpecification,
+} from "maplibre-gl";
 import { useEffect, useRef } from "react";
 import Map, {
   AttributionControl,
@@ -62,6 +67,23 @@ export default function CourtMap({
   const t = useTheme();
   const mapStyle = useMapStyle(t.scheme);
   const mapRef = useRef<MapRef>(null);
+  const geolocateRef = useRef<GeolocateControlInstance>(null);
+
+  // MapLibre's geolocate control only locates when its button is pressed, so
+  // the blue dot never appeared until someone thought to click it — even for
+  // a visitor who had already granted the permission. Trigger it once the map
+  // is ready, but only when the browser reports the permission as already
+  // granted: firing it blind would raise the OS prompt on first paint, which
+  // is exactly what the app's permission priming exists to avoid.
+  async function showUserLocationIfAllowed() {
+    try {
+      const status = await navigator.permissions?.query({ name: "geolocation" });
+      if (status?.state !== "granted") return;
+    } catch {
+      return; // Permissions API unavailable or geolocation unqueryable: leave it to the button.
+    }
+    geolocateRef.current?.trigger();
+  }
 
   useEffect(() => {
     if (!cameraTarget) return;
@@ -99,7 +121,10 @@ export default function CourtMap({
       // which disabled the court query and showed a brand-new visitor an
       // empty map reading "no courts in view". Reporting the region on load
       // too means the first viewport is queried like any other.
-      onLoad={(evt) => emitRegion(evt.target, onRegionChange)}
+      onLoad={(evt) => {
+        emitRegion(evt.target, onRegionChange);
+        void showUserLocationIfAllowed();
+      }}
       onMoveEnd={(evt) => emitRegion(evt.target, onRegionChange)}
     >
       {/* OSM attribution must stay visible; the position prop keeps it out
@@ -123,6 +148,7 @@ export default function CourtMap({
           collide with the filter button (top-right) or the FAB. */}
       {showUserLocation && (
         <GeolocateControl
+          ref={geolocateRef}
           trackUserLocation
           position="top-left"
           style={{ marginTop: 19, marginLeft: 16 }}
