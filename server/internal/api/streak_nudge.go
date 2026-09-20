@@ -53,7 +53,8 @@ func daysLeftInStreakWeek(localNow time.Time) int {
 
 // runStreakNudges is the cron pass: find players whose streak is alive but
 // unplayed this week, and nudge the ones for whom it is currently evening.
-// Called from the internal drain endpoint on the 15-minute Cloudflare cron.
+// Called from the internal drain endpoint on the hourly Cloudflare cron; the
+// 17:00-21:00 local window gives every candidate several ticks.
 func (s *Server) runStreakNudges(ctx context.Context) int {
 	candidates, err := s.store.Queries.ListStreakNudgeCandidates(ctx, nudgeMaxCandidatesPerRun)
 	if err != nil {
