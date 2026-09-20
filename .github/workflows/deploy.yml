@@ -167,3 +167,10 @@ jobs:
             cat "$RUNNER_TEMP/worker-headers"
             exit 1
           fi
+      - name: Smoke map render
+        env:
+          WEB_ORIGIN: ${{ vars.WEB_ORIGIN }}
+        # Every other check can pass against a map that draws nothing — that is
+        # how the blank-map deploy shipped. This drives the deployed origin in
+        # the runner's Chrome and asserts vector tiles are actually fetched.
+        run: npm --prefix deploy/api run smoke:map
