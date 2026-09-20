@@ -8,13 +8,15 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "types": "wrangler types --include-runtime=false",
-    "types:check": "wrangler types --check --include-runtime=false"
+    "types:check": "wrangler types --check --include-runtime=false",
+    "smoke:map": "node scripts/smoke-map.mjs"
   },
   "dependencies": {
     "@cloudflare/containers": "0.3.7"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "5.20260916.1",
+    "playwright-core": "1.63.0",
     "typescript": "6.0.3",
     "vitest": "4.1.11",
     "wrangler": "4.132.0"
