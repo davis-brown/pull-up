@@ -30,9 +30,11 @@ const maxTilesPerRequest = 6
 // courtesyDelay spaces successive Overpass queries (shared free service).
 const courtesyDelay = 10 * time.Second
 
-// idlePoll is how long the worker waits before re-checking the queue when
-// there's nothing claimable.
-const idlePoll = 30 * time.Second
+// idleFallback re-checks the queue even without a wake signal, covering work
+// enqueued by another process or a signal dropped while the worker was busy.
+// It is deliberately long: an idle 30s poll kept a pgx connection — and with
+// it the Neon compute endpoint — awake for as long as the container lived.
+const idleFallback = 15 * time.Minute
 
 type Tile struct {
 	X, Y int
@@ -106,6 +108,10 @@ type Seeder struct {
 	// /internal/drain never fetch Overpass at once; courtesyDelay only spaces
 	// imports within a single serialized run.
 	mu sync.Mutex
+	// wake carries "there is work" from Request to Run. Buffered to one and
+	// sent without blocking, so a burst of enqueues coalesces into a single
+	// wake-up and no request ever waits on the worker.
+	wake chan struct{}
 }
 
 func New(queries *gen.Queries, endpoint string, log *slog.Logger) *Seeder {
@@ -116,6 +122,7 @@ func New(queries *gen.Queries, endpoint string, log *slog.Logger) *Seeder {
 		queries:  queries,
 		endpoint: endpoint,
 		log:      log,
+		wake:     make(chan struct{}, 1),
 	}
 }
 
@@ -133,6 +140,7 @@ func (s *Seeder) Request(ctx context.Context, minLng, minLat, maxLng, maxLat flo
 			s.log.Error("enqueue seed tile", "tile", t, "err", err)
 		}
 	}
+	s.signal()
 }
 
 // ViewportSeeding reports whether the viewport is seedable and at least one
@@ -189,8 +197,21 @@ func (s *Seeder) Run(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(idlePoll):
+		case <-s.wake:
+		case <-time.After(idleFallback):
 		}
+	}
+}
+
+// signal nudges Run that work was enqueued. Never blocks: a full buffer
+// already means Run has an unconsumed wake-up pending.
+func (s *Seeder) signal() {
+	if s.wake == nil {
+		return
+	}
+	select {
+	case s.wake <- struct{}{}:
+	default:
 	}
 }
 

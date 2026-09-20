@@ -56,7 +56,11 @@ var mapillaryBaseURL = "https://graph.mapillary.com/images"
 // Overridable in tests. Overpass endpoint for the per-court attribute backfill.
 var overpassEndpoint = osm.DefaultOverpassEndpoint
 
-const idlePoll = 30 * time.Second
+// idleFallback re-checks the queue even without a wake signal, covering work
+// enqueued by another process or a signal dropped while the worker was busy.
+// Long on purpose: an idle 30s poll kept a pgx connection — and with it the
+// Neon compute endpoint — awake for as long as the container lived.
+const idleFallback = 15 * time.Minute
 
 type Enricher struct {
 	queries *gen.Queries
@@ -66,6 +70,10 @@ type Enricher struct {
 	mapillaryToken string
 	// mapillaryOutage throttles the Sentry alert for a rejecting Mapillary API.
 	mapillaryOutage throttle
+	// wake carries "there is work" from Request to Run. Buffered to one and
+	// sent without blocking, so a burst of requests coalesces into a single
+	// wake-up and no request ever waits on the worker.
+	wake chan struct{}
 	// mu serializes enrichment so the Run loop and a concurrent
 	// /internal/drain never hit the upstream services at once; the courtesy
 	// delays only space calls within a single serialized run.
@@ -124,6 +132,7 @@ func New(queries *gen.Queries, log *slog.Logger, mapillaryToken string) *Enriche
 		log:            log,
 		client:         &http.Client{Timeout: requestTimeout},
 		mapillaryToken: mapillaryToken,
+		wake:           make(chan struct{}, 1),
 	}
 }
 
@@ -132,6 +141,20 @@ func New(queries *gen.Queries, log *slog.Logger, mapillaryToken string) *Enriche
 func (e *Enricher) Request(ctx context.Context, id uuid.UUID) {
 	if err := e.queries.RequestEnrichment(ctx, id); err != nil {
 		e.log.Error("request enrichment", "court", id, "err", err)
+		return
+	}
+	e.signal()
+}
+
+// signal nudges Run that work was requested. Never blocks: a full buffer
+// already means Run has an unconsumed wake-up pending.
+func (e *Enricher) signal() {
+	if e.wake == nil {
+		return
+	}
+	select {
+	case e.wake <- struct{}{}:
+	default:
 	}
 }
 
@@ -163,7 +186,8 @@ func (e *Enricher) Run(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(idlePoll):
+		case <-e.wake:
+		case <-time.After(idleFallback):
 		}
 	}
 }
