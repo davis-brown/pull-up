@@ -184,6 +184,11 @@ npm --prefix deploy/api test   # API Worker: vitest (photo security, drain batch
 make smoke
 make smoke-worker
 
+# Asserts the deployed map actually renders — it drives the origin in headless
+# Chrome and fails unless vector tiles are fetched. Runs after every deploy,
+# and can be pointed anywhere:
+WEB_ORIGIN=https://pull-up.davisbrown.dev npm --prefix deploy/api run smoke:map
+
 # Server integration tests (store queries + full HTTP API) need a scratch
 # Postgres with PostGIS. `make test-int` brings up the compose database,
 # creates a throwaway `pullup_test` database, and runs the full suite against
