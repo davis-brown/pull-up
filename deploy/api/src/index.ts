@@ -77,12 +77,14 @@ const EMAIL_PATHS = new Set([
 
 export class ApiContainer extends Container<RuntimeEnv> {
   defaultPort = 8080;
-  // Must stay longer than the */15 cron interval in wrangler.jsonc. The cron
-  // drain wakes the container every 15 minutes anyway; at an equal 15m lease
-  // the two raced and roughly half of user requests paid a cold start (the
-  // ~1.2s p99 on the stateless view). A 20m lease is always re-upped by the
-  // next cron, so the container stays warm without any extra wake-ups.
-  sleepAfter = "20m";
+  // Short on purpose, so an idle container sleeps and lets the Neon endpoint
+  // suspend behind it. The previous 20m lease was set to outlive the */15 cron
+  // so the container never cold-started, but that reasoning was circular: the
+  // cron is a drain for a queue that is almost always empty, not a heartbeat,
+  // and "free" warmth billed the container ~100% of the time and held a pgx
+  // pool open against the database around the clock. Organic traffic keeps the
+  // container warm on its own; when there is none, nobody is waiting on it.
+  sleepAfter = "5m";
 
   constructor(ctx: DurableObjectState<{}>, env: RuntimeEnv) {
     super(ctx, env);

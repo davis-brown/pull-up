@@ -124,15 +124,16 @@ comes from geo-verified check-ins and crowd reports.
 **Reliability**
 - Durable background work — OSM seeding and enrichment run off a DB-backed
   queue (not in-memory), drained on the request warm path and by a
-  secret-guarded `/internal/drain` endpoint on a 15-minute Cloudflare Cron
+  secret-guarded `/internal/drain` endpoint on an hourly Cloudflare Cron
   Trigger, so backlogged imports/enrichment finish even with no traffic
 - Structured Worker/container logs and source-controlled Cloudflare saved-view
   definitions separate stateless API latency from container invocations and
   track both background drains
-- Warm by construction — the container's sleep lease is deliberately longer
-  than the 15-minute drain cron that wakes it, so it stays up rather than
-  cold-starting between crons; browser CORS preflights are answered at the
-  Worker edge instead of being proxied into the container at all
+- Idle by construction — the container's sleep lease is short and the drain
+  cron is hourly, so with no traffic the container sleeps and the Neon compute
+  endpoint suspends behind it rather than both billing around the clock;
+  browser CORS preflights are answered at the Worker edge instead of being
+  proxied into the container at all
 
 ## Stack
 
@@ -282,7 +283,7 @@ regenerate `deploy/api/worker-configuration.d.ts` with `npm run types`.
 
 `INTERNAL_TASK_SECRET` is passed to the Go container by the API Worker. It
 protects cron, verification-email, and status-aware media cleanup calls; these
-internal routes are not exposed by the public Worker. The 15-minute cron drains
+internal routes are not exposed by the public Worker. The hourly cron drains
 OSM/enrichment work and physically removes revoked R2 objects.
 
 Then, from the repo root:
