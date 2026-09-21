@@ -30,6 +30,18 @@ const mapLib = import("maplibre-gl").then((lib) => {
   return lib;
 });
 
+// MapLibre renders a compact attribution expanded and only minimises it after
+// the user interacts with the map, so the OpenFreeMap credit covered a corner
+// of every fresh load. Collapse it to its ⓘ button up front — the same state
+// MapLibre itself toggles to — so the credit stays one tap away and visible as
+// a control, without sitting over the map by default.
+function collapseAttribution(map: { getContainer: () => HTMLElement }): void {
+  const el = map.getContainer().querySelector(".maplibregl-ctrl-attrib.maplibregl-compact");
+  if (!el) return;
+  el.classList.remove("maplibregl-compact-show");
+  el.setAttribute("open", "");
+}
+
 // Reports the map's current viewport as a bbox. Shared by the load and
 // move-end handlers so both report the region identically.
 function emitRegion(
@@ -123,6 +135,7 @@ export default function CourtMap({
       // too means the first viewport is queried like any other.
       onLoad={(evt) => {
         emitRegion(evt.target, onRegionChange);
+        collapseAttribution(evt.target);
         void showUserLocationIfAllowed();
       }}
       onMoveEnd={(evt) => emitRegion(evt.target, onRegionChange)}

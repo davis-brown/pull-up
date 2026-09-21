@@ -60,20 +60,10 @@ export function CourtPinMarker({
         </Pressable>
       );
     }
-    // Kept far lighter than any count pin so "now" mode's hierarchy reads.
-    return (
-      <Pressable onPress={onPress} hitSlop={12}>
-        <View>
-          <View
-            style={[
-              styles.quietDot,
-              { backgroundColor: t.colors.quietDot, borderColor: t.colors.surface },
-            ]}
-          />
-          {pinBadges(pin, t)}
-        </View>
-      </Pressable>
-    );
+    // Same badge as "all" mode: a quiet court should still look like a court.
+    // The count pins below stay much larger, so the mode's hierarchy still
+    // reads — the difference is now size, not presence.
+    return <QuietBasketballPin pin={pin} onPress={onPress} t={t} />;
   }
 
   const size = variant.size;
@@ -119,6 +109,44 @@ export function CourtPinMarker({
             <Text style={[t.type.overline, { color: t.colors.surface }]}>{pin.name}</Text>
           </View>
         )}
+      </View>
+    </Pressable>
+  );
+}
+
+// A court with nobody on it. Both modes draw the same 22px basketball badge:
+// it reads as "a court is here" at a glance, where the old grey dot in "now"
+// mode read as noise. Still far smaller than any count pin, so a court with
+// players on it stays the loudest thing on the map.
+function QuietBasketballPin({
+  pin,
+  onPress,
+  t,
+}: {
+  pin: CourtPin;
+  onPress?: () => void;
+  t: Theme;
+}) {
+  const pending = pin.status === "pending";
+  return (
+    <Pressable onPress={onPress} hitSlop={12}>
+      <View>
+        <View
+          style={[
+            styles.badge,
+            {
+              backgroundColor: pending ? t.colors.surface : t.colors.accent,
+              borderColor: pending ? t.colors.textMuted : t.colors.surface,
+            },
+          ]}
+        >
+          <Ionicons
+            name="basketball"
+            size={13}
+            color={pending ? t.colors.textMuted : t.colors.onAccent}
+          />
+        </View>
+        {pinBadges(pin, t)}
       </View>
     </Pressable>
   );
@@ -226,31 +254,9 @@ function AllCourtsPin({
   t: Theme;
 }) {
   const live = pin.activeCount > 0;
-  const pending = pin.status === "pending";
 
   if (!live) {
-    return (
-      <Pressable onPress={onPress} hitSlop={12}>
-        <View>
-          <View
-            style={[
-              styles.badge,
-              {
-                backgroundColor: pending ? t.colors.surface : t.colors.accent,
-                borderColor: pending ? t.colors.textMuted : t.colors.surface,
-              },
-            ]}
-          >
-            <Ionicons
-              name="basketball"
-              size={13}
-              color={pending ? t.colors.textMuted : t.colors.onAccent}
-            />
-          </View>
-          {pinBadges(pin, t)}
-        </View>
-      </Pressable>
-    );
+    return <QuietBasketballPin pin={pin} onPress={onPress} t={t} />;
   }
 
   return (
@@ -292,12 +298,6 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 13,
     fontWeight: "700",
-  },
-  quietDot: {
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    borderWidth: 2,
   },
   pinColumn: {
     alignItems: "center",
