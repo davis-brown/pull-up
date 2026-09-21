@@ -311,7 +311,9 @@ contributors, licensed [ODbL](https://www.openstreetmap.org/copyright). The
 attribution must remain visible in the app, and the OSM-derived subset of the
 courts database is kept separable via the `source`/`osm_id` columns to honor
 share-alike. Map tiles are served by OpenFreeMap (also OSM-derived); the map's
-attribution control must stay visible.
+attribution control must stay visible. It is MapLibre's compact control, which
+starts collapsed to its ⓘ button and expands on tap — the control itself is
+always on screen, and the credit is one tap away. Do not remove it.
 
 ## License
 
