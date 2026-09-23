@@ -279,7 +279,14 @@ export default function MapScreen() {
               </View>
             )}
           </Pressable>
-          <View style={[styles.chromeCenteredRow, { top: 12 }]}>
+          {/* Both of these span the pane's full width, and both render after
+              the filter button, so without box-none they sit on top of it and
+              take its clicks — the toggle row overlapped it outright. Only
+              their children should be hit-testable, as on mobile. */}
+          <View
+            pointerEvents="box-none"
+            style={[styles.chromeCenteredRow, { top: 12 }]}
+          >
             <SegmentedToggle
               options={[
                 { key: "now", label: "Now" },
@@ -289,7 +296,10 @@ export default function MapScreen() {
               onChange={(key) => setMode(key as "now" | "all")}
             />
           </View>
-          <View style={[styles.chromeCentered, { top: 66 }]}>
+          <View
+            pointerEvents="box-none"
+            style={[styles.chromeCentered, { top: 66 }]}
+          >
             <DiscoverySearchButton onPress={() => setSearchOpen(true)} />
           </View>
           <View
