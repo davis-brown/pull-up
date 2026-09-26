@@ -29,6 +29,3 @@ app/android/
 # OS / editor
 .DS_Store
 *.log
-
-# Local-only working notes (specs, plans, task reports/diffs) —
-# not meant for every repo collaborator to see.
