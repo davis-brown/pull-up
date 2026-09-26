@@ -46,8 +46,43 @@ If you edit SQL under `server/internal/store/queries/`, regenerate with
   are load-bearing and are commented as such.
 - Keep commits focused, and write the commit message for someone who has to
   understand the change a year from now.
-- Never put a credential in a command, a config file, or a commit. Local
-  credentials go in the macOS Keychain via `scripts/secret`.
+- Never put a credential in a command, a config file, or a commit — see
+  [Secrets](#secrets).
+
+## Secrets
+
+Never put a credential in a command. A value typed inline ends up in shell
+history and in whatever tool config recorded the invocation, and it persists
+there long after you have forgotten it — this repo lost a database password
+to a local tool's config file exactly once, which is why the wrappers below
+exist.
+
+Local credentials live in the macOS Keychain:
+
+```sh
+scripts/secret set   pull-up-db-dev   # prompts; the value is never echoed
+scripts/secret check pull-up-db-dev   # reports present/absent, nothing else
+```
+
+Query the database through the wrapper rather than passing `DATABASE_URL`
+inline:
+
+```sh
+scripts/dbq "select count(*) from courts"          # dev branch
+PULL_UP_ALLOW_PROD=1 scripts/dbq --prod "select 1" # production
+```
+
+`scripts/dbq` defaults to the **dev** branch. Production needs both `--prod`
+and `PULL_UP_ALLOW_PROD=1`. That pairing is a deliberate speed bump rather
+than a security boundary: routine dev queries stay frictionless, while
+anything pointed at production takes a second, explicit step.
+
+Deployed secrets are Cloudflare Worker secrets, declared by name in
+`deploy/api/wrangler.jsonc` under `secrets.required` and provisioned in CI
+from GitHub secrets (see `.github/workflows/deploy.yml`). Optional ones —
+currently `CLOUDFLARE_AI_TOKEN`, which gates Llama Guard text moderation — go
+in that workflow's `optional` list, so a missing value disables the feature
+instead of failing the deploy.
 
 ## Court data
 
