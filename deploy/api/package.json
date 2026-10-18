@@ -19,6 +19,6 @@
     "playwright-core": "1.63.0",
     "typescript": "6.0.3",
     "vitest": "4.1.11",
-    "wrangler": "4.132.0"
+    "wrangler": "4.151.1"
   }
 }
