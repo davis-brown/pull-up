@@ -113,6 +113,20 @@ func (s *Server) handleRecordGame(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnprocessableEntity, "cannot record a game at a rejected court")
 		return
 	}
+	// Only people who were actually at the court can be put in a result,
+	// so nobody can be dragged into a game they never played.
+	players := append(append([]uuid.UUID{}, teamA...), teamB...)
+	present, err := s.store.Queries.CountPlayersRecentlyAtCourt(r.Context(), gen.CountPlayersRecentlyAtCourtParams{
+		CourtID: courtID, UserIds: players,
+	})
+	if err != nil {
+		s.internalError(w, "check players at court", err)
+		return
+	}
+	if int(present) != len(players) {
+		writeError(w, http.StatusUnprocessableEntity, "every player must have checked in at this court")
+		return
+	}
 
 	tx, err := s.store.Pool.Begin(r.Context())
 	if err != nil {
@@ -137,9 +151,7 @@ func (s *Server) handleRecordGame(w http.ResponseWriter, r *http.Request) {
 				GameID: game.ID, UserID: playerID, Team: int16(team),
 				IsRecorder: playerID == uid,
 			}); err != nil {
-				// A bad player id is the client's error, not ours: the FK
-				// is the only thing validating that these users exist.
-				writeError(w, http.StatusBadRequest, "one of the players does not exist")
+				s.internalError(w, "add game participant", err)
 				return
 			}
 		}

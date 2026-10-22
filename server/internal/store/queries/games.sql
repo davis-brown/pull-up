@@ -18,6 +18,16 @@ VALUES (
     CASE WHEN sqlc.arg('is_recorder')::bool THEN now() ELSE NULL END
 );
 
+-- name: CountPlayersRecentlyAtCourt :one
+-- How many of these players checked in at the court in the last 3 hours:
+-- long enough to cover a check-in that expired or was closed before the
+-- result got recorded.
+SELECT count(DISTINCT user_id)::int
+FROM check_ins
+WHERE court_id = sqlc.arg('court_id')
+  AND user_id = ANY(sqlc.arg('user_ids')::uuid[])
+  AND created_at > now() - interval '3 hours';
+
 -- name: GetGame :one
 SELECT id, court_id, recorded_by, winning_team, score_win, score_lose,
     status, confirmed_at, played_at

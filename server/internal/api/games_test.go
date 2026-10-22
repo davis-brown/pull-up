@@ -7,6 +7,9 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/davisbrown/pull-up/server/internal/store"
+	"github.com/davisbrown/pull-up/server/internal/store/gen"
 )
 
 type gameResp struct {
@@ -15,6 +18,20 @@ type gameResp struct {
 		WinningTeam int    `json:"winning_team"`
 		Status      string `json:"status"`
 	} `json:"game"`
+}
+
+// seedCheckIns puts each user at the court, which recording a game requires.
+// Seeded through the store so check-in XP and pushes stay out of the way.
+func seedCheckIns(t *testing.T, st *store.Store, courtID string, userIDs ...string) {
+	t.Helper()
+	for _, id := range userIDs {
+		if _, err := st.Queries.CreateCheckIn(context.Background(), gen.CreateCheckInParams{
+			CourtID: uuid.MustParse(courtID), UserID: uuid.MustParse(id),
+			Source: "manual", PartySize: 1,
+		}); err != nil {
+			t.Fatalf("seed check-in: %v", err)
+		}
+	}
 }
 
 func TestGameConfirmationRules(t *testing.T) {
@@ -28,6 +45,17 @@ func TestGameConfirmationRules(t *testing.T) {
 		return doJSON(t, ts, http.MethodPost, "/courts/"+court.ID+"/games", token, body)
 	}
 
+	// Nobody can be put in a game at a court they never checked in at.
+	seedCheckIns(t, st, court.ID, winner.User.ID)
+	resp := record(winner.AccessToken, map[string]any{
+		"team_a": []string{winner.User.ID}, "team_b": []string{loser.User.ID}, "winning_team": 0,
+	})
+	if resp.StatusCode != http.StatusUnprocessableEntity {
+		defer resp.Body.Close()
+		t.Fatalf("absent player: status %d, want 422: %s", resp.StatusCode, readBody(t, resp))
+	}
+	resp.Body.Close()
+	seedCheckIns(t, st, court.ID, loser.User.ID, bystander.User.ID)
 
 	// Validation: the recorder must have played, teams can't overlap, and
 	// a partial or backwards score is rejected.
@@ -48,7 +76,7 @@ func TestGameConfirmationRules(t *testing.T) {
 		}
 	}
 
-	resp := record(winner.AccessToken, map[string]any{
+	resp = record(winner.AccessToken, map[string]any{
 		"team_a": []string{winner.User.ID}, "team_b": []string{loser.User.ID},
 		"winning_team": 0, "score_win": 11, "score_lose": 7,
 	})
@@ -181,6 +209,7 @@ func TestGameXPOnlyOnConfirmationAndRecordInStats(t *testing.T) {
 		return n
 	}
 
+	seedCheckIns(t, st, court.ID, winner.User.ID, loser.User.ID)
 	resp := doJSON(t, ts, http.MethodPost, "/courts/"+court.ID+"/games", winner.AccessToken, map[string]any{
 		"team_a": []string{winner.User.ID}, "team_b": []string{loser.User.ID}, "winning_team": 0,
 	})
@@ -246,6 +275,7 @@ func TestUnconfirmedGamesExpire(t *testing.T) {
 	a := registerUser(t, ts, "exp-a@test.local", "ExpA")
 	b := registerUser(t, ts, "exp-b@test.local", "ExpB")
 	court := createTestCourt(t, ts, a.AccessToken, "Expiry Court", ruckerLat, ruckerLng)
+	seedCheckIns(t, st, court.ID, a.User.ID, b.User.ID)
 
 	resp := doJSON(t, ts, http.MethodPost, "/courts/"+court.ID+"/games", a.AccessToken, map[string]any{
 		"team_a": []string{a.User.ID}, "team_b": []string{b.User.ID}, "winning_team": 0,
