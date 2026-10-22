@@ -8,7 +8,7 @@ Security issues go through [SECURITY.md](SECURITY.md), not the issue tracker.
 
 ## Getting set up
 
-Requirements are in the [README](README.md#local-development): Go 1.25.7+,
+Requirements are in the [README](README.md#local-development): Go 1.27.3+,
 Node 22, Docker for Postgres+PostGIS, and sqlc if you touch SQL.
 
 ```sh

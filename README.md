@@ -146,7 +146,7 @@ comes from geo-verified check-ins and crowd reports.
 
 ## Local development
 
-Requirements: Go 1.25.7+ (per `server/go.mod`), Node 22 (what CI uses), Docker
+Requirements: Go 1.27.3+ (per `server/go.mod`), Node 22 (what CI uses), Docker
 (for Postgres+PostGIS), and [sqlc](https://docs.sqlc.dev) if you edit SQL
 queries.
 

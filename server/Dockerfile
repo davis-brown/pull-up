@@ -1,4 +1,4 @@
-FROM golang:1.25.7-bookworm@sha256:564e366a28ad1d70f460a2b97d1d299a562f08707eb0ecb24b659e5bd6c108e1 AS build
+FROM golang:1.27.3-bookworm@sha256:972b4110ba0f47539a975c31e52c64765e1ff19f2d74469ae4a595c6676e80a5 AS build
 WORKDIR /src
 ENV GOTOOLCHAIN=local
 COPY go.mod go.sum ./

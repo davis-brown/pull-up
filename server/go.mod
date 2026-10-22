@@ -1,6 +1,6 @@
 module github.com/davisbrown/pull-up/server
 
-go 1.25.7
+go 1.27.3
 
 require (
 	github.com/MicahParks/keyfunc/v3 v3.8.0
@@ -25,8 +25,8 @@ require (
 	github.com/sethvargo/go-retry v0.3.0 // indirect
 	github.com/zeebo/xxh3 v1.0.2 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	golang.org/x/sync v0.21.0 // indirect
+	golang.org/x/sync v0.24.0 // indirect
 	golang.org/x/sys v0.46.0 // indirect
-	golang.org/x/text v0.38.0 // indirect
+	golang.org/x/text v0.43.0 // indirect
 	golang.org/x/time v0.9.0 // indirect
 )
