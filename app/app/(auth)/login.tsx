@@ -24,10 +24,20 @@ export default function LoginScreen() {
     try {
       await signIn(email.trim(), password);
     } catch (e) {
-      if (e instanceof ApiError && e.status === 403 && e.message === "email verification required") {
+      // The right password on an unverified account: the server just emailed
+      // a fresh code to pair with this id.
+      if (
+        e instanceof ApiError &&
+        e.status === 403 &&
+        typeof e.body.verification_id === "string"
+      ) {
         router.push({
           pathname: "/verify-email",
-          params: { email: email.trim().toLowerCase(), ...(next ? { next } : {}) },
+          params: {
+            email: email.trim().toLowerCase(),
+            id: e.body.verification_id,
+            ...(next ? { next } : {}),
+          },
         } as Href);
         return;
       }

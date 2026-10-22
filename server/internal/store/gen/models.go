@@ -138,6 +138,8 @@ type EmailVerificationToken struct {
 	ExpiresAt  time.Time  `json:"expires_at"`
 	ConsumedAt *time.Time `json:"consumed_at"`
 	CreatedAt  time.Time  `json:"created_at"`
+	CodeHash   string     `json:"code_hash"`
+	Attempts   int16      `json:"attempts"`
 }
 
 type ExternalPhoto struct {

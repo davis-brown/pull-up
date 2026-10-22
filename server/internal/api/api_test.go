@@ -71,7 +71,7 @@ func newTestServer(t *testing.T) (*httptest.Server, *store.Store) {
 		UploadSigningSecret:  []byte("test-upload-secret"),
 		AccessTokenTTL:       15 * time.Minute,
 		RefreshTokenTTL:      30 * 24 * time.Hour,
-		EmailVerificationTTL: 24 * time.Hour,
+		EmailVerificationTTL: 15 * time.Minute,
 		CORSOrigins:          []string{"http://app.test"},
 		AutoSeed:             false,
 		InternalTaskSecret:   "test-internal-secret",
@@ -111,13 +111,15 @@ func registerUser(t *testing.T, ts *httptest.Server, email, displayName string) 
 		defer resp.Body.Close()
 		t.Fatalf("register %s: status %d: %s", email, resp.StatusCode, readBody(t, resp))
 	}
-	verificationToken := resp.Header.Get("X-Pull-Up-Email-Verification-Token")
-	resp.Body.Close()
-	if verificationToken == "" {
-		t.Fatalf("register %s: trusted response missing verification token header", email)
+	code := resp.Header.Get("X-Pull-Up-Email-Verification-Code")
+	pending := decodeJSON[struct {
+		VerificationID string `json:"verification_id"`
+	}](t, resp)
+	if code == "" || pending.VerificationID == "" {
+		t.Fatalf("register %s: trusted response missing code header or verification id", email)
 	}
 	resp = doJSON(t, ts, http.MethodPost, "/auth/email-verification/verify", "", map[string]string{
-		"token": verificationToken,
+		"verification_id": pending.VerificationID, "code": code,
 	})
 	if resp.StatusCode != http.StatusOK {
 		defer resp.Body.Close()

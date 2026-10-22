@@ -1,6 +1,8 @@
 package api
 
 import (
+	"context"
+	"crypto/subtle"
 	"errors"
 	"net/http"
 	"net/mail"
@@ -28,10 +30,13 @@ type tokenResponse struct {
 }
 
 const (
-	emailVerificationTokenHeader  = "X-Pull-Up-Email-Verification-Token"
+	emailVerificationCodeHeader   = "X-Pull-Up-Email-Verification-Code"
 	emailVerificationExpiryHeader = "X-Pull-Up-Email-Verification-Expires"
 	emailVerificationToHeader     = "X-Pull-Up-Email-Verification-To"
-	refreshCookieName             = "pullup_refresh"
+	// Set to "existing-account" when someone registers an email that already
+	// has an account: the Worker tells the owner instead of sending a code.
+	emailKindHeader   = "X-Pull-Up-Email-Kind"
+	refreshCookieName = "pullup_refresh"
 )
 
 func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
@@ -60,12 +65,6 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, "hash password", err)
 		return
 	}
-	verificationToken, verificationHash, err := auth.NewOpaqueToken()
-	if err != nil {
-		s.internalError(w, "create email verification token", err)
-		return
-	}
-	expiresAt := time.Now().Add(s.cfg.EmailVerificationTTL)
 	tx, err := s.store.Pool.Begin(r.Context())
 	if err != nil {
 		s.internalError(w, "begin registration", err)
@@ -78,41 +77,88 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		PasswordHash: &hash,
 		DisplayName:  req.DisplayName,
 	})
-	if err != nil {
-		// No row: the email belongs to a verified or OAuth account.
-		if errors.Is(err, pgx.ErrNoRows) {
-			writeError(w, http.StatusConflict, "an account with that email already exists")
+	if errors.Is(err, pgx.ErrNoRows) {
+		// The email belongs to a verified or OAuth account. Answer exactly as
+		// for a new one, so registering can't reveal who has signed up, and
+		// let the Worker tell the owner instead. The id is a decoy that no
+		// code will ever match.
+		decoy, _, err := auth.NewOpaqueToken()
+		if err != nil {
+			s.internalError(w, "create decoy verification id", err)
 			return
 		}
+		if s.internalSecretValid(r) {
+			w.Header().Set(emailKindHeader, "existing-account")
+			w.Header().Set(emailVerificationToHeader, req.Email)
+		}
+		writeVerificationRequired(w, http.StatusAccepted, decoy)
+		return
+	}
+	if err != nil {
 		s.internalError(w, "create user", err)
 		return
 	}
-	// A takeover of an unverified account kills links sent for the old password.
-	if err := q.InvalidateEmailVerificationTokens(r.Context(), user.ID); err != nil {
-		s.internalError(w, "invalidate email verification tokens", err)
-		return
-	}
-	if err := q.CreateEmailVerificationToken(r.Context(), gen.CreateEmailVerificationTokenParams{
-		UserID: user.ID, TokenHash: verificationHash, ExpiresAt: expiresAt,
-	}); err != nil {
-		s.internalError(w, "store email verification token", err)
+	verificationID, code, expiresAt, err := s.issueEmailCode(r.Context(), q, user.ID)
+	if err != nil {
+		s.internalError(w, "issue email verification code", err)
 		return
 	}
 	if err := tx.Commit(r.Context()); err != nil {
 		s.internalError(w, "commit registration", err)
 		return
 	}
-	// A trusted reverse proxy/email Worker injects X-Internal-Task, consumes
-	// these origin-only headers, and strips them before replying to the client.
-	if s.internalSecretValid(r) {
-		w.Header().Set(emailVerificationTokenHeader, verificationToken)
-		w.Header().Set(emailVerificationExpiryHeader, expiresAt.UTC().Format(time.RFC3339))
-		w.Header().Set(emailVerificationToHeader, req.Email)
+	s.setEmailCodeHeaders(w, r, code, expiresAt, req.Email)
+	writeVerificationRequired(w, http.StatusAccepted, verificationID)
+}
+
+// issueEmailCode replaces a user's pending verification with a new id and
+// code. The id goes to the client that just proved the password and the code
+// only to the inbox, so verifying takes both: a squatter who registered
+// someone else's email never sees the code, and the owner clicking or typing
+// a code they didn't ask for can't activate the squatter's session.
+func (s *Server) issueEmailCode(ctx context.Context, q *gen.Queries, userID uuid.UUID) (id, code string, expiresAt time.Time, err error) {
+	// Also satisfies the one-active-token-per-user index.
+	if err = q.InvalidateEmailVerificationTokens(ctx, userID); err != nil {
+		return
 	}
-	writeJSON(w, http.StatusAccepted, map[string]any{
-		"verification_required": true,
-		"user":                  user,
+	id, idHash, err := auth.NewOpaqueToken()
+	if err != nil {
+		return
+	}
+	if code, err = auth.NewVerificationCode(); err != nil {
+		return
+	}
+	expiresAt = time.Now().Add(s.cfg.EmailVerificationTTL)
+	err = q.CreateEmailVerificationToken(ctx, gen.CreateEmailVerificationTokenParams{
+		UserID: userID, TokenHash: idHash, CodeHash: emailCodeHash(id, code), ExpiresAt: expiresAt,
 	})
+	return
+}
+
+// emailCodeHash salts the 6-digit code with its verification id, which is
+// stored only as a hash, so a leaked table can't be brute-forced offline.
+func emailCodeHash(verificationID, code string) string {
+	return auth.HashOpaqueToken(verificationID + ":" + code)
+}
+
+// setEmailCodeHeaders hands the code to the email Worker. The Worker injects
+// X-Internal-Task, consumes these origin-only headers, and strips them before
+// replying to the client.
+func (s *Server) setEmailCodeHeaders(w http.ResponseWriter, r *http.Request, code string, expiresAt time.Time, to string) {
+	if !s.internalSecretValid(r) {
+		return
+	}
+	w.Header().Set(emailVerificationCodeHeader, code)
+	w.Header().Set(emailVerificationExpiryHeader, expiresAt.UTC().Format(time.RFC3339))
+	w.Header().Set(emailVerificationToHeader, to)
+}
+
+func writeVerificationRequired(w http.ResponseWriter, status int, verificationID string) {
+	body := map[string]any{"verification_required": true, "verification_id": verificationID}
+	if status == http.StatusForbidden {
+		body["error"] = "email verification required"
+	}
+	writeJSON(w, status, body)
 }
 
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
@@ -135,7 +181,25 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if !user.EmailVerified {
-		writeError(w, http.StatusForbidden, "email verification required")
+		// The password checks out, so this is the owner (or whoever set it)
+		// coming back: send a fresh code to the inbox.
+		tx, err := s.store.Pool.Begin(r.Context())
+		if err != nil {
+			s.internalError(w, "begin email code", err)
+			return
+		}
+		defer tx.Rollback(r.Context())
+		verificationID, code, expiresAt, err := s.issueEmailCode(r.Context(), s.store.Queries.WithTx(tx), user.ID)
+		if err != nil {
+			s.internalError(w, "issue email verification code", err)
+			return
+		}
+		if err := tx.Commit(r.Context()); err != nil {
+			s.internalError(w, "commit email code", err)
+			return
+		}
+		s.setEmailCodeHeaders(w, r, code, expiresAt, user.Email)
+		writeVerificationRequired(w, http.StatusForbidden, verificationID)
 		return
 	}
 	publicUser := gen.GetUserByIDRow{
@@ -321,91 +385,73 @@ func (s *Server) issueTokens(w http.ResponseWriter, r *http.Request, uid uuid.UU
 }
 
 type emailVerificationRequest struct {
-	Email string `json:"email"`
+	VerificationID string `json:"verification_id"`
+	Code           string `json:"code,omitempty"`
 }
 
+// handleRequestEmailVerification sends a new code for a pending verification.
+// It answers the same whatever the id, so it reveals nothing.
 func (s *Server) handleRequestEmailVerification(w http.ResponseWriter, r *http.Request) {
 	var req emailVerificationRequest
 	if !readJSON(w, r, &req) {
 		return
 	}
+	accepted := map[string]string{"status": "if the verification is pending, a new code will be sent"}
 	// Only reachable from the API Worker, which applies its own rate limits.
 	// The internal secret gate is defense-in-depth against direct access.
-	if !s.internalSecretValid(r) {
-		writeJSON(w, http.StatusAccepted, map[string]string{
-			"status": "if the account is eligible, a verification message will be sent",
-		})
+	if !s.internalSecretValid(r) || req.VerificationID == "" || len(req.VerificationID) > 256 {
+		writeJSON(w, http.StatusAccepted, accepted)
 		return
 	}
-	token, expiresAt, eligible, err := s.createEmailVerificationToken(
-		r, strings.TrimSpace(strings.ToLower(req.Email)))
+	code, err := auth.NewVerificationCode()
 	if err != nil {
-		s.internalError(w, "create email verification token", err)
+		s.internalError(w, "create email verification code", err)
 		return
-	}
-	if eligible {
-		w.Header().Set(emailVerificationTokenHeader, token)
-		w.Header().Set(emailVerificationExpiryHeader, expiresAt.UTC().Format(time.RFC3339))
-		w.Header().Set(emailVerificationToHeader, strings.TrimSpace(strings.ToLower(req.Email)))
-	}
-	writeJSON(w, http.StatusAccepted, map[string]string{
-		"status": "if the account is eligible, a verification message will be sent",
-	})
-}
-
-func (s *Server) createEmailVerificationToken(r *http.Request, email string) (string, time.Time, bool, error) {
-	tx, err := s.store.Pool.Begin(r.Context())
-	if err != nil {
-		return "", time.Time{}, false, err
-	}
-	defer tx.Rollback(r.Context())
-	q := s.store.Queries.WithTx(tx)
-	uid, err := q.GetUnverifiedPasswordUserByEmailForUpdate(r.Context(), email)
-	if errors.Is(err, pgx.ErrNoRows) {
-		return "", time.Time{}, false, nil
-	}
-	if err != nil {
-		return "", time.Time{}, false, err
-	}
-	// Invalidate any unconsumed token to satisfy the one-active-token-per-user
-	// constraint, leaving the latest emailed token the only verifiable one.
-	if err := q.InvalidateEmailVerificationTokens(r.Context(), uid); err != nil {
-		return "", time.Time{}, false, err
-	}
-	token, hash, err := auth.NewOpaqueToken()
-	if err != nil {
-		return "", time.Time{}, false, err
 	}
 	expiresAt := time.Now().Add(s.cfg.EmailVerificationTTL)
-	if err := q.CreateEmailVerificationToken(r.Context(), gen.CreateEmailVerificationTokenParams{
-		UserID: uid, TokenHash: hash, ExpiresAt: expiresAt,
-	}); err != nil {
-		return "", time.Time{}, false, err
+	email, err := s.store.Queries.ReissueEmailVerificationCode(r.Context(), gen.ReissueEmailVerificationCodeParams{
+		TokenHash: auth.HashOpaqueToken(req.VerificationID),
+		CodeHash:  emailCodeHash(req.VerificationID, code),
+		ExpiresAt: expiresAt,
+	})
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
+		s.internalError(w, "reissue email verification code", err)
+		return
 	}
-	if err := tx.Commit(r.Context()); err != nil {
-		return "", time.Time{}, false, err
+	if err == nil {
+		s.setEmailCodeHeaders(w, r, code, expiresAt, email)
 	}
-	return token, expiresAt, true, nil
-}
-
-type verifyEmailRequest struct {
-	Token string `json:"token"`
+	writeJSON(w, http.StatusAccepted, accepted)
 }
 
 func (s *Server) handleVerifyEmail(w http.ResponseWriter, r *http.Request) {
-	var req verifyEmailRequest
+	var req emailVerificationRequest
 	if !readJSON(w, r, &req) {
 		return
 	}
-	if req.Token == "" || len(req.Token) > 256 {
-		writeError(w, http.StatusBadRequest, "invalid or expired verification token")
+	code := strings.ReplaceAll(req.Code, " ", "")
+	if req.VerificationID == "" || len(req.VerificationID) > 256 || len(code) != 6 {
+		writeError(w, http.StatusBadRequest, "invalid or expired code")
 		return
 	}
-	user, err := s.store.Queries.VerifyEmailWithToken(
-		r.Context(), auth.HashOpaqueToken(req.Token))
+	attempt, err := s.store.Queries.ClaimEmailVerificationAttempt(
+		r.Context(), auth.HashOpaqueToken(req.VerificationID))
+	if errors.Is(err, pgx.ErrNoRows) {
+		writeError(w, http.StatusBadRequest, "invalid or expired code")
+		return
+	}
+	if err != nil {
+		s.internalError(w, "claim email verification attempt", err)
+		return
+	}
+	if subtle.ConstantTimeCompare([]byte(emailCodeHash(req.VerificationID, code)), []byte(attempt.CodeHash)) != 1 {
+		writeError(w, http.StatusBadRequest, "invalid or expired code")
+		return
+	}
+	user, err := s.store.Queries.VerifyEmailWithToken(r.Context(), attempt.ID)
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
-			writeError(w, http.StatusBadRequest, "invalid or expired verification token")
+			writeError(w, http.StatusBadRequest, "invalid or expired code")
 			return
 		}
 		s.internalError(w, "verify email", err)
