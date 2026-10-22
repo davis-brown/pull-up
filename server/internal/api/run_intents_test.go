@@ -230,3 +230,46 @@ func TestRunIntentThresholdAndConversionPushes(t *testing.T) {
 
 func seekerEmail(i int) string { return "ri-seeker" + string(rune('a'+i)) + "@test.local" }
 func seekerName(i int) string  { return "Seeker" + string(rune('A'+i)) }
+
+// The seeker list is public, so it must not identify a private player to a
+// non-follower, or anyone across a block — but they still count as demand.
+func TestRunIntentsHidePrivateAndBlockedSeekers(t *testing.T) {
+	ts, _ := newTestServer(t)
+	private := registerUser(t, ts, "ri-private@test.local", "Private")
+	blocker := registerUser(t, ts, "ri-blocker@test.local", "Blocker")
+	stranger := registerUser(t, ts, "ri-stranger@test.local", "Stranger")
+	court := createTestCourt(t, ts, private.AccessToken, "Quiet Court", ruckerLat, ruckerLng)
+	date, windowKey := tomorrowBucket()
+
+	doJSON(t, ts, http.MethodPatch, "/me", private.AccessToken, map[string]any{"is_private": true}).Body.Close()
+	doJSON(t, ts, http.MethodPut, "/users/"+stranger.User.ID+"/block", blocker.AccessToken, nil).Body.Close()
+	setRunIntent(t, ts, private.AccessToken, court.ID, date, windowKey)
+	setRunIntent(t, ts, blocker.AccessToken, court.ID, date, windowKey)
+
+	names := func(token string) []string {
+		resp := doJSON(t, ts, http.MethodGet, "/courts/"+court.ID+"/run-intents", token, nil)
+		seekers := decodeJSON[map[string][]runIntentSeekerRow](t, resp)["seekers"]
+		out := make([]string, 0, len(seekers))
+		for _, s := range seekers {
+			if s.DisplayName == "A player" && s.UserID != "" {
+				t.Errorf("anonymized seeker still carries user_id %q", s.UserID)
+			}
+			out = append(out, s.DisplayName)
+		}
+		return out
+	}
+	for _, tc := range []struct {
+		viewer string
+		token  string
+		want   []string
+	}{
+		{"anonymous", "", []string{"A player", "Blocker"}},
+		{"blocked stranger", stranger.AccessToken, []string{"A player", "A player"}},
+		{"the private seeker", private.AccessToken, []string{"Private", "Blocker"}},
+	} {
+		got := names(tc.token)
+		if strings.Join(got, ",") != strings.Join(tc.want, ",") {
+			t.Errorf("%s sees %v, want %v", tc.viewer, got, tc.want)
+		}
+	}
+}
