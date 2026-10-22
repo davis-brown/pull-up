@@ -713,13 +713,20 @@ func (q *Queries) InsertCourtAttributeEdit(ctx context.Context, arg InsertCourtA
 const promoteCourtIfPending = `-- name: PromoteCourtIfPending :one
 UPDATE courts SET status = 'verified', updated_at = now()
 WHERE id = $1 AND status = 'pending'
+  AND submitted_by IS DISTINCT FROM $2::uuid
 RETURNING submitted_by
 `
 
+type PromoteCourtIfPendingParams struct {
+	ID         uuid.UUID `json:"id"`
+	VerifierID uuid.UUID `json:"verifier_id"`
+}
+
 // Promotes and reports who submitted it (for the reputation award);
-// pgx.ErrNoRows means the court wasn't pending.
-func (q *Queries) PromoteCourtIfPending(ctx context.Context, id uuid.UUID) (*uuid.UUID, error) {
-	row := q.db.QueryRow(ctx, promoteCourtIfPending, id)
+// pgx.ErrNoRows means the court wasn't pending, or verifier_id is its
+// submitter, who can't vouch for their own court.
+func (q *Queries) PromoteCourtIfPending(ctx context.Context, arg PromoteCourtIfPendingParams) (*uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, promoteCourtIfPending, arg.ID, arg.VerifierID)
 	var submitted_by *uuid.UUID
 	err := row.Scan(&submitted_by)
 	return submitted_by, err

@@ -246,10 +246,12 @@ ON CONFLICT (osm_type, osm_id) DO UPDATE SET
 RETURNING id, (xmax = 0) AS inserted;
 
 -- Promotes and reports who submitted it (for the reputation award);
--- pgx.ErrNoRows means the court wasn't pending.
+-- pgx.ErrNoRows means the court wasn't pending, or verifier_id is its
+-- submitter, who can't vouch for their own court.
 -- name: PromoteCourtIfPending :one
 UPDATE courts SET status = 'verified', updated_at = now()
-WHERE id = $1 AND status = 'pending'
+WHERE id = sqlc.arg('id') AND status = 'pending'
+  AND submitted_by IS DISTINCT FROM sqlc.arg('verifier_id')::uuid
 RETURNING submitted_by;
 
 -- name: SetCourtStatus :exec

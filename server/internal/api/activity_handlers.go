@@ -108,12 +108,15 @@ func (s *Server) handleCheckIn(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, "commit check-in", err)
 		return
 	}
-	// A person verified at the court is the strongest signal it's real.
-	submitter, err := s.store.Queries.PromoteCourtIfPending(r.Context(), courtID)
+	// A person verified at the court is the strongest signal it's real,
+	// unless it's the submitter vouching for themselves.
+	submitter, err := s.store.Queries.PromoteCourtIfPending(r.Context(), gen.PromoteCourtIfPendingParams{
+		ID: courtID, VerifierID: uid,
+	})
 	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		s.log.Error("promote court after check-in", "err", err)
 	}
-	if err == nil && submitter != nil && *submitter != uid {
+	if err == nil && submitter != nil {
 		s.awardReputation(r.Context(), *submitter, repCourtVerified)
 		s.awardXP(r.Context(), *submitter, "court_verified", "court:"+courtID.String(), xpCourtVerified)
 	}

@@ -2,6 +2,7 @@ package store_test
 
 import (
 	"context"
+	"errors"
 	"os"
 	"testing"
 	"time"
@@ -370,7 +371,7 @@ func TestOSMUpsertIdempotent(t *testing.T) {
 		t.Fatalf("first upsert: %v", err)
 	}
 
-	if _, err := st.Queries.PromoteCourtIfPending(ctx, first.ID); err != nil {
+	if _, err := st.Queries.PromoteCourtIfPending(ctx, gen.PromoteCourtIfPendingParams{ID: first.ID}); err != nil {
 		t.Fatalf("promote: %v", err)
 	}
 	second, err := st.Queries.UpsertOSMCourt(ctx, gen.UpsertOSMCourtParams{
@@ -442,7 +443,16 @@ func TestVerifiedCheckInPromotesCourt(t *testing.T) {
 	uid := createUser(t, st, "promote@test.local")
 	court := createCourt(t, st, "Pending Court", ruckerLat, ruckerLng, uid)
 
-	if _, err := st.Queries.PromoteCourtIfPending(ctx, court.ID); err != nil {
+	// The submitter can't vouch for their own court.
+	if _, err := st.Queries.PromoteCourtIfPending(ctx, gen.PromoteCourtIfPendingParams{
+		ID: court.ID, VerifierID: uid,
+	}); !errors.Is(err, pgx.ErrNoRows) {
+		t.Fatalf("self-promote: err = %v, want ErrNoRows", err)
+	}
+	other := createUser(t, st, "promote-other@test.local")
+	if _, err := st.Queries.PromoteCourtIfPending(ctx, gen.PromoteCourtIfPendingParams{
+		ID: court.ID, VerifierID: other,
+	}); err != nil {
 		t.Fatalf("promote: %v", err)
 	}
 	got, err := st.Queries.GetCourt(ctx, court.ID)
