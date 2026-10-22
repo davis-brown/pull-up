@@ -2,6 +2,7 @@ import { Container, getContainer } from "@cloudflare/containers";
 
 import { drainInBatches } from "./background-drain";
 import { corsPreflightResponse, isCorsPreflight } from "./cors-preflight";
+import { existingAccountEmail, verificationCodeEmail } from "./verification-email";
 import {
   MAX_PHOTO_BYTES,
   hasJpegMagic,
@@ -66,12 +67,15 @@ const PHOTO_READ_MAX_PER_WINDOW = 100;
 // responses per client is therefore the signal that actually limits blind
 // enumeration, without ever throttling real gallery browsing.
 const PHOTO_MISS_MAX_PER_WINDOW = 40;
-const EMAIL_TOKEN_HEADER = "X-Pull-Up-Email-Verification-Token";
+const EMAIL_CODE_HEADER = "X-Pull-Up-Email-Verification-Code";
 const EMAIL_EXPIRY_HEADER = "X-Pull-Up-Email-Verification-Expires";
 const EMAIL_TO_HEADER = "X-Pull-Up-Email-Verification-To";
+const EMAIL_KIND_HEADER = "X-Pull-Up-Email-Kind";
 const EMAIL_SENT_HEADER = "X-Pull-Up-Email-Sent";
+// Signing in to an unverified account sends a fresh code, so login is one.
 const EMAIL_PATHS = new Set([
   "/api/v1/auth/register",
+  "/api/v1/auth/login",
   "/api/v1/auth/email-verification/request",
 ]);
 
@@ -215,8 +219,9 @@ function containerProxyRequest(request: Request, internalSecret?: string): Reque
 
 function sanitizedEmailResponse(response: Response): Response {
   const headers = new Headers(response.headers);
-  headers.delete(EMAIL_TOKEN_HEADER);
+  headers.delete(EMAIL_CODE_HEADER);
   headers.delete(EMAIL_EXPIRY_HEADER);
+  headers.delete(EMAIL_KIND_HEADER);
   headers.delete(EMAIL_TO_HEADER);
   headers.delete(EMAIL_SENT_HEADER);
   return new Response(response.body, {
@@ -227,10 +232,11 @@ function sanitizedEmailResponse(response: Response): Response {
 }
 
 async function deliverVerificationEmail(response: Response, env: RuntimeEnv): Promise<Response> {
-  const token = response.headers.get(EMAIL_TOKEN_HEADER);
+  const code = response.headers.get(EMAIL_CODE_HEADER);
   const expires = response.headers.get(EMAIL_EXPIRY_HEADER);
   const recipient = response.headers.get(EMAIL_TO_HEADER);
-  if (!token || !expires || !recipient) {
+  const existingAccount = response.headers.get(EMAIL_KIND_HEADER) === "existing-account";
+  if (!recipient || (!existingAccount && (!code || !expires))) {
     // Resend responses deliberately look the same for unknown and verified
     // addresses, preventing account enumeration.
     return sanitizedEmailResponse(response);
@@ -257,33 +263,14 @@ async function deliverVerificationEmail(response: Response, env: RuntimeEnv): Pr
     return sanitizedEmailResponse(response);
   }
 
-  const verificationUrl = new URL("/verify-email", webOrigin);
-  // Keep the credential out of URL search params: it would be sent in Referer
-  // headers and recorded by edge invocation logs. The client reads the fragment
-  // and clears it before issuing API requests.
-  verificationUrl.hash = `token=${encodeURIComponent(token)}`;
-  const text = [
-    "Verify your pull-up account",
-    "",
-    "Open this link to verify your email address:",
-    verificationUrl.toString(),
-    "",
-    `This link expires at ${expires}. If you did not create this account, ignore this email.`,
-  ].join("\n");
-  const html = [
-    "<h1>Verify your pull-up account</h1>",
-    "<p>Confirm this email address to finish creating your account.</p>",
-    `<p><a href="${escapeHtml(verificationUrl.toString())}">Verify email</a></p>`,
-    `<p>This link expires at ${escapeHtml(expires)}. If you did not create this account, ignore this email.</p>`,
-  ].join("");
-
+  const email = existingAccount
+    ? existingAccountEmail(new URL("/login", webOrigin).toString())
+    : verificationCodeEmail(code!, expires!);
   try {
     await env.EMAIL.send({
       to: recipient,
       from: { email: from, name: "pull-up" },
-      subject: "Verify your pull-up account",
-      text,
-      html,
+      ...email,
     });
     return sanitizedEmailResponse(response);
   } catch (error) {
@@ -293,14 +280,6 @@ async function deliverVerificationEmail(response: Response, env: RuntimeEnv): Pr
     }));
     return sanitizedEmailResponse(response);
   }
-}
-
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;");
 }
 
 function handlePhotoOptions(request: Request, env: RuntimeEnv): Response {

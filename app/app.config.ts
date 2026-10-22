@@ -60,7 +60,6 @@ const config: ExpoConfig = {
         autoVerify: true,
         data: [
           { scheme: "https", host: webHost, pathPrefix: "/court" },
-          { scheme: "https", host: webHost, pathPrefix: "/verify-email" },
         ],
         category: ["BROWSABLE", "DEFAULT"],
       },

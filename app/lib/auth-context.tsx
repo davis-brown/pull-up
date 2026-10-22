@@ -32,8 +32,8 @@ interface AuthState {
     password: string,
     displayName: string,
   ) => Promise<apiClient.RegistrationResult>;
-  verifyEmail: (token: string) => Promise<void>;
-  requestEmailVerification: (email: string) => Promise<void>;
+  verifyEmail: (verificationId: string, code: string) => Promise<void>;
+  requestEmailVerification: (verificationId: string) => Promise<void>;
   oauthSignIn: (
     provider: "google" | "apple",
     idToken: string,
@@ -215,11 +215,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return result;
   };
 
-  const verifyEmail = (token: string) =>
-    authenticate(() => apiClient.verifyEmail(token));
+  const verifyEmail = (verificationId: string, code: string) =>
+    authenticate(() => apiClient.verifyEmail(verificationId, code));
 
-  const requestEmailVerification = (email: string) =>
-    apiClient.requestEmailVerification(email);
+  const requestEmailVerification = (verificationId: string) =>
+    apiClient.requestEmailVerification(verificationId);
 
   const oauthSignIn = (
     provider: "google" | "apple",

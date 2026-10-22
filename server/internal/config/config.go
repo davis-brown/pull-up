@@ -66,7 +66,7 @@ func Load() (*Config, error) {
 		UploadSigningSecret:      []byte(getenv("UPLOAD_SIGNING_SECRET", "")),
 		AccessTokenTTL:           15 * time.Minute,
 		RefreshTokenTTL:          30 * 24 * time.Hour,
-		EmailVerificationTTL:     24 * time.Hour,
+		EmailVerificationTTL:     15 * time.Minute,
 		CORSOrigins:              strings.Split(getenv("CORS_ORIGINS", "http://localhost:8081"), ","),
 		AutoSeed:                 getenv("AUTO_SEED", "true") != "false",
 		OverpassEndpoint:         getenv("OVERPASS_ENDPOINT", ""),

@@ -30,6 +30,8 @@ interface TokenResponse {
 
 export interface RegistrationResult {
   verificationRequired: true;
+  // Pairs with the code emailed to the user; verifying needs both.
+  verificationId: string;
 }
 
 export interface LogoutOptions {
@@ -632,8 +634,11 @@ export function oauthLogin(
   }));
 }
 
-export function verifyEmail(token: string): Promise<User> {
-  return runCookieMutating(() => authenticate("/auth/email-verification/verify", { token }));
+export function verifyEmail(verificationId: string, code: string): Promise<User> {
+  return runCookieMutating(() => authenticate("/auth/email-verification/verify", {
+    verification_id: verificationId,
+    code,
+  }));
 }
 
 export async function register(
@@ -657,22 +662,27 @@ export async function register(
     if (sessionEpoch !== epoch) throw new SessionChangedError();
     if (!scoped.response.ok) throw new ApiError(scoped.response.status, errorBody(value));
     const body = errorBody(value);
-    if (scoped.response.status !== 202 || body.verification_required !== true) {
+    if (
+      scoped.response.status !== 202 ||
+      body.verification_required !== true ||
+      typeof body.verification_id !== "string"
+    ) {
       throw new ApiError(502, { error: "Invalid registration response" });
     }
     return {
       verificationRequired: true,
+      verificationId: body.verification_id,
     };
   } finally {
     scoped.release();
   }
 }
 
-export async function requestEmailVerification(email: string): Promise<void> {
+export async function requestEmailVerification(verificationId: string): Promise<void> {
   const epoch = sessionEpoch;
   const scoped = await rawRequestScoped(
     "/auth/email-verification/request",
-    { method: "POST", body: JSON.stringify({ email }) },
+    { method: "POST", body: JSON.stringify({ verification_id: verificationId }) },
     null,
     epoch,
   );
