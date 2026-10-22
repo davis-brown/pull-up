@@ -87,6 +87,29 @@ func (q *Queries) ConfirmGameParticipant(ctx context.Context, arg ConfirmGamePar
 	return result.RowsAffected(), nil
 }
 
+const countPlayersRecentlyAtCourt = `-- name: CountPlayersRecentlyAtCourt :one
+SELECT count(DISTINCT user_id)::int
+FROM check_ins
+WHERE court_id = $1
+  AND user_id = ANY($2::uuid[])
+  AND created_at > now() - interval '3 hours'
+`
+
+type CountPlayersRecentlyAtCourtParams struct {
+	CourtID uuid.UUID   `json:"court_id"`
+	UserIds []uuid.UUID `json:"user_ids"`
+}
+
+// How many of these players checked in at the court in the last 3 hours:
+// long enough to cover a check-in that expired or was closed before the
+// result got recorded.
+func (q *Queries) CountPlayersRecentlyAtCourt(ctx context.Context, arg CountPlayersRecentlyAtCourtParams) (int32, error) {
+	row := q.db.QueryRow(ctx, countPlayersRecentlyAtCourt, arg.CourtID, arg.UserIds)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const createGame = `-- name: CreateGame :one
 
 INSERT INTO games (court_id, recorded_by, winning_team, score_win, score_lose)
