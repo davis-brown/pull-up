@@ -50,10 +50,26 @@ func TestCheckInDistanceGuard(t *testing.T) {
 		t.Fatal("check_ins still retains the exact reported_location column")
 	}
 
+	// The submitter checking in at their own court proves nothing.
 	resp = doJSON(t, ts, http.MethodGet, "/courts/"+court.ID, "", nil)
 	got := decodeJSON[courtResp](t, resp)
+	if got.Status != "pending" {
+		t.Errorf("court status after submitter check-in = %q, want pending", got.Status)
+	}
+
+	other := registerUser(t, ts, "visitor@test.local", "Visitor")
+	resp = doJSON(t, ts, http.MethodPost, "/courts/"+court.ID+"/check-ins", other.AccessToken, map[string]any{
+		"lat": ruckerLat, "lng": ruckerLng,
+	})
+	if resp.StatusCode != http.StatusCreated {
+		defer resp.Body.Close()
+		t.Fatalf("visitor check-in: status %d: %s", resp.StatusCode, readBody(t, resp))
+	}
+	resp.Body.Close()
+	resp = doJSON(t, ts, http.MethodGet, "/courts/"+court.ID, "", nil)
+	got = decodeJSON[courtResp](t, resp)
 	if got.Status != "verified" {
-		t.Errorf("court status after check-in = %q, want verified", got.Status)
+		t.Errorf("court status after visitor check-in = %q, want verified", got.Status)
 	}
 }
 

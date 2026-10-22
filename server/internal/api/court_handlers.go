@@ -522,12 +522,14 @@ func (s *Server) handleVoteCourt(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	} else if changed && status == rules.CourtVerified {
-		submitter, err := s.store.Queries.PromoteCourtIfPending(r.Context(), courtID)
+		submitter, err := s.store.Queries.PromoteCourtIfPending(r.Context(), gen.PromoteCourtIfPendingParams{
+			ID: courtID, VerifierID: uid,
+		})
 		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			s.internalError(w, "promote court", err)
 			return
 		}
-		if err == nil && submitter != nil && *submitter != uid {
+		if err == nil && submitter != nil {
 			s.awardReputation(r.Context(), *submitter, repCourtVerified)
 			s.awardXP(r.Context(), *submitter, "court_verified", "court:"+courtID.String(), xpCourtVerified)
 		}
