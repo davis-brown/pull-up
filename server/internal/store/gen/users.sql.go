@@ -69,6 +69,9 @@ func (q *Queries) CreateRefreshToken(ctx context.Context, arg CreateRefreshToken
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (email, password_hash, display_name)
 VALUES ($1, $2, $3)
+ON CONFLICT (email) DO UPDATE
+    SET password_hash = EXCLUDED.password_hash, display_name = EXCLUDED.display_name
+    WHERE users.email_verified_at IS NULL AND users.auth_provider = 'password'
 RETURNING id, email, display_name, avatar_url, reputation, created_at, is_admin,
     is_private, jersey_number, position, height_cm, style_tags,
     skill_level, availability, xp,
@@ -100,6 +103,10 @@ type CreateUserRow struct {
 	EmailVerified bool      `json:"email_verified"`
 }
 
+// Re-registering an email nobody has verified takes the account over: the
+// earlier password was never proven to belong to the inbox owner, so keeping
+// it would let whoever registered first log in once the owner verifies.
+// A verified or OAuth account returns no row (the caller's 409).
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error) {
 	row := q.db.QueryRow(ctx, createUser, arg.Email, arg.PasswordHash, arg.DisplayName)
 	var i CreateUserRow

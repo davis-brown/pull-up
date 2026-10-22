@@ -9,7 +9,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/davisbrown/pull-up/server/internal/auth"
 	"github.com/davisbrown/pull-up/server/internal/rules"
@@ -80,12 +79,17 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		DisplayName:  req.DisplayName,
 	})
 	if err != nil {
-		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+		// No row: the email belongs to a verified or OAuth account.
+		if errors.Is(err, pgx.ErrNoRows) {
 			writeError(w, http.StatusConflict, "an account with that email already exists")
 			return
 		}
 		s.internalError(w, "create user", err)
+		return
+	}
+	// A takeover of an unverified account kills links sent for the old password.
+	if err := q.InvalidateEmailVerificationTokens(r.Context(), user.ID); err != nil {
+		s.internalError(w, "invalidate email verification tokens", err)
 		return
 	}
 	if err := q.CreateEmailVerificationToken(r.Context(), gen.CreateEmailVerificationTokenParams{
