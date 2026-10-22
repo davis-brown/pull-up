@@ -12,25 +12,10 @@ import (
 // fires only on a streak the player built themselves, and only inside a
 // window where acting on it is still possible.
 const (
-	// nudgeMaxCandidatesPerRun bounds one cron tick's work.
+	// nudgeMaxCandidatesPerRun bounds one cron tick's work. The
+	// Thursday-Saturday evening window is applied in ListStreakNudgeCandidates.
 	nudgeMaxCandidatesPerRun = 200
-	// Local-time gate. Weekday numbering is Go's (Sunday=0); the streak week
-	// runs Monday-Sunday to match Postgres date_trunc('week', …).
-	nudgeHourStart = 17
-	nudgeHourEnd   = 21
 )
-
-// nudgeEligible reports whether a candidate's local time is inside the nudge
-// window: Thursday through Saturday evening. Sunday is deliberately excluded.
-func nudgeEligible(localNow time.Time) bool {
-	switch localNow.Weekday() {
-	case time.Thursday, time.Friday, time.Saturday:
-	default:
-		return false
-	}
-	h := localNow.Hour()
-	return h >= nudgeHourStart && h < nudgeHourEnd
-}
 
 // streakNudgeBody renders the copy for a streak of n weeks.
 func streakNudgeBody(streak int, daysLeft int) string {
@@ -55,12 +40,14 @@ func daysLeftInStreakWeek(localNow time.Time) int {
 // Called from the internal drain endpoint on the hourly Cloudflare cron; the
 // 17:00-21:00 local window gives every candidate several ticks.
 func (s *Server) runStreakNudges(ctx context.Context) int {
-	candidates, err := s.store.Queries.ListStreakNudgeCandidates(ctx, nudgeMaxCandidatesPerRun)
+	now := time.Now()
+	candidates, err := s.store.Queries.ListStreakNudgeCandidates(ctx, gen.ListStreakNudgeCandidatesParams{
+		Now: now, MaxCandidates: nudgeMaxCandidatesPerRun,
+	})
 	if err != nil {
 		s.log.Error("streak nudge candidates", "err", err)
 		return 0
 	}
-	now := time.Now()
 	sent := 0
 	for _, c := range candidates {
 		if c.Timezone == nil {
@@ -71,9 +58,6 @@ func (s *Server) runStreakNudges(ctx context.Context) int {
 			continue // an unusable stored zone silently opts them out
 		}
 		localNow := now.In(loc)
-		if !nudgeEligible(localNow) {
-			continue
-		}
 
 		// Same helper /me/stats uses, so the push matches the profile.
 		weeks, err := s.store.Queries.UserCheckInWeeks(ctx, gen.UserCheckInWeeksParams{

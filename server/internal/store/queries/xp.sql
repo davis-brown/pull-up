@@ -62,23 +62,28 @@ LIMIT 1;
 -- current one. Only users who can and want to hear about it — nudges on,
 -- a push token, and a timezone on file (phase 16; users without one are
 -- skipped rather than guessed at) — and not nudged in the last 6 days.
--- The caller re-checks each candidate's local hour and computes the exact
--- streak length with the existing weekStreak helper.
+-- The local-time gate (Thursday-Saturday, 17:00-21:00) lives here rather
+-- than in Go so the LIMIT only ever spends on people it can nudge now.
+-- Joining pg_timezone_names first drops zones Postgres doesn't know, which
+-- would otherwise fail AT TIME ZONE for the whole batch. The caller
+-- computes the exact streak length with the existing weekStreak helper.
 SELECT u.id AS user_id, u.timezone
 FROM users u
+JOIN pg_catalog.pg_timezone_names tz ON tz.name = u.timezone
 WHERE u.play_nudges_enabled
-  AND u.timezone IS NOT NULL
-  AND (u.last_play_nudge_at IS NULL OR u.last_play_nudge_at < now() - interval '6 days')
+  AND (u.last_play_nudge_at IS NULL OR u.last_play_nudge_at < sqlc.arg('now')::timestamptz - interval '6 days')
+  AND extract(isodow FROM sqlc.arg('now')::timestamptz AT TIME ZONE tz.name) IN (4, 5, 6)
+  AND extract(hour FROM sqlc.arg('now')::timestamptz AT TIME ZONE tz.name) BETWEEN 17 AND 20
   AND EXISTS (SELECT 1 FROM push_tokens pt WHERE pt.user_id = u.id)
   AND EXISTS (
       SELECT 1 FROM check_ins ci
       WHERE ci.user_id = u.id
-        AND ci.created_at >= date_trunc('week', now()) - interval '7 days'
-        AND ci.created_at < date_trunc('week', now())
+        AND ci.created_at >= date_trunc('week', sqlc.arg('now')::timestamptz) - interval '7 days'
+        AND ci.created_at < date_trunc('week', sqlc.arg('now')::timestamptz)
   )
   AND NOT EXISTS (
       SELECT 1 FROM check_ins ci
-      WHERE ci.user_id = u.id AND ci.created_at >= date_trunc('week', now())
+      WHERE ci.user_id = u.id AND ci.created_at >= date_trunc('week', sqlc.arg('now')::timestamptz)
   )
 LIMIT sqlc.arg('max_candidates');
 
