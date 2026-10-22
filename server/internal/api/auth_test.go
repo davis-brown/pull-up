@@ -434,3 +434,38 @@ func TestRegisterTakesOverUnverifiedAccount(t *testing.T) {
 	}
 	resp.Body.Close()
 }
+
+// The cron drain deletes expired tokens and leaves live ones alone.
+func TestDeleteExpiredAuthTokens(t *testing.T) {
+	ts, st := newTestServer(t)
+	ctx := context.Background()
+	u := registerUser(t, ts, "tokens@test.local", "Tokens")
+	for _, q := range []string{
+		`INSERT INTO refresh_tokens (user_id, family_id, token_hash, expires_at)
+		VALUES ($1, gen_random_uuid(), 'expired-refresh', now() - interval '1 minute')`,
+		`INSERT INTO email_verification_tokens (user_id, token_hash, expires_at, consumed_at)
+		VALUES ($1, 'expired-verify', now() - interval '1 minute', now())`,
+	} {
+		if _, err := st.Pool.Exec(ctx, q, u.User.ID); err != nil {
+			t.Fatalf("seed expired token: %v", err)
+		}
+	}
+	if err := st.Queries.DeleteExpiredAuthTokens(ctx); err != nil {
+		t.Fatalf("delete expired tokens: %v", err)
+	}
+	var expired, live int
+	if err := st.Pool.QueryRow(ctx, `
+		SELECT
+			(SELECT count(*) FROM refresh_tokens WHERE expires_at < now())
+			+ (SELECT count(*) FROM email_verification_tokens WHERE expires_at < now()),
+			(SELECT count(*) FROM refresh_tokens WHERE user_id = $1 AND expires_at > now())`,
+		u.User.ID).Scan(&expired, &live); err != nil {
+		t.Fatalf("count tokens: %v", err)
+	}
+	if expired != 0 {
+		t.Errorf("%d expired tokens survived", expired)
+	}
+	if live == 0 {
+		t.Error("the live refresh token from login was deleted")
+	}
+}

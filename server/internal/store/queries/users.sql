@@ -97,6 +97,12 @@ UPDATE refresh_tokens
 SET replaced_by_hash = $2
 WHERE id = $1 AND replaced_by_hash IS NULL;
 
+-- name: DeleteExpiredAuthTokens :exec
+-- Housekeeping for the cron drain. Expired refresh tokens can no longer be
+-- replayed, so dropping them loses no reuse detection.
+WITH refresh AS (DELETE FROM refresh_tokens WHERE expires_at < now())
+DELETE FROM email_verification_tokens WHERE expires_at < now();
+
 -- Email verification -------------------------------------------------------
 
 -- name: CreateEmailVerificationToken :exec
