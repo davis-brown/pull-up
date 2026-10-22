@@ -3,6 +3,7 @@ package api_test
 import (
 	"context"
 	"net/http"
+	"slices"
 	"testing"
 
 	"github.com/google/uuid"
@@ -158,13 +159,45 @@ func TestAdminFlagAndModerationFlow(t *testing.T) {
 		} `json:"photo"`
 	}](t, resp)
 
-	resp = doJSON(t, ts, http.MethodPost, "/admin/photos/"+photo.Photo.ID+"/status", admin.AccessToken, map[string]string{
-		"status": "removed",
-	})
-	if resp.StatusCode != http.StatusNoContent {
-		t.Fatalf("set photo status: status %d", resp.StatusCode)
+	// Pretend the upload finished and its cleanup timer is due, so only the
+	// photo's status decides whether the R2 deletion queue may take it.
+	var key string
+	if err := st.Pool.QueryRow(context.Background(), `
+		WITH done AS (
+			DELETE FROM pending_uploads
+			WHERE storage_key = (SELECT storage_key FROM court_photos WHERE id = $1)
+		)
+		SELECT storage_key FROM court_photos WHERE id = $1`, photo.Photo.ID).Scan(&key); err != nil {
+		t.Fatalf("finish upload: %v", err)
 	}
-	resp.Body.Close()
+	if err := st.Queries.ScheduleObjectDeletion(context.Background(), key); err != nil {
+		t.Fatalf("schedule deletion: %v", err)
+	}
+	claimed := func() bool {
+		keys, err := st.Queries.ClaimObjectDeletions(context.Background(), 100)
+		if err != nil {
+			t.Fatalf("claim object deletions: %v", err)
+		}
+		return slices.Contains(keys, key)
+	}
+	setStatus := func(status string) {
+		resp := doJSON(t, ts, http.MethodPost, "/admin/photos/"+photo.Photo.ID+"/status", admin.AccessToken, map[string]string{
+			"status": status,
+		})
+		if resp.StatusCode != http.StatusNoContent {
+			t.Fatalf("set photo status %s: status %d", status, resp.StatusCode)
+		}
+		resp.Body.Close()
+	}
+
+	setStatus("flagged")
+	if claimed() {
+		t.Fatal("a flagged photo's object was handed out for deletion")
+	}
+	setStatus("removed")
+	if !claimed() {
+		t.Fatal("a removed photo's object was not handed out for deletion")
+	}
 	resp = doJSON(t, ts, http.MethodGet, "/courts/"+court.ID+"/photos", "", nil)
 	photos := decodeJSON[struct {
 		Photos []map[string]any `json:"photos"`

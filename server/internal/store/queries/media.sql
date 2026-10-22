@@ -20,7 +20,8 @@ WITH candidates AS (
       )
       AND NOT EXISTS (
           SELECT 1 FROM court_photos p
-          WHERE p.storage_key = q.storage_key AND p.status = 'visible'
+          -- flagged is under review, not removed; its bytes must survive.
+          WHERE p.storage_key = q.storage_key AND p.status IN ('visible', 'flagged')
       )
     ORDER BY q.requested_at
     FOR UPDATE SKIP LOCKED
