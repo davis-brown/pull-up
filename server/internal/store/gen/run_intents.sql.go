@@ -74,13 +74,33 @@ func (q *Queries) ListRunIntentBucketTokens(ctx context.Context, arg ListRunInte
 
 const listRunIntentsForCourt = `-- name: ListRunIntentsForCourt :many
 SELECT ri.run_date, ri.window_key, ri.user_id,
-    u.display_name, u.avatar_url, u.skill_level
+    u.display_name, u.avatar_url, u.skill_level,
+    (
+        (
+            ri.user_id = $1
+            OR NOT u.is_private
+            OR EXISTS (
+                SELECT 1 FROM follows f
+                WHERE f.follower_id = $1 AND f.followee_id = ri.user_id
+            )
+        )
+        AND NOT EXISTS (
+            SELECT 1 FROM blocked_users b
+            WHERE (b.blocker_id = $1 AND b.blocked_id = ri.user_id)
+               OR (b.blocker_id = ri.user_id AND b.blocked_id = $1)
+        )
+    )::bool AS visible
 FROM run_intents ri
 JOIN users u ON u.id = ri.user_id
-WHERE ri.court_id = $1
+WHERE ri.court_id = $2
   AND ri.run_date >= (now() AT TIME ZONE 'UTC')::date
 ORDER BY ri.run_date, ri.window_key, ri.created_at
 `
+
+type ListRunIntentsForCourtParams struct {
+	ViewerID uuid.UUID `json:"viewer_id"`
+	CourtID  uuid.UUID `json:"court_id"`
+}
 
 type ListRunIntentsForCourtRow struct {
 	RunDate     pgtype.Date `json:"run_date"`
@@ -89,13 +109,18 @@ type ListRunIntentsForCourtRow struct {
 	DisplayName string      `json:"display_name"`
 	AvatarUrl   *string     `json:"avatar_url"`
 	SkillLevel  *string     `json:"skill_level"`
+	Visible     bool        `json:"visible"`
 }
 
 // Every seeker at every bucket for this court from today forward; the
 // caller (Go) drops same-day buckets whose window has already ended, since
 // that needs the window-span hour table this file has no access to.
-func (q *Queries) ListRunIntentsForCourt(ctx context.Context, courtID uuid.UUID) ([]ListRunIntentsForCourtRow, error) {
-	rows, err := q.db.Query(ctx, listRunIntentsForCourt, courtID)
+// visible applies the attendee-list rule (self, public, or followed, and
+// never across a block); the caller anonymizes hidden rows rather than
+// dropping them, so bucket counts stay true. viewer_id is the zero UUID
+// for anonymous viewers.
+func (q *Queries) ListRunIntentsForCourt(ctx context.Context, arg ListRunIntentsForCourtParams) ([]ListRunIntentsForCourtRow, error) {
+	rows, err := q.db.Query(ctx, listRunIntentsForCourt, arg.ViewerID, arg.CourtID)
 	if err != nil {
 		return nil, err
 	}
@@ -110,6 +135,7 @@ func (q *Queries) ListRunIntentsForCourt(ctx context.Context, courtID uuid.UUID)
 			&i.DisplayName,
 			&i.AvatarUrl,
 			&i.SkillLevel,
+			&i.Visible,
 		); err != nil {
 			return nil, err
 		}

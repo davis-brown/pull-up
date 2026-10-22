@@ -193,14 +193,17 @@ type runIntentSeeker struct {
 	SkillLevel  *string `json:"skill_level"`
 }
 
-// handleListRunIntents is public, matching the public RSVP/attendee lists.
+// handleListRunIntents is public, but names only the seekers the viewer
+// could see on an attendee list; everyone else is an anonymous "A player".
 func (s *Server) handleListRunIntents(w http.ResponseWriter, r *http.Request) {
 	courtID, err := uuid.Parse(chi.URLParam(r, "id"))
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid court id")
 		return
 	}
-	rows, err := s.store.Queries.ListRunIntentsForCourt(r.Context(), courtID)
+	rows, err := s.store.Queries.ListRunIntentsForCourt(r.Context(), gen.ListRunIntentsForCourtParams{
+		ViewerID: s.optionalUserID(r), CourtID: courtID,
+	})
 	if err != nil {
 		s.internalError(w, "list run intents", err)
 		return
@@ -217,11 +220,17 @@ func (s *Server) handleListRunIntents(w http.ResponseWriter, r *http.Request) {
 				continue
 			}
 		}
-		out = append(out, runIntentSeeker{
+		seeker := runIntentSeeker{
 			RunDate: date.Format("2006-01-02"), WindowKey: row.WindowKey,
 			UserID: row.UserID.String(), DisplayName: row.DisplayName,
 			AvatarURL: row.AvatarUrl, SkillLevel: row.SkillLevel,
-		})
+		}
+		if !row.Visible {
+			// Still counted toward demand, but not identifiable.
+			seeker.UserID, seeker.DisplayName = "", "A player"
+			seeker.AvatarURL, seeker.SkillLevel = nil, nil
+		}
+		out = append(out, seeker)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"seekers": out})
 }

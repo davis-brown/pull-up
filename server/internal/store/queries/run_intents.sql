@@ -16,8 +16,27 @@ WHERE court_id = sqlc.arg('court_id') AND user_id = sqlc.arg('user_id')
 -- Every seeker at every bucket for this court from today forward; the
 -- caller (Go) drops same-day buckets whose window has already ended, since
 -- that needs the window-span hour table this file has no access to.
+-- visible applies the attendee-list rule (self, public, or followed, and
+-- never across a block); the caller anonymizes hidden rows rather than
+-- dropping them, so bucket counts stay true. viewer_id is the zero UUID
+-- for anonymous viewers.
 SELECT ri.run_date, ri.window_key, ri.user_id,
-    u.display_name, u.avatar_url, u.skill_level
+    u.display_name, u.avatar_url, u.skill_level,
+    (
+        (
+            ri.user_id = sqlc.arg('viewer_id')
+            OR NOT u.is_private
+            OR EXISTS (
+                SELECT 1 FROM follows f
+                WHERE f.follower_id = sqlc.arg('viewer_id') AND f.followee_id = ri.user_id
+            )
+        )
+        AND NOT EXISTS (
+            SELECT 1 FROM blocked_users b
+            WHERE (b.blocker_id = sqlc.arg('viewer_id') AND b.blocked_id = ri.user_id)
+               OR (b.blocker_id = ri.user_id AND b.blocked_id = sqlc.arg('viewer_id'))
+        )
+    )::bool AS visible
 FROM run_intents ri
 JOIN users u ON u.id = ri.user_id
 WHERE ri.court_id = sqlc.arg('court_id')
