@@ -407,3 +407,30 @@ func TestOAuthDisabledWithoutClientIDs(t *testing.T) {
 	}
 	resp.Body.Close()
 }
+
+// Registering someone else's email first must not lock them out, or leave the
+// squatter holding a password to the account once the real owner verifies.
+func TestRegisterTakesOverUnverifiedAccount(t *testing.T) {
+	ts, _ := newTestServer(t)
+
+	resp := doJSON(t, ts, http.MethodPost, "/auth/register", "", map[string]string{
+		"email": "owner@test.local", "password": "squatter-pass", "display_name": "Squatter",
+	})
+	if resp.StatusCode != http.StatusAccepted {
+		t.Fatalf("squatter register: status %d", resp.StatusCode)
+	}
+	resp.Body.Close()
+
+	owner := registerUser(t, ts, "owner@test.local", "Owner")
+	if owner.User.DisplayName != "Owner" {
+		t.Errorf("display name = %q, want the owner's", owner.User.DisplayName)
+	}
+
+	resp = doJSON(t, ts, http.MethodPost, "/auth/login", "", map[string]string{
+		"email": "owner@test.local", "password": "squatter-pass",
+	})
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Errorf("squatter login after owner verified: status %d, want 401", resp.StatusCode)
+	}
+	resp.Body.Close()
+}
