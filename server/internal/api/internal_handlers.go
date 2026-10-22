@@ -56,6 +56,9 @@ func (s *Server) handleInternalDrain(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		s.log.Error("expire unconfirmed games", "err", err)
 	}
+	if err := s.store.Queries.DeleteExpiredAuthTokens(ctx); err != nil {
+		s.log.Error("delete expired auth tokens", "err", err)
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"tiles": tiles, "courts": courts, "stale_pending_uploads": stale,
 		"streak_nudges": nudges, "expired_games": expiredGames,

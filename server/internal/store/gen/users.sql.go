@@ -131,6 +131,18 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CreateU
 	return i, err
 }
 
+const deleteExpiredAuthTokens = `-- name: DeleteExpiredAuthTokens :exec
+WITH refresh AS (DELETE FROM refresh_tokens WHERE expires_at < now())
+DELETE FROM email_verification_tokens WHERE expires_at < now()
+`
+
+// Housekeeping for the cron drain. Expired refresh tokens can no longer be
+// replayed, so dropping them loses no reuse detection.
+func (q *Queries) DeleteExpiredAuthTokens(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, deleteExpiredAuthTokens)
+	return err
+}
+
 const getRefreshTokenByHash = `-- name: GetRefreshTokenByHash :one
 SELECT id, user_id, family_id, token_hash, expires_at, revoked_at, created_at
 FROM refresh_tokens
