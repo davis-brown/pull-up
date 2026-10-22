@@ -132,6 +132,19 @@ func (q *Queries) DeletePushToken(ctx context.Context, arg DeletePushTokenParams
 	return result.RowsAffected(), nil
 }
 
+const deletePushTokens = `-- name: DeletePushTokens :execrows
+DELETE FROM push_tokens WHERE token = ANY($1::text[])
+`
+
+// Drops tokens Expo reported as DeviceNotRegistered, whoever owns them.
+func (q *Queries) DeletePushTokens(ctx context.Context, tokens []string) (int64, error) {
+	result, err := q.db.Exec(ctx, deletePushTokens, tokens)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
+}
+
 const getUserAdmin = `-- name: GetUserAdmin :one
 
 SELECT is_admin FROM users WHERE id = $1

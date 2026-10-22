@@ -7,7 +7,6 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/davisbrown/pull-up/server/internal/push"
 	"github.com/davisbrown/pull-up/server/internal/rules"
 	"github.com/davisbrown/pull-up/server/internal/store/gen"
 )
@@ -208,7 +207,7 @@ func (s *Server) notifyLevelUp(userID uuid.UUID, level int) {
 		}
 		return
 	}
-	if err := push.Send(ctx, tokens,
+	if err := s.sendPush(ctx, tokens,
 		fmt.Sprintf("Level %d — %s", level, tierFor(level)),
 		"Your run count is showing. Keep it going.",
 		map[string]string{"action": "view_profile"},

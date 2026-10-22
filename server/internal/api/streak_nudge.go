@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/davisbrown/pull-up/server/internal/push"
 	"github.com/davisbrown/pull-up/server/internal/store/gen"
 )
 
@@ -105,7 +104,7 @@ func (s *Server) runStreakNudges(ctx context.Context) int {
 			s.log.Error("mark play nudge sent", "user", c.UserID, "err", err)
 			continue
 		}
-		if err := push.Send(ctx, tokens,
+		if err := s.sendPush(ctx, tokens,
 			"Keep your streak alive",
 			streakNudgeBody(streak, daysLeftInStreakWeek(localNow)),
 			map[string]string{"action": "view_map"},
