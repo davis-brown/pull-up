@@ -208,40 +208,6 @@ func (q *Queries) GetRefreshTokenByHashForUpdate(ctx context.Context, tokenHash 
 	return i, err
 }
 
-const getRefreshTokenReplacement = `-- name: GetRefreshTokenReplacement :one
-SELECT id, user_id, family_id, token_hash, expires_at, revoked_at, replaced_by_hash, created_at
-FROM refresh_tokens
-WHERE token_hash = $1 AND revoked_at IS NULL
-`
-
-type GetRefreshTokenReplacementRow struct {
-	ID             uuid.UUID  `json:"id"`
-	UserID         uuid.UUID  `json:"user_id"`
-	FamilyID       uuid.UUID  `json:"family_id"`
-	TokenHash      string     `json:"token_hash"`
-	ExpiresAt      time.Time  `json:"expires_at"`
-	RevokedAt      *time.Time `json:"revoked_at"`
-	ReplacedByHash *string    `json:"replaced_by_hash"`
-	CreatedAt      time.Time  `json:"created_at"`
-}
-
-// Returns the token that replaced a recently rotated one, if any.
-func (q *Queries) GetRefreshTokenReplacement(ctx context.Context, tokenHash string) (GetRefreshTokenReplacementRow, error) {
-	row := q.db.QueryRow(ctx, getRefreshTokenReplacement, tokenHash)
-	var i GetRefreshTokenReplacementRow
-	err := row.Scan(
-		&i.ID,
-		&i.UserID,
-		&i.FamilyID,
-		&i.TokenHash,
-		&i.ExpiresAt,
-		&i.RevokedAt,
-		&i.ReplacedByHash,
-		&i.CreatedAt,
-	)
-	return i, err
-}
-
 const getUnverifiedPasswordUserByEmailForUpdate = `-- name: GetUnverifiedPasswordUserByEmailForUpdate :one
 SELECT id
 FROM users

@@ -57,7 +57,7 @@ func TestGarbageTokenRejected(t *testing.T) {
 }
 
 func TestRefreshTokenHashing(t *testing.T) {
-	token, hash, err := NewRefreshToken()
+	token, hash, err := NewOpaqueToken()
 	if err != nil {
 		t.Fatalf("new refresh token: %v", err)
 	}
@@ -67,11 +67,11 @@ func TestRefreshTokenHashing(t *testing.T) {
 	if token == hash {
 		t.Error("token must not equal its hash")
 	}
-	if HashRefreshToken(token) != hash {
+	if HashOpaqueToken(token) != hash {
 		t.Error("hash mismatch on re-hash")
 	}
 	// Distinct tokens each time.
-	token2, hash2, err := NewRefreshToken()
+	token2, hash2, err := NewOpaqueToken()
 	if err != nil {
 		t.Fatalf("new refresh token: %v", err)
 	}

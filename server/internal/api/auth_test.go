@@ -159,7 +159,7 @@ func TestPasswordRegistrationRequiresEmailVerification(t *testing.T) {
 		WHERE u.email = $1 AND evt.consumed_at IS NULL`, email).Scan(&storedHash); err != nil {
 		t.Fatalf("query stored verification hash: %v", err)
 	}
-	if storedHash == verificationToken || storedHash != auth.HashEmailVerificationToken(verificationToken) {
+	if storedHash == verificationToken || storedHash != auth.HashOpaqueToken(verificationToken) {
 		t.Fatal("verification token was not stored solely as its expected hash")
 	}
 
@@ -273,7 +273,7 @@ func TestExpiredRotatedTokenCannotRevokeCurrentFamily(t *testing.T) {
 	current := decodeJSON[testUser](t, resp)
 	if _, err := st.Pool.Exec(context.Background(), `
 		UPDATE refresh_tokens SET expires_at = now() - interval '1 minute' WHERE token_hash = $1`,
-		auth.HashRefreshToken(u.RefreshToken)); err != nil {
+		auth.HashOpaqueToken(u.RefreshToken)); err != nil {
 		t.Fatalf("expire old token: %v", err)
 	}
 
@@ -333,7 +333,7 @@ func TestRefreshReplayBeyondGraceRevokesFamily(t *testing.T) {
 	// is treated as theft rather than a concurrent race.
 	if _, err := st.Pool.Exec(context.Background(), `
 		UPDATE refresh_tokens SET revoked_at = now() - interval '10 seconds' WHERE token_hash = $1`,
-		auth.HashRefreshToken(u.RefreshToken)); err != nil {
+		auth.HashOpaqueToken(u.RefreshToken)); err != nil {
 		t.Fatalf("age revocation: %v", err)
 	}
 

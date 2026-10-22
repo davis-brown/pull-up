@@ -21,10 +21,9 @@ func rateLimitKey(trustCloudflare bool) httprate.KeyFunc {
 	}
 }
 
-func perIPLimit(requestLimit int, window time.Duration, trustCloudflare ...bool) func(http.Handler) http.Handler {
-	trust := len(trustCloudflare) > 0 && trustCloudflare[0]
+func perIPLimit(requestLimit int, window time.Duration, trustCloudflare bool) func(http.Handler) http.Handler {
 	return httprate.Limit(requestLimit, window,
-		httprate.WithKeyFuncs(rateLimitKey(trust)),
+		httprate.WithKeyFuncs(rateLimitKey(trustCloudflare)),
 		httprate.WithLimitHandler(func(w http.ResponseWriter, r *http.Request) {
 			// httprate sets Retry-After before invoking this; belt and
 			// braces for older versions.
@@ -38,8 +37,8 @@ func perIPLimit(requestLimit int, window time.Duration, trustCloudflare ...bool)
 
 // writeLimiter rate-limits mutating methods only; reads stay unlimited
 // (map browsing fans out many GETs per pan).
-func writeLimiter(requestLimit int, window time.Duration, trustCloudflare ...bool) func(http.Handler) http.Handler {
-	limit := perIPLimit(requestLimit, window, trustCloudflare...)
+func writeLimiter(requestLimit int, window time.Duration, trustCloudflare bool) func(http.Handler) http.Handler {
+	limit := perIPLimit(requestLimit, window, trustCloudflare)
 	return func(next http.Handler) http.Handler {
 		limited := limit(next)
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

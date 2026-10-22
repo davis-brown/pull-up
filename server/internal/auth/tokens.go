@@ -53,36 +53,19 @@ func (i *Issuer) VerifyAccessToken(token string) (uuid.UUID, error) {
 	return id, nil
 }
 
-// NewRefreshToken returns the opaque token given to the client and the
-// sha256 hash that gets persisted. Only the hash ever touches the database.
-func NewRefreshToken() (token string, hash string, err error) {
-	return newOpaqueToken()
-}
-
-// NewEmailVerificationToken returns a one-time token and the hash persisted by
-// the server. It intentionally has the same entropy as a refresh token.
-func NewEmailVerificationToken() (token string, hash string, err error) {
-	return newOpaqueToken()
-}
-
-func newOpaqueToken() (token string, hash string, err error) {
+// NewOpaqueToken returns a random token for the client (refresh or email
+// verification) and the sha256 hash that gets persisted. Only the hash ever
+// touches the database.
+func NewOpaqueToken() (token string, hash string, err error) {
 	raw := make([]byte, 32)
 	if _, err := rand.Read(raw); err != nil {
 		return "", "", err
 	}
 	token = hex.EncodeToString(raw)
-	return token, HashRefreshToken(token), nil
+	return token, HashOpaqueToken(token), nil
 }
 
-func HashRefreshToken(token string) string {
-	return hashOpaqueToken(token)
-}
-
-func HashEmailVerificationToken(token string) string {
-	return hashOpaqueToken(token)
-}
-
-func hashOpaqueToken(token string) string {
+func HashOpaqueToken(token string) string {
 	sum := sha256.Sum256([]byte(token))
 	return hex.EncodeToString(sum[:])
 }
