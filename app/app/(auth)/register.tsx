@@ -22,11 +22,12 @@ export default function RegisterScreen() {
     setBusy(true);
     try {
       const normalizedEmail = email.trim().toLowerCase();
-      await signUp(normalizedEmail, password, displayName.trim());
+      const { verificationId } = await signUp(normalizedEmail, password, displayName.trim());
       router.replace({
         pathname: "/verify-email",
         params: {
           email: normalizedEmail,
+          id: verificationId,
           ...(next ? { next } : {}),
         },
       } as Href);

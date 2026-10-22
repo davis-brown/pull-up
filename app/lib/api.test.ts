@@ -244,16 +244,21 @@ describe("auth transitions and logout", () => {
     (global.fetch as jest.Mock)
       .mockResolvedValueOnce(fakeResponse(
         202,
-        { verification_required: true },
+        { verification_required: true, verification_id: "vid" },
       ))
       .mockResolvedValueOnce(fakeResponse(200, tokenResponse("verified-a", "verified-r")));
 
     await expect(client.register("new@test.local", "password123", "New Player")).resolves.toEqual({
       verificationRequired: true,
+      verificationId: "vid",
     });
     expect(stored["pullup.token_pair"]).toBeUndefined();
 
-    await expect(client.verifyEmail("one-time-token")).resolves.toMatchObject({ id: "u1" });
+    await expect(client.verifyEmail("vid", "042917")).resolves.toMatchObject({ id: "u1" });
+    expect(JSON.parse((global.fetch as jest.Mock).mock.calls[1][1].body)).toEqual({
+      verification_id: "vid",
+      code: "042917",
+    });
     expect(JSON.parse(stored["pullup.token_pair"])).toEqual({
       accessToken: "verified-a",
       refreshToken: "verified-r",

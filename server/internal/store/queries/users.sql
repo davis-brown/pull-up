@@ -2,11 +2,13 @@
 -- Re-registering an email nobody has verified takes the account over: the
 -- earlier password was never proven to belong to the inbox owner, so keeping
 -- it would let whoever registered first log in once the owner verifies.
--- A verified or OAuth account returns no row (the caller's 409).
+-- created_at restarts so the unverified-account purge counts from the new
+-- registration. A verified or OAuth account returns no row.
 INSERT INTO users (email, password_hash, display_name)
 VALUES ($1, $2, $3)
 ON CONFLICT (email) DO UPDATE
-    SET password_hash = EXCLUDED.password_hash, display_name = EXCLUDED.display_name
+    SET password_hash = EXCLUDED.password_hash, display_name = EXCLUDED.display_name,
+        created_at = now()
     WHERE users.email_verified_at IS NULL AND users.auth_provider = 'password'
 RETURNING id, email, display_name, avatar_url, reputation, created_at, is_admin,
     is_private, jersey_number, position, height_cm, style_tags,
@@ -93,21 +95,43 @@ WHERE id = $1 AND replaced_by_hash IS NULL;
 
 -- name: DeleteExpiredAuthTokens :exec
 -- Housekeeping for the cron drain. Expired refresh tokens can no longer be
--- replayed, so dropping them loses no reuse detection.
+-- replayed, so dropping them loses no reuse detection. A verification row
+-- outlives its code by a day so "send a new code" still works on it.
 WITH refresh AS (DELETE FROM refresh_tokens WHERE expires_at < now())
-DELETE FROM email_verification_tokens WHERE expires_at < now();
+DELETE FROM email_verification_tokens
+WHERE consumed_at IS NOT NULL OR expires_at < now() - interval '1 day';
+
+-- name: DeleteStaleUnverifiedUsers :execrows
+-- A password account nobody verified within a week is abandoned or a
+-- squatter's; deleting it frees the email. Unverified accounts can't sign
+-- in, so they own nothing else.
+DELETE FROM users
+WHERE email_verified_at IS NULL AND auth_provider = 'password'
+  AND created_at < now() - interval '7 days';
 
 -- Email verification -------------------------------------------------------
 
 -- name: CreateEmailVerificationToken :exec
-INSERT INTO email_verification_tokens (user_id, token_hash, expires_at)
-VALUES ($1, $2, $3);
+INSERT INTO email_verification_tokens (user_id, token_hash, code_hash, expires_at)
+VALUES ($1, $2, $3, $4);
 
--- name: GetUnverifiedPasswordUserByEmailForUpdate :one
-SELECT id
-FROM users
-WHERE email = $1 AND auth_provider = 'password' AND email_verified_at IS NULL
-FOR UPDATE;
+-- name: ReissueEmailVerificationCode :one
+-- "Send a new code": same verification id, fresh code, attempts reset.
+UPDATE email_verification_tokens t
+SET code_hash = sqlc.arg('code_hash'), attempts = 0, expires_at = sqlc.arg('expires_at')
+FROM users u
+WHERE t.token_hash = sqlc.arg('token_hash') AND t.consumed_at IS NULL
+  AND u.id = t.user_id AND u.email_verified_at IS NULL
+RETURNING u.email;
+
+-- name: ClaimEmailVerificationAttempt :one
+-- Spends one of the five guesses a code gets before it needs reissuing,
+-- whether or not the guess turns out right.
+UPDATE email_verification_tokens
+SET attempts = attempts + 1
+WHERE token_hash = $1 AND consumed_at IS NULL AND expires_at > now()
+  AND attempts < 5
+RETURNING id, code_hash;
 
 -- name: InvalidateEmailVerificationTokens :exec
 UPDATE email_verification_tokens
@@ -116,11 +140,10 @@ WHERE user_id = $1 AND consumed_at IS NULL;
 
 -- name: VerifyEmailWithToken :one
 WITH consumed AS (
-    UPDATE email_verification_tokens
+    UPDATE email_verification_tokens t
     SET consumed_at = now()
-    WHERE token_hash = $1
-      AND consumed_at IS NULL
-      AND expires_at > now()
+    WHERE t.id = $1
+      AND t.consumed_at IS NULL
     RETURNING user_id
 ), verified AS (
     UPDATE users u

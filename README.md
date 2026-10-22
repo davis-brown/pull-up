@@ -281,8 +281,10 @@ npx wrangler secret put INTERNAL_TASK_SECRET  # auth for the drain cron
 npx wrangler email sending enable pull-up.davisbrown.dev   # one-time transactional email setup
 ```
 
-The API Worker sends verification links through its `EMAIL` binding from
-`verify@pull-up.davisbrown.dev`. If another sending domain or canonical web origin is used,
+The API Worker sends 6-digit verification codes (and an "you already have an
+account" notice when someone registers a taken email) through its `EMAIL`
+binding from `verify@pull-up.davisbrown.dev`. `WEB_ORIGIN` is the sign-in link
+in that notice. If another sending domain or canonical web origin is used,
 set the `EMAIL_FROM` and `WEB_ORIGIN` Worker vars before deployment and
 regenerate `deploy/api/worker-configuration.d.ts` with `npm run types`.
 

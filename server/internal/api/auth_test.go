@@ -22,13 +22,24 @@ func TestAuthRegisterLoginFlow(t *testing.T) {
 		t.Fatal("register did not return tokens")
 	}
 
-	resp := doJSON(t, ts, http.MethodPost, "/auth/register", "", map[string]string{
+	// Registering a taken email looks exactly like a fresh registration to
+	// the caller; only the Worker learns to tell the owner instead.
+	resp := doJSONHeaders(t, ts, http.MethodPost, "/auth/register", "", map[string]string{
 		"email": "alice@test.local", "password": "password123", "display_name": "Alice 2",
-	})
-	if resp.StatusCode != http.StatusConflict {
-		t.Fatalf("duplicate register: status %d, want 409", resp.StatusCode)
+	}, map[string]string{"X-Internal-Task": "test-internal-secret"})
+	if resp.StatusCode != http.StatusAccepted {
+		t.Fatalf("duplicate register: status %d, want 202", resp.StatusCode)
 	}
-	resp.Body.Close()
+	if kind := resp.Header.Get("X-Pull-Up-Email-Kind"); kind != "existing-account" {
+		t.Errorf("duplicate register email kind = %q, want existing-account", kind)
+	}
+	if code := resp.Header.Get("X-Pull-Up-Email-Verification-Code"); code != "" {
+		t.Error("duplicate register issued a verification code")
+	}
+	decoy := decodeJSON[map[string]any](t, resp)
+	if id, _ := decoy["verification_id"].(string); id == "" || decoy["verification_required"] != true {
+		t.Errorf("duplicate register body = %+v, want a verification id like a new account", decoy)
+	}
 
 	resp = doJSON(t, ts, http.MethodPost, "/auth/login", "", map[string]string{
 		"email": "alice@test.local", "password": "wrong-password",
@@ -121,49 +132,77 @@ func TestPasswordRegistrationRequiresEmailVerification(t *testing.T) {
 		t.Errorf("registration Cache-Control = %q, want no-store", resp.Header.Get("Cache-Control"))
 	}
 
-	resp = doJSON(t, ts, http.MethodPost, "/auth/login", "", map[string]string{
+	// Signing in with the right password sends a fresh code and hands this
+	// client the verification id it pairs with.
+	resp = doJSONHeaders(t, ts, http.MethodPost, "/auth/login", "", map[string]string{
 		"email": email, "password": "password123",
-	})
+	}, map[string]string{"X-Internal-Task": "test-internal-secret"})
 	if resp.StatusCode != http.StatusForbidden {
 		t.Fatalf("unverified login: status %d, want 403", resp.StatusCode)
 	}
-	resp.Body.Close()
-
-	// An untrusted resend request is a non-mutating, non-enumerating no-op.
-	resp = doJSON(t, ts, http.MethodPost, "/auth/email-verification/request", "", map[string]string{"email": email})
-	if resp.StatusCode != http.StatusAccepted || resp.Header.Get("X-Pull-Up-Email-Verification-Token") != "" {
-		t.Fatalf("untrusted resend response: status=%d token=%q", resp.StatusCode, resp.Header.Get("X-Pull-Up-Email-Verification-Token"))
+	code := resp.Header.Get("X-Pull-Up-Email-Verification-Code")
+	if to := resp.Header.Get("X-Pull-Up-Email-Verification-To"); to != email {
+		t.Fatalf("login code recipient = %q, want %q", to, email)
 	}
-	resp.Body.Close()
-
-	// The trusted email Worker gets the raw one-time token in an origin-only
-	// header. Only its SHA-256 hash is retained in Postgres.
-	resp = doJSONHeaders(t, ts, http.MethodPost, "/auth/email-verification/request", "",
-		map[string]string{"email": email}, map[string]string{"X-Internal-Task": "test-internal-secret"})
-	if resp.StatusCode != http.StatusAccepted {
-		t.Fatalf("trusted resend: status %d", resp.StatusCode)
-	}
-	verificationToken := resp.Header.Get("X-Pull-Up-Email-Verification-Token")
-	verificationRecipient := resp.Header.Get("X-Pull-Up-Email-Verification-To")
-	resp.Body.Close()
-	if verificationToken == "" {
-		t.Fatal("trusted resend missing verification token header")
-	}
-	if verificationRecipient != email {
-		t.Fatalf("trusted resend recipient = %q, want %q", verificationRecipient, email)
+	verificationID := decodeJSON[struct {
+		VerificationID string `json:"verification_id"`
+	}](t, resp).VerificationID
+	if len(code) != 6 || verificationID == "" {
+		t.Fatalf("unverified login: code %q, verification id %q", code, verificationID)
 	}
 	var storedHash string
 	if err := st.Pool.QueryRow(context.Background(), `
-		SELECT token_hash FROM email_verification_tokens evt
+		SELECT code_hash FROM email_verification_tokens evt
 		JOIN users u ON u.id = evt.user_id
 		WHERE u.email = $1 AND evt.consumed_at IS NULL`, email).Scan(&storedHash); err != nil {
-		t.Fatalf("query stored verification hash: %v", err)
+		t.Fatalf("query stored code hash: %v", err)
 	}
-	if storedHash == verificationToken || storedHash != auth.HashOpaqueToken(verificationToken) {
-		t.Fatal("verification token was not stored solely as its expected hash")
+	if storedHash != auth.HashOpaqueToken(verificationID+":"+code) {
+		t.Fatal("code was not stored solely as its hash salted with the verification id")
 	}
 
-	resp = doJSON(t, ts, http.MethodPost, "/auth/email-verification/verify", "", map[string]string{"token": verificationToken})
+	verify := func(id, code string) int {
+		resp := doJSON(t, ts, http.MethodPost, "/auth/email-verification/verify", "", map[string]string{
+			"verification_id": id, "code": code,
+		})
+		resp.Body.Close()
+		return resp.StatusCode
+	}
+	wrong := "000000"
+	if code == wrong {
+		wrong = "111111"
+	}
+	// The code alone, without the id this client holds, proves nothing.
+	if status := verify("someone-elses-id", code); status != http.StatusBadRequest {
+		t.Fatalf("code with another id: status %d, want 400", status)
+	}
+	// Five guesses, then even the right code is refused until a new one is sent.
+	for i := 0; i < 5; i++ {
+		if status := verify(verificationID, wrong); status != http.StatusBadRequest {
+			t.Fatalf("wrong code: status %d, want 400", status)
+		}
+	}
+	if status := verify(verificationID, code); status != http.StatusBadRequest {
+		t.Fatalf("right code after five misses: status %d, want 400", status)
+	}
+
+	// An untrusted resend is a non-mutating, non-enumerating no-op.
+	resp = doJSON(t, ts, http.MethodPost, "/auth/email-verification/request", "", map[string]string{"verification_id": verificationID})
+	if resp.StatusCode != http.StatusAccepted || resp.Header.Get("X-Pull-Up-Email-Verification-Code") != "" {
+		t.Fatalf("untrusted resend: status=%d code=%q", resp.StatusCode, resp.Header.Get("X-Pull-Up-Email-Verification-Code"))
+	}
+	resp.Body.Close()
+	resp = doJSONHeaders(t, ts, http.MethodPost, "/auth/email-verification/request", "",
+		map[string]string{"verification_id": verificationID}, map[string]string{"X-Internal-Task": "test-internal-secret"})
+	code = resp.Header.Get("X-Pull-Up-Email-Verification-Code")
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusAccepted || len(code) != 6 {
+		t.Fatalf("trusted resend: status %d, code %q", resp.StatusCode, code)
+	}
+
+	resp = doJSON(t, ts, http.MethodPost, "/auth/email-verification/verify", "", map[string]string{
+		"verification_id": verificationID, "code": code,
+	})
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("verify: status %d: %s", resp.StatusCode, readBody(t, resp))
 	}
@@ -171,12 +210,9 @@ func TestPasswordRegistrationRequiresEmailVerification(t *testing.T) {
 	if verified.AccessToken == "" || !verified.User.EmailVerified {
 		t.Fatalf("verified response missing authenticated verified user: %+v", verified)
 	}
-
-	resp = doJSON(t, ts, http.MethodPost, "/auth/email-verification/verify", "", map[string]string{"token": verificationToken})
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Fatalf("verification token reuse: status %d, want 400", resp.StatusCode)
+	if status := verify(verificationID, code); status != http.StatusBadRequest {
+		t.Fatalf("code reuse: status %d, want 400", status)
 	}
-	resp.Body.Close()
 }
 
 func TestWebAuthUsesSameOriginHttpOnlyRefreshCookie(t *testing.T) {
@@ -443,8 +479,8 @@ func TestDeleteExpiredAuthTokens(t *testing.T) {
 	for _, q := range []string{
 		`INSERT INTO refresh_tokens (user_id, family_id, token_hash, expires_at)
 		VALUES ($1, gen_random_uuid(), 'expired-refresh', now() - interval '1 minute')`,
-		`INSERT INTO email_verification_tokens (user_id, token_hash, expires_at, consumed_at)
-		VALUES ($1, 'expired-verify', now() - interval '1 minute', now())`,
+		`INSERT INTO email_verification_tokens (user_id, token_hash, code_hash, expires_at, consumed_at)
+		VALUES ($1, 'expired-verify', '', now() - interval '1 minute', now())`,
 	} {
 		if _, err := st.Pool.Exec(ctx, q, u.User.ID); err != nil {
 			t.Fatalf("seed expired token: %v", err)
@@ -467,5 +503,39 @@ func TestDeleteExpiredAuthTokens(t *testing.T) {
 	}
 	if live == 0 {
 		t.Error("the live refresh token from login was deleted")
+	}
+}
+
+// Unverified password accounts are deleted after a week, freeing the email;
+// verified ones stay.
+func TestDeleteStaleUnverifiedUsers(t *testing.T) {
+	ts, st := newTestServer(t)
+	ctx := context.Background()
+	kept := registerUser(t, ts, "kept@test.local", "Kept")
+	resp := doJSON(t, ts, http.MethodPost, "/auth/register", "", map[string]string{
+		"email": "stale@test.local", "password": "password123", "display_name": "Stale",
+	})
+	resp.Body.Close()
+	if _, err := st.Pool.Exec(ctx,
+		`UPDATE users SET created_at = now() - interval '8 days'`); err != nil {
+		t.Fatalf("age users: %v", err)
+	}
+	if n, err := st.Queries.DeleteStaleUnverifiedUsers(ctx); err != nil || n != 1 {
+		t.Fatalf("delete stale unverified: n=%d err=%v, want 1", n, err)
+	}
+	var emails []string
+	rows, err := st.Pool.Query(ctx, `SELECT email FROM users`)
+	if err != nil {
+		t.Fatalf("list users: %v", err)
+	}
+	for rows.Next() {
+		var e string
+		if err := rows.Scan(&e); err != nil {
+			t.Fatalf("scan: %v", err)
+		}
+		emails = append(emails, e)
+	}
+	if len(emails) != 1 || emails[0] != kept.User.Email {
+		t.Errorf("users after purge = %v, want only %s", emails, kept.User.Email)
 	}
 }

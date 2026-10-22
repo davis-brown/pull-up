@@ -5,6 +5,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
+	"math/big"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -63,6 +65,15 @@ func NewOpaqueToken() (token string, hash string, err error) {
 	}
 	token = hex.EncodeToString(raw)
 	return token, HashOpaqueToken(token), nil
+}
+
+// NewVerificationCode returns a uniformly random 6-digit code for an email.
+func NewVerificationCode() (string, error) {
+	n, err := rand.Int(rand.Reader, big.NewInt(1_000_000))
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%06d", n.Int64()), nil
 }
 
 func HashOpaqueToken(token string) string {
