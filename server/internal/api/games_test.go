@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"testing"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 type gameResp struct {
@@ -25,6 +27,7 @@ func TestGameConfirmationRules(t *testing.T) {
 	record := func(token string, body map[string]any) *http.Response {
 		return doJSON(t, ts, http.MethodPost, "/courts/"+court.ID+"/games", token, body)
 	}
+
 
 	// Validation: the recorder must have played, teams can't overlap, and
 	// a partial or backwards score is rejected.
@@ -125,6 +128,34 @@ func TestGameConfirmationRules(t *testing.T) {
 		t.Errorf("re-confirm: status %d, want 200", resp.StatusCode)
 	}
 	resp.Body.Close()
+
+	// A recorder who puts themselves on the losing side still can't settle
+	// it: their auto-confirmation must not count as the losing side agreeing.
+	resp = record(loser.AccessToken, map[string]any{
+		"team_a": []string{winner.User.ID}, "team_b": []string{loser.User.ID},
+		"winning_team": 0,
+	})
+	if resp.StatusCode != http.StatusCreated {
+		defer resp.Body.Close()
+		t.Fatalf("record losing-recorder game: status %d: %s", resp.StatusCode, readBody(t, resp))
+	}
+	selfLoss := decodeJSON[gameResp](t, resp).Game.ID
+	resp = doJSON(t, ts, http.MethodPost, "/games/"+selfLoss+"/confirm", loser.AccessToken, nil)
+	if resp.StatusCode != http.StatusForbidden {
+		t.Errorf("losing recorder self-confirm: status %d, want 403", resp.StatusCode)
+	}
+	resp.Body.Close()
+	// The SQL guard holds even if the handler check were bypassed.
+	if _, err := st.Queries.ConfirmGameIfOpposingAgreed(context.Background(), uuid.MustParse(selfLoss)); err != nil {
+		t.Fatalf("confirm-if-agreed: %v", err)
+	}
+	if err := st.Pool.QueryRow(context.Background(),
+		"SELECT status FROM games WHERE id = $1", selfLoss).Scan(&status); err != nil {
+		t.Fatalf("read game status: %v", err)
+	}
+	if status != "unconfirmed" {
+		t.Errorf("losing-recorder game status = %q, want unconfirmed", status)
+	}
 }
 
 func TestGameXPOnlyOnConfirmationAndRecordInStats(t *testing.T) {

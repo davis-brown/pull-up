@@ -49,6 +49,7 @@ WHERE g.id = sqlc.arg('game_id')
       SELECT 1 FROM game_participants p
       WHERE p.game_id = g.id
         AND p.team <> g.winning_team
+        AND p.user_id <> g.recorded_by
         AND p.confirmed_at IS NOT NULL
   );
 
