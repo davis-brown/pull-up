@@ -179,8 +179,9 @@ func (s *Server) handleConfirmGame(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Only the losing side settles a result; the winner and the recorder
-	// (auto-confirmed at creation) agreeing proves nothing.
-	if participant.Team == game.WinningTeam {
+	// (auto-confirmed at creation, whichever side they put themselves on)
+	// agreeing proves nothing.
+	if participant.Team == game.WinningTeam || game.RecordedBy == uid {
 		writeError(w, http.StatusForbidden, "only the other team can confirm a result")
 		return
 	}
