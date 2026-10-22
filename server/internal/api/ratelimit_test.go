@@ -81,7 +81,7 @@ func TestWriteLimiterSkipsReads(t *testing.T) {
 
 func TestPerIPLimitIgnoresUntrustedForwardingHeader(t *testing.T) {
 	r := chi.NewRouter()
-	r.Use(perIPLimit(1, time.Minute))
+	r.Use(perIPLimit(1, time.Minute, false))
 	r.Post("/x", okHandler)
 	ts := httptest.NewServer(r)
 	defer ts.Close()

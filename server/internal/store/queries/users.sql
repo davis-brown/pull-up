@@ -78,12 +78,6 @@ FROM refresh_tokens
 WHERE token_hash = $1
 FOR UPDATE;
 
--- name: GetRefreshTokenReplacement :one
--- Returns the token that replaced a recently rotated one, if any.
-SELECT id, user_id, family_id, token_hash, expires_at, revoked_at, replaced_by_hash, created_at
-FROM refresh_tokens
-WHERE token_hash = $1 AND revoked_at IS NULL;
-
 -- name: RevokeRefreshToken :exec
 UPDATE refresh_tokens SET revoked_at = now()
 WHERE id = $1 AND revoked_at IS NULL;

@@ -60,7 +60,7 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, "hash password", err)
 		return
 	}
-	verificationToken, verificationHash, err := auth.NewEmailVerificationToken()
+	verificationToken, verificationHash, err := auth.NewOpaqueToken()
 	if err != nil {
 		s.internalError(w, "create email verification token", err)
 		return
@@ -170,7 +170,7 @@ func (s *Server) handleRefresh(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback(r.Context())
 	q := s.store.Queries.WithTx(tx)
-	row, err := q.GetRefreshTokenByHashForUpdate(r.Context(), auth.HashRefreshToken(refreshToken))
+	row, err := q.GetRefreshTokenByHashForUpdate(r.Context(), auth.HashOpaqueToken(refreshToken))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			s.clearRefreshCookie(w, r)
@@ -226,7 +226,7 @@ func (s *Server) handleRefresh(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, "issue access token", err)
 		return
 	}
-	refresh, refreshHash, err := auth.NewRefreshToken()
+	refresh, refreshHash, err := auth.NewOpaqueToken()
 	if err != nil {
 		s.internalError(w, "issue refresh token", err)
 		return
@@ -240,15 +240,12 @@ func (s *Server) handleRefresh(w http.ResponseWriter, r *http.Request) {
 	}
 	// Forensic audit trail of the rotation chain. Replay detection itself is
 	// the revoked_at grace window above, not this column.
-	if row.RevokedAt == nil {
-		replacementHash := &refreshHash
-		if err := q.SetRefreshTokenReplacement(r.Context(), gen.SetRefreshTokenReplacementParams{
-			ID:             row.ID,
-			ReplacedByHash: replacementHash,
-		}); err != nil {
-			s.internalError(w, "set refresh token replacement", err)
-			return
-		}
+	if err := q.SetRefreshTokenReplacement(r.Context(), gen.SetRefreshTokenReplacementParams{
+		ID:             row.ID,
+		ReplacedByHash: &refreshHash,
+	}); err != nil {
+		s.internalError(w, "set refresh token replacement", err)
+		return
 	}
 	if err := tx.Commit(r.Context()); err != nil {
 		s.internalError(w, "commit refresh rotation", err)
@@ -275,7 +272,7 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback(r.Context())
 	q := s.store.Queries.WithTx(tx)
-	row, err := q.GetRefreshTokenByHashForUpdate(r.Context(), auth.HashRefreshToken(refreshToken))
+	row, err := q.GetRefreshTokenByHashForUpdate(r.Context(), auth.HashOpaqueToken(refreshToken))
 	if errors.Is(err, pgx.ErrNoRows) {
 		w.WriteHeader(http.StatusNoContent)
 		return
@@ -306,7 +303,7 @@ func (s *Server) issueTokens(w http.ResponseWriter, r *http.Request, uid uuid.UU
 		s.internalError(w, "issue access token", err)
 		return
 	}
-	refresh, refreshHash, err := auth.NewRefreshToken()
+	refresh, refreshHash, err := auth.NewOpaqueToken()
 	if err != nil {
 		s.internalError(w, "issue refresh token", err)
 		return
@@ -375,7 +372,7 @@ func (s *Server) createEmailVerificationToken(r *http.Request, email string) (st
 	if err := q.InvalidateEmailVerificationTokens(r.Context(), uid); err != nil {
 		return "", time.Time{}, false, err
 	}
-	token, hash, err := auth.NewEmailVerificationToken()
+	token, hash, err := auth.NewOpaqueToken()
 	if err != nil {
 		return "", time.Time{}, false, err
 	}
@@ -405,7 +402,7 @@ func (s *Server) handleVerifyEmail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	user, err := s.store.Queries.VerifyEmailWithToken(
-		r.Context(), auth.HashEmailVerificationToken(req.Token))
+		r.Context(), auth.HashOpaqueToken(req.Token))
 	if err != nil {
 		if errors.Is(err, pgx.ErrNoRows) {
 			writeError(w, http.StatusBadRequest, "invalid or expired verification token")
