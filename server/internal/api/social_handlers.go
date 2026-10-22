@@ -11,7 +11,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/davisbrown/pull-up/server/internal/push"
 	"github.com/davisbrown/pull-up/server/internal/rules"
 	"github.com/davisbrown/pull-up/server/internal/store/gen"
 )
@@ -266,7 +265,7 @@ func (s *Server) notifyFollowRequest(targetID uuid.UUID, requesterName string) {
 	if err != nil || len(tokens) == 0 {
 		return
 	}
-	if err := push.Send(ctx, tokens, "New follow request",
+	if err := s.sendPush(ctx, tokens, "New follow request",
 		fmt.Sprintf("%s wants to follow you.", requesterName),
 		map[string]string{"type": "follow_request"}); err != nil {
 		s.log.Error("push follow request", "err", err)
@@ -281,7 +280,7 @@ func (s *Server) notifyFollowAccepted(requesterID uuid.UUID, accepterName string
 	if err != nil || len(tokens) == 0 {
 		return
 	}
-	if err := push.Send(ctx, tokens, "Follow request accepted",
+	if err := s.sendPush(ctx, tokens, "Follow request accepted",
 		fmt.Sprintf("%s accepted your follow request.", accepterName),
 		map[string]string{"type": "follow_accepted"}); err != nil {
 		s.log.Error("push follow accepted", "err", err)

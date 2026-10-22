@@ -10,7 +10,6 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/davisbrown/pull-up/server/internal/push"
 	"github.com/davisbrown/pull-up/server/internal/store/gen"
 )
 
@@ -127,7 +126,7 @@ func (s *Server) notifyWindowAlerts(courtID, actor uuid.UUID, partySize int) {
 		return
 	}
 	for label, tokens := range tokensByLabel {
-		if err := push.Send(ctx, tokens,
+		if err := s.sendPush(ctx, tokens,
 			fmt.Sprintf("Now at %s: %d playing", court.Name, count),
 			fmt.Sprintf("A run is on during your %s window.", label),
 			map[string]string{"courtId": courtID.String()},

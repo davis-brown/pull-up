@@ -59,6 +59,10 @@ ON CONFLICT (token) DO UPDATE SET user_id = EXCLUDED.user_id, updated_at = now()
 -- name: DeletePushToken :execrows
 DELETE FROM push_tokens WHERE token = $1 AND user_id = $2;
 
+-- name: DeletePushTokens :execrows
+-- Drops tokens Expo reported as DeviceNotRegistered, whoever owns them.
+DELETE FROM push_tokens WHERE token = ANY(@tokens::text[]);
+
 -- name: ListFavoriterPushTokens :many
 -- Tokens of everyone who favorited the court, except the acting user.
 SELECT DISTINCT pt.token

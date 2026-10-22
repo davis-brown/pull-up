@@ -12,7 +12,6 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/davisbrown/pull-up/server/internal/push"
 	"github.com/davisbrown/pull-up/server/internal/store/gen"
 )
 
@@ -257,7 +256,7 @@ func (s *Server) notifyRunIntentThreshold(courtID uuid.UUID, courtName string, d
 		}
 		return
 	}
-	if err := push.Send(ctx, tokens,
+	if err := s.sendPush(ctx, tokens,
 		fmt.Sprintf("%d players want to run at %s", count, courtName),
 		bucketLabel(date, span.label)+" — plan it?",
 		map[string]string{
@@ -298,7 +297,7 @@ func (s *Server) notifyRunIntentConverted(courtID uuid.UUID, courtName string, d
 		}
 		return
 	}
-	if err := push.Send(ctx, tokens,
+	if err := s.sendPush(ctx, tokens,
 		fmt.Sprintf("A run was just planned at %s", courtName),
 		bucketLabel(date, span.label)+" is on — RSVP",
 		map[string]string{

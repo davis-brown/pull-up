@@ -13,7 +13,6 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
-	"github.com/davisbrown/pull-up/server/internal/push"
 	"github.com/davisbrown/pull-up/server/internal/store/gen"
 )
 
@@ -211,7 +210,7 @@ func (s *Server) notifyRunStarted(courtID, actor uuid.UUID) {
 	if err != nil {
 		return
 	}
-	if err := push.Send(ctx, tokens,
+	if err := s.sendPush(ctx, tokens,
 		fmt.Sprintf("Run starting at %s", court.Name),
 		"Someone just checked in at a court you follow.",
 		map[string]string{"courtId": courtID.String()},

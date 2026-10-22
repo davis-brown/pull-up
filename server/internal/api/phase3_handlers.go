@@ -13,7 +13,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/davisbrown/pull-up/server/internal/push"
 	"github.com/davisbrown/pull-up/server/internal/store/gen"
 )
 
@@ -299,7 +298,7 @@ func (s *Server) notifySessionPlanned(courtID uuid.UUID, courtName string, actor
 	if err != nil || len(tokens) == 0 {
 		return
 	}
-	if err := push.Send(ctx, tokens,
+	if err := s.sendPush(ctx, tokens,
 		fmt.Sprintf("Run planned at %s", courtName),
 		"Someone scheduled a run at a court you follow. Tap to RSVP.",
 		map[string]string{"courtId": courtID.String(), "startsAt": startsAt.Format(time.RFC3339)},
