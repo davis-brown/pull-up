@@ -74,6 +74,7 @@ export default function CourtMap({
   selectedCourtId,
   hoveredCourtId,
   attributionPosition = "bottom-right",
+  geolocatePosition = "top-left",
   style,
 }: CourtMapProps) {
   const t = useTheme();
@@ -163,8 +164,22 @@ export default function CourtMap({
         <GeolocateControl
           ref={geolocateRef}
           trackUserLocation
-          position="top-left"
-          style={{ marginTop: 19, marginLeft: 16 }}
+          position={geolocatePosition}
+          style={
+            geolocatePosition === "top-right"
+              ? // The 29px control at 1.8x matches the capsule's 52px width, sitting
+                // 12px under its 52px button; radius and shadow match too.
+                {
+                  marginTop: 76,
+                  marginRight: 16,
+                  transform: "scale(1.8)",
+                  transformOrigin: "top right",
+                  borderRadius: t.radius.md / 1.8,
+                  backgroundColor: t.colors.surface,
+                  boxShadow: "0 2px 9px rgba(22, 19, 38, 0.12)",
+                }
+              : { marginTop: 19, marginLeft: 16 }
+          }
         />
       )}
       {courts.map((pin) => (

@@ -83,8 +83,6 @@ export function DiscoverySearchSheet({
     setSubmitted("");
     onArea(area);
   };
-  const empty = result.data && result.data.courts.length === 0 && result.data.areas.length === 0;
-
   return (
     <Modal transparent animationType="fade" visible={visible} onRequestClose={dismiss}>
       <View style={[styles.overlay, { backgroundColor: t.colors.overlay }]}>
@@ -122,40 +120,60 @@ export function DiscoverySearchSheet({
             />
             <Button title="Search" onPress={submit} disabled={draft.trim().length < 2 || result.isFetching} />
           </View>
-          <ErrorText message={result.error instanceof Error ? result.error.message : null} />
-          <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.results}>
-            {result.isFetching && <ActivityIndicator color={t.colors.accent} style={styles.loading} />}
-            {(result.data?.courts.length ?? 0) > 0 && <Overline style={styles.sectionLabel}>Courts</Overline>}
-            {result.data?.courts.map((court) => (
-              <ResultRow
-                key={court.id}
-                icon="basketball-outline"
-                title={court.name}
-                subtitle={court.address ?? (court.distance_m != null ? `${Math.round(court.distance_m / 100) / 10} km away` : "Court")}
-                onPress={() => selectCourt(court)}
-              />
-            ))}
-            {(result.data?.areas.length ?? 0) > 0 && <Overline style={styles.sectionLabel}>Areas</Overline>}
-            {result.data?.areas.map((area) => (
-              <ResultRow
-                key={`${area.name}-${area.lat}-${area.lng}`}
-                icon="location-outline"
-                title={area.name}
-                subtitle={area.type || "Area"}
-                onPress={() => selectArea(area)}
-              />
-            ))}
-            {result.data?.area_search_unavailable && (
-              <Text style={[t.type.caption, styles.notice, { color: t.colors.textMuted }]}>Area search is temporarily unavailable. Court results are still shown.</Text>
-            )}
-            {empty && (
-              <Text style={[t.type.body, styles.empty, { color: t.colors.textSecondary }]}>No matching courts or areas.</Text>
-            )}
-          </ScrollView>
-          <Text style={[t.type.caption, styles.attribution, { color: t.colors.textMuted }]}>Area results © OpenStreetMap contributors</Text>
+          <DiscoveryResults result={result} onCourt={selectCourt} onArea={selectArea} />
         </View>
       </View>
     </Modal>
+  );
+}
+
+// Search results, shared by the desktop search modal and the mobile courts
+// sheet: courts, then areas, with the OSM credit area results require.
+export function DiscoveryResults({
+  result,
+  onCourt,
+  onArea,
+}: {
+  result: ReturnType<typeof useDiscoverySearch>;
+  onCourt: (court: CourtSearchHit) => void;
+  onArea: (area: AreaSearchHit) => void;
+}) {
+  const t = useTheme();
+  const empty = result.data && result.data.courts.length === 0 && result.data.areas.length === 0;
+  return (
+    <>
+      <ErrorText message={result.error instanceof Error ? result.error.message : null} />
+      <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.results}>
+        {result.isFetching && <ActivityIndicator color={t.colors.accent} style={styles.loading} />}
+        {(result.data?.courts.length ?? 0) > 0 && <Overline style={styles.sectionLabel}>Courts</Overline>}
+        {result.data?.courts.map((court) => (
+          <ResultRow
+            key={court.id}
+            icon="basketball-outline"
+            title={court.name}
+            subtitle={court.address ?? (court.distance_m != null ? `${Math.round(court.distance_m / 100) / 10} km away` : "Court")}
+            onPress={() => onCourt(court)}
+          />
+        ))}
+        {(result.data?.areas.length ?? 0) > 0 && <Overline style={styles.sectionLabel}>Areas</Overline>}
+        {result.data?.areas.map((area) => (
+          <ResultRow
+            key={`${area.name}-${area.lat}-${area.lng}`}
+            icon="location-outline"
+            title={area.name}
+            subtitle={area.type || "Area"}
+            onPress={() => onArea(area)}
+          />
+        ))}
+        {result.data?.area_search_unavailable && (
+          <Text style={[t.type.caption, styles.notice, { color: t.colors.textMuted }]}>Area search is temporarily unavailable. Court results are still shown.</Text>
+        )}
+        {empty && (
+          <Text style={[t.type.body, styles.empty, { color: t.colors.textSecondary }]}>No matching courts or areas.</Text>
+        )}
+      </ScrollView>
+      <Text style={[t.type.caption, styles.attribution, { color: t.colors.textMuted }]}>Area results © OpenStreetMap contributors</Text>
+    </>
   );
 }
 
