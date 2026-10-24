@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import CourtMap from "@/components/CourtMap/CourtMap";
+import { CourtsSheet } from "@/components/CourtsSheet";
 import type { CameraTarget, CourtPin } from "@/components/CourtMap/types";
 import { DesktopPanel } from "@/components/DesktopPanel";
 import {
@@ -364,72 +365,47 @@ export default function MapScreen() {
         }}
         mode={mode}
         selectedCourtId={selectedCourtId}
-        attributionPosition="bottom-left"
+        attributionPosition="top-left"
+        geolocatePosition="top-right"
       />
-      {/* One shared top row: [spacer 44][centered toggle][filter 44]. The
-          toggle stays visually centered (both sides reserve the button's
-          width) and can never overlap the filter button, at any screen
-          width or OS font scale. The map's geolocate control renders in
-          the spacer slot underneath, so the spacer must not eat clicks. */}
+      {/* Map chrome: a control capsule top-right, and the courts
+          sheet (search, filters, list) docked at the bottom. */}
       <View
-        pointerEvents="box-none"
-        style={[styles.chrome, { top: insets.top + 12 }]}
+        style={[
+          styles.capsule,
+          t.shadows.chrome,
+          { top: insets.top + 12, backgroundColor: t.colors.surface, borderRadius: t.radius.md },
+        ]}
       >
-        <View pointerEvents="none" style={styles.chromeSpacer} />
-        <View pointerEvents="box-none" style={styles.chromeCenter}>
-          <SegmentedToggle
-            options={[
-              { key: "now", label: "Now" },
-              { key: "all", label: "All courts" },
-            ]}
-            value={mode}
-            onChange={(key) => setMode(key as "now" | "all")}
-          />
-        </View>
         <Pressable
-          onPress={() => setFilterSheetOpen(true)}
-          style={({ pressed }) => [
-            styles.filterButton,
-            t.shadows.chrome,
-            {
-              backgroundColor: t.colors.surface,
-              borderRadius: t.radius.full,
-              opacity: pressed ? 0.85 : 1,
-            },
-          ]}
+          onPress={() => setMode(mode === "now" ? "all" : "now")}
+          accessibilityRole="button"
+          accessibilityLabel={
+            mode === "now" ? "Showing live activity. Show all courts" : "Showing all courts. Show live activity"
+          }
+          style={({ pressed }) => [styles.capsuleButton, { opacity: pressed ? 0.6 : 1 }]}
         >
-          <Ionicons name="options" size={20} color={t.colors.textPrimary} />
-          {activeFilterCount > 0 && (
-            <View
-              style={[
-                styles.filterBadge,
-                { backgroundColor: t.colors.accent, borderRadius: t.radius.full },
-              ]}
-            >
-              <Text
-                style={[
-                  t.type.caption,
-                  styles.filterBadgeText,
-                  { color: t.colors.onAccent },
-                ]}
-              >
-                {activeFilterCount}
-              </Text>
-            </View>
-          )}
+          <Ionicons
+            name={mode === "now" ? "pulse" : "basketball-outline"}
+            size={20}
+            color={mode === "now" ? t.colors.accent : t.colors.textPrimary}
+          />
+          <Text
+            style={[
+              t.type.caption,
+              styles.capsuleLabel,
+              { color: mode === "now" ? t.colors.accent : t.colors.textPrimary },
+            ]}
+          >
+            {mode === "now" ? "Now" : "All"}
+          </Text>
         </Pressable>
       </View>
       <View
         pointerEvents="box-none"
-        style={[styles.chromeCentered, { top: insets.top + 66 }]}
+        style={[styles.chromeCentered, { top: insets.top + 12, left: 16, right: 84 }]}
       >
-        <DiscoverySearchButton onPress={() => setSearchOpen(true)} />
-      </View>
-      <View
-        pointerEvents="box-none"
-        style={[styles.chromeCentered, { top: insets.top + 112 }]}
-      >
-        {bbox != null && state !== "has-courts" && (
+        {bbox != null && (state === "seeding" || state === "zoomed-out") && (
           <View
             style={[
               styles.banner,
@@ -450,32 +426,23 @@ export default function MapScreen() {
             <Text style={[t.type.caption, { color: t.colors.textSecondary }]}>
               {state === "seeding"
                 ? "Finding courts in this area…"
-                : state === "zoomed-out"
-                  ? "Zoom in to load courts for this area"
-                  : "No courts here yet — add the first one"}
+                : "Zoom in to load courts for this area"}
             </Text>
           </View>
         )}
       </View>
       {selectedCourt == null && (
-        <Pressable
-          onPress={() => router.push("/court/new")}
-          style={({ pressed }) => [
-            styles.fab,
-            t.shadows.chrome,
-            {
-              bottom: insets.bottom + 24,
-              backgroundColor: t.colors.accent,
-              borderRadius: t.radius.full,
-              opacity: pressed ? 0.85 : 1,
-            },
-          ]}
-        >
-          <Ionicons name="add" size={20} color={t.colors.onAccent} />
-          <Text style={[t.type.bodyMedium, { color: t.colors.onAccent }]}>
-            Add court
-          </Text>
-        </Pressable>
+        <CourtsSheet
+          courts={courts}
+          filters={filters}
+          activeFilterCount={activeFilterCount}
+          bias={searchBias}
+          onApplyFilters={setFilters}
+          onSelect={(id) => router.push(`/court/${safePathSegment(id)}`)}
+          onSearchCourt={selectSearchCourt}
+          onSearchArea={selectSearchArea}
+          onAddCourt={() => router.push("/court/new")}
+        />
       )}
       {selectedCourt != null && (
         <MapSheet
@@ -496,27 +463,14 @@ export default function MapScreen() {
         onAllow={() => answerLocationPrimer(true)}
         onDismiss={() => answerLocationPrimer(false)}
       />
-      <FilterSheet
-        visible={filterSheetOpen}
-        filters={filters}
-        courts={courts}
-        onApply={setFilters}
-        onClose={() => setFilterSheetOpen(false)}
-      />
-      <DiscoverySearchSheet
-        visible={searchOpen}
-        bias={searchBias}
-        onCourt={selectSearchCourt}
-        onArea={selectSearchArea}
-        onClose={() => setSearchOpen(false)}
-      />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  mapArea: { flex: 1 },
+  // Clips the courts sheet's collapsed list so it never slides over the tab bar.
+  mapArea: { flex: 1, overflow: "hidden" },
   desktopRow: { flex: 1, flexDirection: "row" },
   mapPane: { flex: 1 },
   statusChip: {
@@ -532,8 +486,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  // Desktop keeps the button floating on the map pane; on mobile it lives
-  // in the shared top chrome row instead.
+  // Desktop only; on mobile the filter lives in the courts sheet.
   filterButtonFloating: {
     position: "absolute",
     right: 16,
@@ -552,20 +505,20 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 13,
   },
-  chrome: {
+  capsule: {
     position: "absolute",
-    left: 0,
-    right: 0,
-    paddingHorizontal: 16,
-    flexDirection: "row",
-    alignItems: "flex-start",
+    right: 16,
+    width: 52,
   },
-  chromeSpacer: {
-    width: 44,
-  },
-  chromeCenter: {
-    flex: 1,
+  capsuleButton: {
+    height: 52,
     alignItems: "center",
+    justifyContent: "center",
+  },
+  capsuleLabel: {
+    fontSize: 10,
+    lineHeight: 12,
+    marginTop: 1,
   },
   chromeCentered: {
     position: "absolute",
@@ -584,15 +537,6 @@ const styles = StyleSheet.create({
     right: 0,
     flexDirection: "row",
     justifyContent: "center",
-  },
-  fab: {
-    position: "absolute",
-    right: 16,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingVertical: 12,
-    paddingHorizontal: 18,
   },
   banner: {
     marginTop: 12,

@@ -11,7 +11,9 @@ interface MapLayer {
   id?: string;
   type: string;
   "source-layer"?: string;
+  minzoom?: number;
   paint?: Record<string, unknown>;
+  layout?: Record<string, unknown>;
 }
 type MapStyle = Record<string, unknown> & { layers: MapLayer[] };
 
@@ -20,7 +22,6 @@ interface Tint {
   street: string; // roads — lighter than base so they read as streets
   park: string; // parks and other greenery
   water: string;
-  building: string;
 }
 
 const LIGHT: Tint = {
@@ -28,18 +29,21 @@ const LIGHT: Tint = {
   street: "#F4F3FB",
   park: "#DCE6CC",
   water: "#D3D6EC",
-  building: "#DEDCEC",
 };
 const DARK: Tint = {
   base: "#1B1830",
   street: "#26233B",
   park: "#1E2A22",
   water: "#141122",
-  building: "#221F38",
 };
 
 const PARK_RE = /park|wood|grass|forest|golf|pitch|meadow|scrub|cemetery|garden|recreation|greens?/;
 const WATER_RE = /water|ocean|sea|lake|river|bay/;
+// Detail that competes with the court pins: dropped outright, or (street
+// names and shields) held back until the map is zoomed in to street level.
+const HIDE_RE = /building|railway|highway_path|oneway|aeroway-taxiway/;
+const STREET_LABEL_RE = /highway[-_]name|shield/;
+const STREET_LABEL_MINZOOM = 15;
 const ROAD_RE = /road|street|motorway|highway|trunk|primary|secondary|tertiary|bridge|tunnel|transit|rail|path|track/;
 
 // Returns a deep copy. Only park-like layers go green; general landuse is
@@ -52,6 +56,14 @@ function tint(style: MapStyle, c: Tint): MapStyle {
     const set = (prop: string, value: string) => {
       layer.paint = { ...(layer.paint ?? {}), [prop]: value };
     };
+    if (HIDE_RE.test(id)) {
+      layer.layout = { ...(layer.layout ?? {}), visibility: "none" };
+      continue;
+    }
+    if (STREET_LABEL_RE.test(id)) {
+      layer.minzoom = Math.max(layer.minzoom ?? 0, STREET_LABEL_MINZOOM);
+      continue;
+    }
     if (layer.type === "background") {
       set("background-color", c.base);
     } else if (sl === "water" || sl === "waterway" || WATER_RE.test(id)) {
@@ -61,8 +73,6 @@ function tint(style: MapStyle, c: Tint): MapStyle {
       if (layer.type === "fill") set("fill-color", c.park);
     } else if ((sl === "transportation" || ROAD_RE.test(id)) && layer.type === "line") {
       set("line-color", c.street);
-    } else if (sl === "building" || id === "building") {
-      if (layer.type === "fill") set("fill-color", c.building);
     }
   }
   return clone;

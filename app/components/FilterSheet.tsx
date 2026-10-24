@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import {
   Modal,
   Pressable,
@@ -67,13 +67,61 @@ export function FilterSheet({
   onClose: () => void;
 }) {
   const t = useTheme();
-  const [draft, setDraft] = useState<CourtFilters>(filters);
+  return (
+    <Modal
+      transparent
+      animationType="fade"
+      visible={visible}
+      onRequestClose={onClose}
+    >
+      <View style={[styles.overlay, { backgroundColor: t.colors.overlay }]}>
+        <Pressable
+          style={StyleSheet.absoluteFill}
+          onPress={onClose}
+          accessibilityLabel="Close filters"
+        />
+        <View
+          style={[
+            styles.sheet,
+            {
+              backgroundColor: t.colors.surface,
+              borderTopLeftRadius: t.radius.xl,
+              borderTopRightRadius: t.radius.xl,
+            },
+            t.shadows.sheet,
+          ]}
+        >
+          {/* Mounted per open, so the draft re-seeds from the committed
+              filters and an edit dismissed without Apply never leaks. */}
+          {visible && (
+            <FilterPanel
+              filters={filters}
+              courts={courts}
+              onApply={(f) => {
+                onApply(f);
+                onClose();
+              }}
+            />
+          )}
+        </View>
+      </View>
+    </Modal>
+  );
+}
 
-  // Re-seed the draft on every open, so an edit dismissed without Apply
-  // never leaks into the next one.
-  useEffect(() => {
-    if (visible) setDraft(filters);
-  }, [visible, filters]);
+// The filter controls and Apply footer, shared by the desktop modal and the
+// mobile courts sheet. The draft seeds from `filters` on mount.
+export function FilterPanel({
+  filters,
+  courts,
+  onApply,
+}: {
+  filters: CourtFilters;
+  courts: CourtSummary[];
+  onApply: (f: CourtFilters) => void;
+}) {
+  const t = useTheme();
+  const [draft, setDraft] = useState<CourtFilters>(filters);
 
   const preset = activePreset(draft);
   const count = courts.filter((c) => matchesFilters(c, draft)).length;
@@ -103,158 +151,127 @@ export function FilterSheet({
   };
 
   return (
-    <Modal
-      transparent
-      animationType="fade"
-      visible={visible}
-      onRequestClose={onClose}
-    >
-      <View style={[styles.overlay, { backgroundColor: t.colors.overlay }]}>
-        <Pressable
-          style={StyleSheet.absoluteFill}
-          onPress={onClose}
-          accessibilityLabel="Close filters"
-        />
-        <View
-          style={[
-            styles.sheet,
-            {
-              backgroundColor: t.colors.surface,
-              borderTopLeftRadius: t.radius.xl,
-              borderTopRightRadius: t.radius.xl,
-            },
-            t.shadows.sheet,
-          ]}
+    <>
+      <ScrollView contentContainerStyle={{ padding: t.spacing.lg }}>
+        <View style={styles.header}>
+          <Text style={[t.type.display, { color: t.colors.textPrimary }]}>
+            Filters
+          </Text>
+          <Pressable onPress={() => setDraft({})} hitSlop={8}>
+            <Text style={[t.type.bodyMedium, { color: t.colors.accent }]}>
+              Reset
+            </Text>
+          </Pressable>
+        </View>
+
+        <Overline
+          style={{ marginTop: t.spacing.lg, marginBottom: t.spacing.sm }}
         >
-          <ScrollView contentContainerStyle={{ padding: t.spacing.lg }}>
-            <View style={styles.header}>
-              <Text style={[t.type.display, { color: t.colors.textPrimary }]}>
-                Filters
-              </Text>
-              <Pressable onPress={() => setDraft({})} hitSlop={8}>
-                <Text style={[t.type.bodyMedium, { color: t.colors.accent }]}>
-                  Reset
+          Quick presets
+        </Overline>
+        <View style={styles.presetGrid}>
+          {PRESETS.map((p) => {
+            const selected = preset === p.key;
+            return (
+              <Pressable
+                key={p.key}
+                onPress={() => setDraft(p.filters)}
+                style={[
+                  styles.presetCard,
+                  {
+                    borderRadius: t.radius.lg,
+                    borderWidth: selected ? 2 : 1,
+                    borderColor: selected ? t.colors.accent : t.colors.border,
+                    backgroundColor: selected
+                      ? t.colors.accentSurface
+                      : t.colors.background,
+                  },
+                ]}
+              >
+                <Ionicons
+                  name={p.icon as keyof typeof Ionicons.glyphMap}
+                  size={20}
+                  color={
+                    selected ? t.colors.accentPressed : t.colors.textSecondary
+                  }
+                />
+                <Text
+                  style={[
+                    t.type.displayCondensed,
+                    {
+                      fontSize: 18,
+                      marginTop: t.spacing.xs,
+                      color: selected
+                        ? t.colors.accentPressed
+                        : t.colors.textPrimary,
+                    },
+                  ]}
+                >
+                  {p.title}
+                </Text>
+                <Text
+                  style={[
+                    t.type.caption,
+                    { color: t.colors.textSecondary, marginTop: 2 },
+                  ]}
+                >
+                  {p.description}
                 </Text>
               </Pressable>
-            </View>
-
-            <Overline
-              style={{ marginTop: t.spacing.lg, marginBottom: t.spacing.sm }}
-            >
-              Quick presets
-            </Overline>
-            <View style={styles.presetGrid}>
-              {PRESETS.map((p) => {
-                const selected = preset === p.key;
-                return (
-                  <Pressable
-                    key={p.key}
-                    onPress={() => setDraft(p.filters)}
-                    style={[
-                      styles.presetCard,
-                      {
-                        borderRadius: t.radius.lg,
-                        borderWidth: selected ? 2 : 1,
-                        borderColor: selected
-                          ? t.colors.accent
-                          : t.colors.border,
-                        backgroundColor: selected
-                          ? t.colors.accentSurface
-                          : t.colors.background,
-                      },
-                    ]}
-                  >
-                    <Ionicons
-                      name={p.icon as keyof typeof Ionicons.glyphMap}
-                      size={20}
-                      color={
-                        selected
-                          ? t.colors.accentPressed
-                          : t.colors.textSecondary
-                      }
-                    />
-                    <Text
-                      style={[
-                        t.type.displayCondensed,
-                        {
-                          fontSize: 18,
-                          marginTop: t.spacing.xs,
-                          color: selected
-                            ? t.colors.accentPressed
-                            : t.colors.textPrimary,
-                        },
-                      ]}
-                    >
-                      {p.title}
-                    </Text>
-                    <Text
-                      style={[
-                        t.type.caption,
-                        { color: t.colors.textSecondary, marginTop: 2 },
-                      ]}
-                    >
-                      {p.description}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-
-            <Overline
-              style={{ marginTop: t.spacing.xl, marginBottom: t.spacing.sm }}
-            >
-              Fine-tune
-            </Overline>
-            <View style={styles.chipWrap}>
-              {BOOL_TOGGLES.map(({ key, label }) => (
-                <Chip
-                  key={key}
-                  label={label}
-                  selected={draft[key] === true}
-                  onPress={() => toggle(key)}
-                />
-              ))}
-              {INVERSE_TOGGLES.map(({ key, label }) => (
-                <Chip
-                  key={`not_${key}`}
-                  label={label}
-                  selected={draft[key] === false}
-                  onPress={() => toggleInverse(key)}
-                />
-              ))}
-              <Chip
-                label="2+ hoops"
-                selected={draft.min_hoops === 2}
-                onPress={() => setMinHoops(2)}
-              />
-              <Chip
-                label="4+ hoops"
-                selected={draft.min_hoops === 4}
-                onPress={() => setMinHoops(4)}
-              />
-              {SURFACES.map(({ value, label }) => (
-                <Chip
-                  key={value}
-                  label={label}
-                  selected={draft.surface === value}
-                  onPress={() => setSurface(value)}
-                />
-              ))}
-            </View>
-          </ScrollView>
-
-          <View style={[styles.footer, { borderTopColor: t.colors.border }]}>
-            <Button
-              title={`Show ${count} court${count === 1 ? "" : "s"}`}
-              onPress={() => {
-                onApply(draft);
-                onClose();
-              }}
-            />
-          </View>
+            );
+          })}
         </View>
+
+        <Overline
+          style={{ marginTop: t.spacing.xl, marginBottom: t.spacing.sm }}
+        >
+          Fine-tune
+        </Overline>
+        <View style={styles.chipWrap}>
+          {BOOL_TOGGLES.map(({ key, label }) => (
+            <Chip
+              key={key}
+              label={label}
+              selected={draft[key] === true}
+              onPress={() => toggle(key)}
+            />
+          ))}
+          {INVERSE_TOGGLES.map(({ key, label }) => (
+            <Chip
+              key={`not_${key}`}
+              label={label}
+              selected={draft[key] === false}
+              onPress={() => toggleInverse(key)}
+            />
+          ))}
+          <Chip
+            label="2+ hoops"
+            selected={draft.min_hoops === 2}
+            onPress={() => setMinHoops(2)}
+          />
+          <Chip
+            label="4+ hoops"
+            selected={draft.min_hoops === 4}
+            onPress={() => setMinHoops(4)}
+          />
+          {SURFACES.map(({ value, label }) => (
+            <Chip
+              key={value}
+              label={label}
+              selected={draft.surface === value}
+              onPress={() => setSurface(value)}
+            />
+          ))}
+        </View>
+      </ScrollView>
+
+      <View style={[styles.footer, { borderTopColor: t.colors.border }]}>
+        <Button
+          title={`Show ${count} court${count === 1 ? "" : "s"}`}
+          onPress={() => onApply(draft)}
+        />
       </View>
-    </Modal>
+    </>
   );
 }
 

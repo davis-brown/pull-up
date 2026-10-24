@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { memo, useCallback, useEffect, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState, type ReactElement } from "react";
 import {
   FlatList,
   Image,
@@ -45,7 +45,7 @@ export function DesktopPanel({
       ]}
     >
       {selectedId == null ? (
-        <ListLevel courts={courts} onSelect={onSelect} onHover={onHover} />
+        <CourtList courts={courts} onSelect={onSelect} onHover={onHover} />
       ) : (
         <DetailLevel
           selectedId={selectedId}
@@ -89,14 +89,14 @@ const CourtRow = memo(function CourtRow({
 }: {
   court: CourtSummary;
   onSelect: (id: string | null) => void;
-  onHover: (id: string | null) => void;
+  onHover?: (id: string | null) => void;
 }) {
   const t = useTheme();
   return (
     <Pressable
       onPress={() => onSelect(court.id)}
-      onHoverIn={() => onHover(court.id)}
-      onHoverOut={() => onHover(null)}
+      onHoverIn={() => onHover?.(court.id)}
+      onHoverOut={() => onHover?.(null)}
       accessibilityRole="button"
       accessibilityLabel={
         court.active_count > 0
@@ -133,18 +133,29 @@ const CourtRow = memo(function CourtRow({
   );
 });
 
-function ListLevel({
+// The court list, shared by this panel and the mobile map's courts drawer.
+export function CourtList({
   courts,
   onSelect,
   onHover,
+  header,
+  onScroll,
 }: {
   courts: CourtSummary[];
   onSelect: (id: string | null) => void;
-  onHover: (id: string | null) => void;
+  onHover?: (id: string | null) => void;
+  header?: ReactElement;
+  /** Reports the list's vertical scroll offset. */
+  onScroll?: (top: number) => void;
 }) {
   const t = useTheme();
   // Virtualized: a dense city viewport can load hundreds of courts, and the
   // previous ScrollView + .map() mounted a Pressable for every one of them.
+  // Busiest courts first; the stable sort keeps the API's order among the rest.
+  const sorted = useMemo(
+    () => [...courts].sort((a, b) => b.active_count - a.active_count),
+    [courts],
+  );
   const renderItem = useCallback(
     ({ item }: ListRenderItemInfo<CourtSummary>) => (
       <CourtRow court={item} onSelect={onSelect} onHover={onHover} />
@@ -153,7 +164,9 @@ function ListLevel({
   );
   return (
     <FlatList
-      data={courts}
+      data={sorted}
+      onScroll={onScroll ? (e) => onScroll(e.nativeEvent.contentOffset.y) : undefined}
+      scrollEventThrottle={16}
       keyExtractor={(court) => court.id}
       renderItem={renderItem}
       contentContainerStyle={styles.listContent}
@@ -161,9 +174,11 @@ function ListLevel({
       windowSize={7}
       removeClippedSubviews
       ListHeaderComponent={
-        <Text style={[t.type.displayCondensed, styles.header, { color: t.colors.textPrimary }]}>
-          Courts near you
-        </Text>
+        header ?? (
+          <Text style={[t.type.displayCondensed, styles.header, { color: t.colors.textPrimary }]}>
+            Courts near you
+          </Text>
+        )
       }
       ListEmptyComponent={
         <Text style={[t.type.caption, styles.empty, { color: t.colors.textMuted }]}>

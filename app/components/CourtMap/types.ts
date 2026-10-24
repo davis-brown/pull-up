@@ -50,6 +50,9 @@ export interface CourtMapProps {
   /** Web only: which map corner gets the attribution ⓘ, so it clears the
    * mobile Add-court FAB. Ignored by the native map. */
   attributionPosition?: "top-left" | "top-right" | "bottom-left" | "bottom-right";
+  /** Web only: "top-right" docks the locate button under the mobile map's
+   * control capsule, scaled to match it. */
+  geolocatePosition?: "top-left" | "top-right";
   style?: object;
 }
 
