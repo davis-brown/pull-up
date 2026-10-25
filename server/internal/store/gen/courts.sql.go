@@ -45,6 +45,8 @@ SELECT
     c.fee_amount_cents, c.fee_currency, c.fee_note,
     c.rim_type, c.net_type,
     c.source, c.status,
+    -- -1 sentinel without a center: sqlc can't type this column nullable.
+    coalesce(ST_Distance(c.location, ST_SetSRID(ST_MakePoint($1::float8, $2::float8), 4326)::geography), -1)::float8 AS distance_m,
     ac.active_count,
     lr.player_count AS latest_player_count,
     lr.run_quality  AS latest_run_quality,
@@ -74,233 +76,59 @@ LEFT JOIN LATERAL (
 ) nr ON true
 WHERE c.status <> 'rejected'
   AND c.location && ST_MakeEnvelope(
-        $1::float8, $2::float8,
-        $3::float8, $4::float8, 4326)::geography
-  AND ($5::bool   IS NULL OR c.indoor = $5)
-  AND ($6::bool      IS NULL OR c.lighting = $6)
-  AND ($7::bool IS NULL OR ($7 = false) OR c.hoop_count > 0)
+        $3::float8, $4::float8,
+        $5::float8, $6::float8, 4326)::geography
+  AND ($1::float8 IS NULL OR ST_DWithin(c.location,
+        ST_SetSRID(ST_MakePoint($1::float8, $2::float8), 4326)::geography,
+        $7::float8))
+  AND ($8::bool   IS NULL OR c.indoor = $8)
+  AND ($9::bool      IS NULL OR c.lighting = $9)
+  AND ($10::bool IS NULL OR ($10 = false) OR c.hoop_count > 0)
   -- public/free are tri-state: true keeps only open-to-all/no-charge courts,
   -- false keeps only the restricted/pay-to-play ones, NULL is unfiltered.
   -- Unknown (NULL) access and fee read as public and free respectively, so a
   -- court with no data surfaces under ` + "`" + `true` + "`" + ` and is excluded by ` + "`" + `false` + "`" + `.
-  AND ($8::bool IS NULL
-       OR ($8 = true  AND c.is_public = true AND (c.access IS NULL OR c.access = 'public'))
-       OR ($8 = false AND (c.is_public = false OR c.access IN ('private','customers'))))
-  AND ($9::bool IS NULL
-       OR ($9 = true  AND (c.fee IS NULL OR c.fee = false))
-       OR ($9 = false AND c.fee = true))
-  AND ($10::bool  IS NULL OR c.covered = $10)
-  AND ($11::text  IS NULL OR c.surface = $11)
-  AND ($12::bool    IS NULL OR ($12 = false) OR c.drinking_water = true)
-  AND ($13::bool  IS NULL OR ($13 = false) OR c.toilets = true)
-  AND ($14::bool  IS NULL OR ($14 = false) OR c.parking = true)
-  AND ($15::bool   IS NULL OR ($15 = false) OR c.fenced = true)
-  AND ($16::int IS NULL OR c.hoop_count >= $16)
-LIMIT 200
+  AND ($11::bool IS NULL
+       OR ($11 = true  AND c.is_public = true AND (c.access IS NULL OR c.access = 'public'))
+       OR ($11 = false AND (c.is_public = false OR c.access IN ('private','customers'))))
+  AND ($12::bool IS NULL
+       OR ($12 = true  AND (c.fee IS NULL OR c.fee = false))
+       OR ($12 = false AND c.fee = true))
+  AND ($13::bool  IS NULL OR c.covered = $13)
+  AND ($14::text  IS NULL OR c.surface = $14)
+  AND ($15::bool    IS NULL OR ($15 = false) OR c.drinking_water = true)
+  AND ($16::bool  IS NULL OR ($16 = false) OR c.toilets = true)
+  AND ($17::bool  IS NULL OR ($17 = false) OR c.parking = true)
+  AND ($18::bool   IS NULL OR ($18 = false) OR c.fenced = true)
+  AND ($19::int IS NULL OR c.hoop_count >= $19)
+ORDER BY distance_m, ac.active_count DESC, c.id
+LIMIT $20
 `
 
 type CourtsInBBoxParams struct {
-	MinLng   float64 `json:"min_lng"`
-	MinLat   float64 `json:"min_lat"`
-	MaxLng   float64 `json:"max_lng"`
-	MaxLat   float64 `json:"max_lat"`
-	Indoor   *bool   `json:"indoor"`
-	Lit      *bool   `json:"lit"`
-	HasHoops *bool   `json:"has_hoops"`
-	Public   *bool   `json:"public"`
-	Free     *bool   `json:"free"`
-	Covered  *bool   `json:"covered"`
-	Surface  *string `json:"surface"`
-	Water    *bool   `json:"water"`
-	Toilets  *bool   `json:"toilets"`
-	Parking  *bool   `json:"parking"`
-	Fenced   *bool   `json:"fenced"`
-	MinHoops *int32  `json:"min_hoops"`
+	CenterLng *float64 `json:"center_lng"`
+	CenterLat *float64 `json:"center_lat"`
+	MinLng    float64  `json:"min_lng"`
+	MinLat    float64  `json:"min_lat"`
+	MaxLng    float64  `json:"max_lng"`
+	MaxLat    float64  `json:"max_lat"`
+	RadiusM   *float64 `json:"radius_m"`
+	Indoor    *bool    `json:"indoor"`
+	Lit       *bool    `json:"lit"`
+	HasHoops  *bool    `json:"has_hoops"`
+	Public    *bool    `json:"public"`
+	Free      *bool    `json:"free"`
+	Covered   *bool    `json:"covered"`
+	Surface   *string  `json:"surface"`
+	Water     *bool    `json:"water"`
+	Toilets   *bool    `json:"toilets"`
+	Parking   *bool    `json:"parking"`
+	Fenced    *bool    `json:"fenced"`
+	MinHoops  *int32   `json:"min_hoops"`
+	MaxRows   int32    `json:"max_rows"`
 }
 
 type CourtsInBBoxRow struct {
-	ID                uuid.UUID `json:"id"`
-	Name              string    `json:"name"`
-	Lat               float64   `json:"lat"`
-	Lng               float64   `json:"lng"`
-	Address           *string   `json:"address"`
-	HoopCount         *int16    `json:"hoop_count"`
-	Indoor            bool      `json:"indoor"`
-	Surface           *string   `json:"surface"`
-	Lighting          *bool     `json:"lighting"`
-	IsPublic          bool      `json:"is_public"`
-	DrinkingWater     *bool     `json:"drinking_water"`
-	Toilets           *bool     `json:"toilets"`
-	Parking           *bool     `json:"parking"`
-	Fenced            *bool     `json:"fenced"`
-	Covered           *bool     `json:"covered"`
-	Fee               *bool     `json:"fee"`
-	Access            *string   `json:"access"`
-	FeeAmountCents    *int32    `json:"fee_amount_cents"`
-	FeeCurrency       *string   `json:"fee_currency"`
-	FeeNote           *string   `json:"fee_note"`
-	RimType           *string   `json:"rim_type"`
-	NetType           *string   `json:"net_type"`
-	Source            string    `json:"source"`
-	Status            string    `json:"status"`
-	ActiveCount       int32     `json:"active_count"`
-	LatestPlayerCount *int16    `json:"latest_player_count"`
-	LatestRunQuality  *string   `json:"latest_run_quality"`
-	LatestReportAt    time.Time `json:"latest_report_at"`
-	NextRunAt         time.Time `json:"next_run_at"`
-}
-
-func (q *Queries) CourtsInBBox(ctx context.Context, arg CourtsInBBoxParams) ([]CourtsInBBoxRow, error) {
-	rows, err := q.db.Query(ctx, courtsInBBox,
-		arg.MinLng,
-		arg.MinLat,
-		arg.MaxLng,
-		arg.MaxLat,
-		arg.Indoor,
-		arg.Lit,
-		arg.HasHoops,
-		arg.Public,
-		arg.Free,
-		arg.Covered,
-		arg.Surface,
-		arg.Water,
-		arg.Toilets,
-		arg.Parking,
-		arg.Fenced,
-		arg.MinHoops,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []CourtsInBBoxRow
-	for rows.Next() {
-		var i CourtsInBBoxRow
-		if err := rows.Scan(
-			&i.ID,
-			&i.Name,
-			&i.Lat,
-			&i.Lng,
-			&i.Address,
-			&i.HoopCount,
-			&i.Indoor,
-			&i.Surface,
-			&i.Lighting,
-			&i.IsPublic,
-			&i.DrinkingWater,
-			&i.Toilets,
-			&i.Parking,
-			&i.Fenced,
-			&i.Covered,
-			&i.Fee,
-			&i.Access,
-			&i.FeeAmountCents,
-			&i.FeeCurrency,
-			&i.FeeNote,
-			&i.RimType,
-			&i.NetType,
-			&i.Source,
-			&i.Status,
-			&i.ActiveCount,
-			&i.LatestPlayerCount,
-			&i.LatestRunQuality,
-			&i.LatestReportAt,
-			&i.NextRunAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const courtsNearby = `-- name: CourtsNearby :many
-SELECT
-    c.id, c.name,
-    ST_Y(c.location::geometry)::float8 AS lat,
-    ST_X(c.location::geometry)::float8 AS lng,
-    c.address, c.hoop_count, c.indoor, c.surface, c.lighting, c.is_public,
-    c.drinking_water, c.toilets, c.parking, c.fenced,
-    c.covered, c.fee, c.access,
-    c.fee_amount_cents, c.fee_currency, c.fee_note,
-    c.rim_type, c.net_type,
-    c.source, c.status,
-    ST_Distance(c.location, ST_SetSRID(ST_MakePoint($1::float8, $2::float8), 4326)::geography)::float8 AS distance_m,
-    ac.active_count,
-    lr.player_count AS latest_player_count,
-    lr.run_quality  AS latest_run_quality,
-    coalesce(lr.created_at, 'epoch'::timestamptz) AS latest_report_at,
-    coalesce(nr.next_run_at, 'epoch'::timestamptz) AS next_run_at
-FROM courts c
-LEFT JOIN LATERAL (
-    SELECT coalesce(sum(ci.party_size), 0)::int AS active_count
-    FROM check_ins ci
-    WHERE ci.court_id = c.id AND ci.checked_out_at IS NULL AND ci.expires_at > now()
-) ac ON true
-LEFT JOIN LATERAL (
-    SELECT cr.player_count, cr.run_quality, cr.created_at
-    FROM crowd_reports cr
-    WHERE cr.court_id = c.id AND cr.created_at > now() - interval '2 hours'
-    ORDER BY cr.created_at DESC
-    LIMIT 1
-) lr ON true
-LEFT JOIN LATERAL (
-    -- Earliest run in the next 24h: drives the map pin's run badge.
-    SELECT s.starts_at AS next_run_at
-    FROM sessions s
-    WHERE s.court_id = c.id AND s.canceled_at IS NULL
-      AND s.starts_at > now() AND s.starts_at < now() + interval '24 hours'
-    ORDER BY s.starts_at
-    LIMIT 1
-) nr ON true
-WHERE c.status <> 'rejected'
-  AND ST_DWithin(c.location, ST_SetSRID(ST_MakePoint($1::float8, $2::float8), 4326)::geography, $3::float8)
-  AND ($4::bool   IS NULL OR c.indoor = $4)
-  AND ($5::bool      IS NULL OR c.lighting = $5)
-  AND ($6::bool IS NULL OR ($6 = false) OR c.hoop_count > 0)
-  -- public/free are tri-state: true keeps only open-to-all/no-charge courts,
-  -- false keeps only the restricted/pay-to-play ones, NULL is unfiltered.
-  -- Unknown (NULL) access and fee read as public and free respectively, so a
-  -- court with no data surfaces under ` + "`" + `true` + "`" + ` and is excluded by ` + "`" + `false` + "`" + `.
-  AND ($7::bool IS NULL
-       OR ($7 = true  AND c.is_public = true AND (c.access IS NULL OR c.access = 'public'))
-       OR ($7 = false AND (c.is_public = false OR c.access IN ('private','customers'))))
-  AND ($8::bool IS NULL
-       OR ($8 = true  AND (c.fee IS NULL OR c.fee = false))
-       OR ($8 = false AND c.fee = true))
-  AND ($9::bool  IS NULL OR c.covered = $9)
-  AND ($10::text  IS NULL OR c.surface = $10)
-  AND ($11::bool    IS NULL OR ($11 = false) OR c.drinking_water = true)
-  AND ($12::bool  IS NULL OR ($12 = false) OR c.toilets = true)
-  AND ($13::bool  IS NULL OR ($13 = false) OR c.parking = true)
-  AND ($14::bool   IS NULL OR ($14 = false) OR c.fenced = true)
-  AND ($15::int IS NULL OR c.hoop_count >= $15)
-ORDER BY distance_m
-LIMIT 100
-`
-
-type CourtsNearbyParams struct {
-	Lng      float64 `json:"lng"`
-	Lat      float64 `json:"lat"`
-	RadiusM  float64 `json:"radius_m"`
-	Indoor   *bool   `json:"indoor"`
-	Lit      *bool   `json:"lit"`
-	HasHoops *bool   `json:"has_hoops"`
-	Public   *bool   `json:"public"`
-	Free     *bool   `json:"free"`
-	Covered  *bool   `json:"covered"`
-	Surface  *string `json:"surface"`
-	Water    *bool   `json:"water"`
-	Toilets  *bool   `json:"toilets"`
-	Parking  *bool   `json:"parking"`
-	Fenced   *bool   `json:"fenced"`
-	MinHoops *int32  `json:"min_hoops"`
-}
-
-type CourtsNearbyRow struct {
 	ID                uuid.UUID `json:"id"`
 	Name              string    `json:"name"`
 	Lat               float64   `json:"lat"`
@@ -333,10 +161,20 @@ type CourtsNearbyRow struct {
 	NextRunAt         time.Time `json:"next_run_at"`
 }
 
-func (q *Queries) CourtsNearby(ctx context.Context, arg CourtsNearbyParams) ([]CourtsNearbyRow, error) {
-	rows, err := q.db.Query(ctx, courtsNearby,
-		arg.Lng,
-		arg.Lat,
+// Map pins for a viewport. With center_lng/center_lat/radius_m set it is the
+// "near me" list: the caller passes a bbox covering the circle (keeps the
+// && index scan unconditional), and rows are cut to the circle and sorted by
+// distance; without a center, distance_m is NULL and live courts come first.
+// A zoomed-out dense viewport holds more than 200 courts: keep the live ones,
+// and a stable order so pins don't reshuffle between pans.
+func (q *Queries) CourtsInBBox(ctx context.Context, arg CourtsInBBoxParams) ([]CourtsInBBoxRow, error) {
+	rows, err := q.db.Query(ctx, courtsInBBox,
+		arg.CenterLng,
+		arg.CenterLat,
+		arg.MinLng,
+		arg.MinLat,
+		arg.MaxLng,
+		arg.MaxLat,
 		arg.RadiusM,
 		arg.Indoor,
 		arg.Lit,
@@ -350,14 +188,15 @@ func (q *Queries) CourtsNearby(ctx context.Context, arg CourtsNearbyParams) ([]C
 		arg.Parking,
 		arg.Fenced,
 		arg.MinHoops,
+		arg.MaxRows,
 	)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []CourtsNearbyRow
+	var items []CourtsInBBoxRow
 	for rows.Next() {
-		var i CourtsNearbyRow
+		var i CourtsInBBoxRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Name,
@@ -684,6 +523,26 @@ func (q *Queries) GetCourt(ctx context.Context, id uuid.UUID) (GetCourtRow, erro
 		&i.NetVotes,
 	)
 	return i, err
+}
+
+const hasOpenFlag = `-- name: HasOpenFlag :one
+SELECT EXISTS (
+    SELECT 1 FROM flags
+    WHERE entity_type = $1 AND entity_id = $2 AND reason = $3 AND resolved_at IS NULL
+)::bool AS open
+`
+
+type HasOpenFlagParams struct {
+	EntityType string    `json:"entity_type"`
+	EntityID   uuid.UUID `json:"entity_id"`
+	Reason     string    `json:"reason"`
+}
+
+func (q *Queries) HasOpenFlag(ctx context.Context, arg HasOpenFlagParams) (bool, error) {
+	row := q.db.QueryRow(ctx, hasOpenFlag, arg.EntityType, arg.EntityID, arg.Reason)
+	var open bool
+	err := row.Scan(&open)
+	return open, err
 }
 
 const insertCourtAttributeEdit = `-- name: InsertCourtAttributeEdit :exec

@@ -512,6 +512,28 @@ func (q *Queries) ListUpcomingSessions(ctx context.Context, arg ListUpcomingSess
 	return items, nil
 }
 
+const plannerHadRecentSessionAtCourt = `-- name: PlannerHadRecentSessionAtCourt :one
+SELECT EXISTS (
+    SELECT 1 FROM sessions
+    WHERE court_id = $1 AND created_by = $2
+      AND id <> $3 AND created_at > now() - interval '24 hours'
+)::bool AS recent
+`
+
+type PlannerHadRecentSessionAtCourtParams struct {
+	CourtID   uuid.UUID `json:"court_id"`
+	CreatedBy uuid.UUID `json:"created_by"`
+	ExcludeID uuid.UUID `json:"exclude_id"`
+}
+
+// Planned-run push cooldown: one push per planner per court per day.
+func (q *Queries) PlannerHadRecentSessionAtCourt(ctx context.Context, arg PlannerHadRecentSessionAtCourtParams) (bool, error) {
+	row := q.db.QueryRow(ctx, plannerHadRecentSessionAtCourt, arg.CourtID, arg.CreatedBy, arg.ExcludeID)
+	var recent bool
+	err := row.Scan(&recent)
+	return recent, err
+}
+
 const setMessageHidden = `-- name: SetMessageHidden :execrows
 UPDATE court_messages
 SET hidden_at = CASE WHEN $1::bool THEN now() ELSE NULL END

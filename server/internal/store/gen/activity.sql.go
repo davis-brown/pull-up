@@ -70,6 +70,28 @@ func (q *Queries) CourtCheckInDistance(ctx context.Context, arg CourtCheckInDist
 	return distance_m, err
 }
 
+const courtHadRecentCheckIn = `-- name: CourtHadRecentCheckIn :one
+SELECT EXISTS (
+    SELECT 1 FROM check_ins
+    WHERE court_id = $1 AND id <> $2
+      AND created_at > now() - interval '2 hours'
+)::bool AS recent
+`
+
+type CourtHadRecentCheckInParams struct {
+	CourtID   uuid.UUID `json:"court_id"`
+	ExcludeID uuid.UUID `json:"exclude_id"`
+}
+
+// Run-started push cooldown: any other check-in here in the last 2 hours
+// means this is not a new run, however briefly the court sat empty.
+func (q *Queries) CourtHadRecentCheckIn(ctx context.Context, arg CourtHadRecentCheckInParams) (bool, error) {
+	row := q.db.QueryRow(ctx, courtHadRecentCheckIn, arg.CourtID, arg.ExcludeID)
+	var recent bool
+	err := row.Scan(&recent)
+	return recent, err
+}
+
 const createCheckIn = `-- name: CreateCheckIn :one
 INSERT INTO check_ins (court_id, user_id, source, distance_m, expires_at, party_size, has_ball)
 VALUES (
@@ -315,6 +337,19 @@ func (q *Queries) ListRecentReports(ctx context.Context, arg ListRecentReportsPa
 		return nil, err
 	}
 	return items, nil
+}
+
+const lockCourtForCheckIn = `-- name: LockCourtForCheckIn :one
+SELECT id FROM courts WHERE id = $1 AND status <> 'rejected' FOR NO KEY UPDATE
+`
+
+// Serializes check-ins at one court so each sees the headcount before it.
+// NO KEY UPDATE leaves the FK share locks other tables take on courts alone.
+func (q *Queries) LockCourtForCheckIn(ctx context.Context, id uuid.UUID) (uuid.UUID, error) {
+	row := q.db.QueryRow(ctx, lockCourtForCheckIn, id)
+	var id_2 uuid.UUID
+	err := row.Scan(&id_2)
+	return id_2, err
 }
 
 const lockUserForCheckIn = `-- name: LockUserForCheckIn :one

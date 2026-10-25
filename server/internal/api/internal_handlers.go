@@ -25,17 +25,19 @@ func (s *Server) handleInternalVersion(w http.ResponseWriter, r *http.Request) {
 // backlog drains even with no organic traffic. Secret-guarded; not in the
 // public or requireAuth groups.
 func (s *Server) handleInternalDrain(w http.ResponseWriter, r *http.Request) {
-	deadline := time.Now().Add(50 * time.Second)
-	ctx, cancel := context.WithDeadline(r.Context(), deadline)
+	// The queue loop gets its own shorter deadline so the cleanup below still
+	// has a live context when a backlog keeps the loop busy the whole time.
+	deadline := time.Now().Add(40 * time.Second)
+	loopCtx, cancel := context.WithDeadline(r.Context(), deadline)
 	defer cancel()
 	tiles, courts := 0, 0
 	for time.Now().Before(deadline) {
 		did := false
-		if s.seeder != nil && s.seeder.DrainOnce(ctx) {
+		if s.seeder != nil && s.seeder.DrainOnce(loopCtx) {
 			tiles++
 			did = true
 		}
-		if s.enricher != nil && s.enricher.DrainOnce(ctx) {
+		if s.enricher != nil && s.enricher.DrainOnce(loopCtx) {
 			courts++
 			did = true
 		}
@@ -43,6 +45,7 @@ func (s *Server) handleInternalDrain(w http.ResponseWriter, r *http.Request) {
 			break // nothing claimable
 		}
 	}
+	ctx := r.Context()
 	stale, err := s.drainStalePendingUploads(ctx)
 	if err != nil {
 		s.internalError(w, "drain stale pending uploads", err)

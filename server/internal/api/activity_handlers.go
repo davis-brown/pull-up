@@ -90,8 +90,28 @@ func (s *Server) handleCheckIn(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, "lock user for check-in", err)
 		return
 	}
+	// Locking the court serializes check-ins there, so the counts below are
+	// this check-in's true "before" even when a group arrives at once.
+	if _, err := q.LockCourtForCheckIn(r.Context(), courtID); err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			writeError(w, http.StatusNotFound, "court not found")
+			return
+		}
+		s.internalError(w, "lock court for check-in", err)
+		return
+	}
 	if err := q.CloseActiveCheckInsForUser(r.Context(), uid); err != nil {
 		s.internalError(w, "close prior check-ins", err)
+		return
+	}
+	rowsBefore, err := q.CountActiveCheckInRows(r.Context(), courtID)
+	if err != nil {
+		s.internalError(w, "count check-ins before", err)
+		return
+	}
+	headsBefore, err := q.CountActiveCheckIns(r.Context(), courtID)
+	if err != nil {
+		s.internalError(w, "count headcount before", err)
 		return
 	}
 	d := float32(distance)
@@ -133,11 +153,14 @@ func (s *Server) handleCheckIn(w http.ResponseWriter, r *http.Request) {
 	// XP rides the same gate but is a separate track (see xp.go). Off the
 	// request path: gamification must never slow down or fail a check-in.
 	s.runBackground("award check-in xp", func() { s.awardCheckInXP(uid, courtID, checkIn.ID, recent) })
-	// If this started a run (0 → 1 active), ping the court's favoriters.
-	s.runBackground("notify run started", func() { s.notifyRunStarted(courtID, uid) })
+	// If this started a run (court was empty), ping the court's favoriters.
+	if rowsBefore == 0 {
+		s.runBackground("notify run started", func() { s.notifyRunStarted(courtID, uid, checkIn.ID) })
+	}
 	// If this pushed the headcount over the alert threshold, ping favoriters
 	// whose availability window covers right now.
-	s.runBackground("notify window alerts", func() { s.notifyWindowAlerts(courtID, uid, partySize) })
+	headsAfter := int(headsBefore) + partySize
+	s.runBackground("notify window alerts", func() { s.notifyWindowAlerts(courtID, uid, int(headsBefore), headsAfter) })
 	writeJSON(w, http.StatusCreated, checkIn)
 }
 

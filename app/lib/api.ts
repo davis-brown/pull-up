@@ -13,8 +13,6 @@ export const API_URL = process.env.EXPO_PUBLIC_API_URL ??
 const API_BASE_URL = API_URL.replace(/\/+$/, "");
 
 const TOKEN_PAIR_KEY = "pullup.token_pair";
-const LEGACY_ACCESS_KEY = "pullup.access_token";
-const LEGACY_REFRESH_KEY = "pullup.refresh_token";
 const PLATFORM_HEADER = "X-Pull-Up-Platform";
 const REQUEST_TIMEOUT_MS = 15_000;
 const LOGOUT_TIMEOUT_MS = 5_000;
@@ -119,7 +117,6 @@ let tokenWriteQueue: Promise<void> = Promise.resolve();
 let tokenLoad:
   | { epoch: number; promise: Promise<TokenPair | null> }
   | null = null;
-let legacyWebRefreshToken: string | null | undefined;
 
 const requestControllers = new Map<number, Set<AbortController>>();
 
@@ -160,14 +157,9 @@ function clearMemorySession(): number {
 }
 
 function queueStoredTokenClear(): Promise<void> {
-  if (isWeb()) return removeLegacyWebTokens(false);
-  return queueTokenWrite(async () => {
-    await storage.remove(TOKEN_PAIR_KEY);
-    await Promise.all([
-      storage.remove(LEGACY_ACCESS_KEY),
-      storage.remove(LEGACY_REFRESH_KEY),
-    ]);
-  });
+  // Web keeps no tokens in storage: the refresh token is an HttpOnly cookie.
+  if (isWeb()) return Promise.resolve();
+  return queueTokenWrite(() => storage.remove(TOKEN_PAIR_KEY));
 }
 
 function parseStoredPair(raw: string | null): TokenPair | null {
@@ -188,56 +180,20 @@ function parseStoredPair(raw: string | null): TokenPair | null {
   return null;
 }
 
-async function removeLegacyWebTokens(preserveRefresh = true): Promise<void> {
-  if (!isWeb()) return;
-  if (preserveRefresh && legacyWebRefreshToken === undefined) {
-    // Consume a legacy refresh token once so the backend can exchange it for
-    // an HttpOnly cookie during the first refresh after an upgrade.
-    legacyWebRefreshToken = await storage.get(LEGACY_REFRESH_KEY);
-  } else if (!preserveRefresh) {
-    legacyWebRefreshToken = null;
-  }
-  await Promise.all([
-    storage.remove(LEGACY_ACCESS_KEY),
-    storage.remove(LEGACY_REFRESH_KEY),
-    storage.remove(TOKEN_PAIR_KEY),
-  ]);
-}
-
 async function loadNativeTokens(epoch: number): Promise<TokenPair | null> {
-  const stored = parseStoredPair(await storage.get(TOKEN_PAIR_KEY));
-  if (stored) return stored;
-
-  // Migrate the old two-key native format into one atomic SecureStore value.
-  const [accessToken, refreshToken] = await Promise.all([
-    storage.get(LEGACY_ACCESS_KEY),
-    storage.get(LEGACY_REFRESH_KEY),
-  ]);
-  const migrated = accessToken && refreshToken
-    ? { accessToken, refreshToken }
-    : null;
-  await queueTokenWrite(async () => {
-    if (sessionEpoch !== epoch) return;
-    if (migrated) {
-      await storage.set(TOKEN_PAIR_KEY, JSON.stringify(migrated));
-    } else {
-      await storage.remove(TOKEN_PAIR_KEY);
-    }
-    await Promise.all([
-      storage.remove(LEGACY_ACCESS_KEY),
-      storage.remove(LEGACY_REFRESH_KEY),
-    ]);
-  });
-  return migrated;
+  const raw = await storage.get(TOKEN_PAIR_KEY);
+  const stored = parseStoredPair(raw);
+  if (!stored && raw != null) {
+    await queueTokenWrite(async () => {
+      if (sessionEpoch === epoch) await storage.remove(TOKEN_PAIR_KEY);
+    });
+  }
+  return stored;
 }
 
 async function getTokens(epoch = sessionEpoch): Promise<TokenPair | null> {
   if (epoch !== sessionEpoch) throw new SessionChangedError();
-  if (isWeb()) {
-    await removeLegacyWebTokens();
-    return memoryTokens;
-  }
-  if (memoryTokens) return memoryTokens;
+  if (isWeb() || memoryTokens) return memoryTokens;
   if (knownEmptyEpoch === epoch) return null;
   if (!tokenLoad || tokenLoad.epoch !== epoch) {
     const promise = loadNativeTokens(epoch).then((tokens) => {
@@ -278,17 +234,12 @@ async function storeTokenResponse(token: TokenResponse, epoch: number): Promise<
   await queueTokenWrite(async () => {
     if (sessionEpoch !== epoch) return;
     await storage.set(TOKEN_PAIR_KEY, JSON.stringify(pair));
-    await Promise.all([
-      storage.remove(LEGACY_ACCESS_KEY),
-      storage.remove(LEGACY_REFRESH_KEY),
-    ]);
   });
   if (sessionEpoch !== epoch) throw new SessionChangedError();
 }
 
 export async function hasSession(): Promise<boolean> {
   if (isWeb()) {
-    await removeLegacyWebTokens();
     // HttpOnly cookies are deliberately opaque to JavaScript. Probe /me on
     // restore; its 401 path performs one cookie-backed refresh if necessary.
     return true;
@@ -551,13 +502,7 @@ async function performRefresh(epoch: number): Promise<RefreshResult> {
       await expireSession(epoch);
       return { kind: "expired" };
     }
-    const migrationToken = isWeb() ? legacyWebRefreshToken : null;
-    if (isWeb()) legacyWebRefreshToken = null;
-    const body = isWeb()
-      ? migrationToken
-        ? { refresh_token: migrationToken }
-        : {}
-      : { refresh_token: tokens!.refreshToken };
+    const body = isWeb() ? {} : { refresh_token: tokens!.refreshToken };
   const scoped = await rawRequestScoped(
     "/auth/refresh",
     { method: "POST", body: JSON.stringify(body) },

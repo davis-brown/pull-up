@@ -222,7 +222,9 @@ func (s *Server) awardGameXP(gameID uuid.UUID) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	participants, err := s.store.Queries.ListGameParticipants(ctx, []uuid.UUID{gameID})
+	participants, err := s.store.Queries.ListGameParticipants(ctx, gen.ListGameParticipantsParams{
+		GameIds: []uuid.UUID{gameID},
+	})
 	if err != nil {
 		s.log.Error("game xp participants", "game", gameID, "err", err)
 		return
@@ -233,10 +235,10 @@ func (s *Server) awardGameXP(gameID uuid.UUID) {
 }
 
 type gamePlayer struct {
-	UserID      uuid.UUID `json:"user_id"`
-	DisplayName string    `json:"display_name"`
-	AvatarURL   *string   `json:"avatar_url"`
-	Team        int16     `json:"team"`
+	UserID      string  `json:"user_id"`
+	DisplayName string  `json:"display_name"`
+	AvatarURL   *string `json:"avatar_url"`
+	Team        int16   `json:"team"`
 }
 
 // handleListCourtGames serves a court's recent confirmed games. Public, like
@@ -260,16 +262,23 @@ func (s *Server) handleListCourtGames(w http.ResponseWriter, r *http.Request) {
 	}
 	byGame := map[uuid.UUID][]gamePlayer{}
 	if len(ids) > 0 {
-		participants, err := s.store.Queries.ListGameParticipants(r.Context(), ids)
+		participants, err := s.store.Queries.ListGameParticipants(r.Context(), gen.ListGameParticipantsParams{
+			GameIds: ids, ViewerID: s.optionalUserID(r),
+		})
 		if err != nil {
 			s.internalError(w, "list game participants", err)
 			return
 		}
 		for _, p := range participants {
-			byGame[p.GameID] = append(byGame[p.GameID], gamePlayer{
-				UserID: p.UserID, DisplayName: p.DisplayName,
+			player := gamePlayer{
+				UserID: p.UserID.String(), DisplayName: p.DisplayName,
 				AvatarURL: p.AvatarUrl, Team: p.Team,
-			})
+			}
+			if !p.Visible {
+				// Private or blocked: still on a team, but not identifiable.
+				player.UserID, player.DisplayName, player.AvatarURL = "", "A player", nil
+			}
+			byGame[p.GameID] = append(byGame[p.GameID], player)
 		}
 	}
 	out := make([]map[string]any, 0, len(games))

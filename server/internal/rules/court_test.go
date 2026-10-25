@@ -34,11 +34,11 @@ func TestDecideCourtStatus(t *testing.T) {
 			wantStatus: rules.CourtRejected, wantChanged: true,
 		},
 		{
-			// A court that turned out to be gone must be removable even after
-			// it was verified.
-			name:    "a verified court can still be voted down",
+			// Votes alone never hide a verified court; it goes to an admin
+			// (NeedsAdminReview) so brigading can't wipe real courts.
+			name:    "a verified court is not hidden by votes",
 			current: rules.CourtVerified, upvotes: 5, net: rules.RejectNetVotes - 1,
-			wantStatus: rules.CourtRejected, wantChanged: true,
+			wantStatus: rules.CourtVerified, wantChanged: false,
 		},
 		{
 			// Re-promoting would re-award the submitter.
@@ -68,6 +68,18 @@ func TestDecideCourtStatus(t *testing.T) {
 					tc.current, tc.upvotes, tc.net, status, changed, tc.wantStatus, tc.wantChanged)
 			}
 		})
+	}
+}
+
+func TestNeedsAdminReview(t *testing.T) {
+	if !rules.NeedsAdminReview(rules.CourtVerified, rules.RejectNetVotes) {
+		t.Error("a verified court at the rejection threshold should go to admin review")
+	}
+	if rules.NeedsAdminReview(rules.CourtVerified, rules.RejectNetVotes+1) {
+		t.Error("a verified court above the threshold should not")
+	}
+	if rules.NeedsAdminReview(rules.CourtPending, rules.RejectNetVotes) {
+		t.Error("a pending court is rejected by votes, not sent to review")
 	}
 }
 

@@ -5,6 +5,14 @@ INSERT INTO sessions (court_id, created_by, starts_at, note)
 VALUES ($1, $2, $3, $4)
 RETURNING id, court_id, created_by, starts_at, note, created_at;
 
+-- name: PlannerHadRecentSessionAtCourt :one
+-- Planned-run push cooldown: one push per planner per court per day.
+SELECT EXISTS (
+    SELECT 1 FROM sessions
+    WHERE court_id = sqlc.arg(court_id) AND created_by = sqlc.arg(created_by)
+      AND id <> sqlc.arg(exclude_id) AND created_at > now() - interval '24 hours'
+)::bool AS recent;
+
 -- name: GetSession :one
 SELECT s.id, s.court_id, c.name AS court_name, s.created_by, s.starts_at, s.note, s.canceled_at, s.created_at
 FROM sessions s

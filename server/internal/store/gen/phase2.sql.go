@@ -30,6 +30,18 @@ func (q *Queries) AddFavorite(ctx context.Context, arg AddFavoriteParams) error 
 	return err
 }
 
+const countRecentPhotosByUser = `-- name: CountRecentPhotosByUser :one
+SELECT count(*)::int FROM court_photos
+WHERE user_id = $1 AND created_at > now() - interval '24 hours'
+`
+
+func (q *Queries) CountRecentPhotosByUser(ctx context.Context, userID uuid.UUID) (int32, error) {
+	row := q.db.QueryRow(ctx, countRecentPhotosByUser, userID)
+	var column_1 int32
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const createCourtPhoto = `-- name: CreateCourtPhoto :one
 
 INSERT INTO court_photos (court_id, user_id, storage_key, status)

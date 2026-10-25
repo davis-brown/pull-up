@@ -245,48 +245,18 @@ func (s *Server) handleListCourts(w http.ResponseWriter, r *http.Request) {
 		}
 		radius = parsed
 	}
-	rows, err := s.store.Queries.CourtsNearby(r.Context(), gen.CourtsNearbyParams{
-		Lng: lng, Lat: lat, RadiusM: radius,
-		Indoor:   optBool(q, "indoor"),
-		Lit:      optBool(q, "lit"),
-		HasHoops: optBool(q, "has_hoops"),
-		Public:   optBool(q, "public"),
-		Free:     optBool(q, "free"),
-		Covered:  optBool(q, "covered"),
-		Surface:  optSurface(q),
-		Water:    optBool(q, "water"),
-		Toilets:  optBool(q, "toilets"),
-		Parking:  optBool(q, "parking"),
-		Fenced:   optBool(q, "fenced"),
-		MinHoops: optInt(q, "min_hoops"),
-	})
-	if err != nil {
-		s.internalError(w, "courts nearby", err)
-		return
-	}
-	// Approximate the search circle as a bbox for the auto-seeder.
+	// A bbox covering the search circle: it bounds the index scan and is the
+	// area the auto-seeder fills. Longitude span is taken at the circle's
+	// poleward edge, where a degree is shortest, so the box never clips it.
 	dLat := radius / 111_320
-	dLng := radius / (111_320 * math.Max(0.1, math.Cos(lat*math.Pi/180)))
+	edgeLat := math.Min(89.9, math.Abs(lat)+dLat)
+	dLng := radius / (111_320 * math.Max(0.01, math.Cos(edgeLat*math.Pi/180)))
 	minLng, maxLng := math.Max(-180, lng-dLng), math.Min(180, lng+dLng)
 	minLat, maxLat := math.Max(-90, lat-dLat), math.Min(90, lat+dLat)
-	s.requestSeeding(r.Context(), minLng, minLat, maxLng, maxLat)
-	seeding := s.viewportSeeding(r.Context(), minLng, minLat, maxLng, maxLat)
-	out := make([]courtSummary, 0, len(rows))
-	for _, c := range rows {
-		d := c.DistanceM
-		out = append(out, courtSummary{
-			ID: c.ID, Name: c.Name, Lat: c.Lat, Lng: c.Lng, Address: c.Address,
-			HoopCount: c.HoopCount, Indoor: c.Indoor, Surface: c.Surface, Lighting: c.Lighting,
-			IsPublic: c.IsPublic, Source: c.Source, Status: c.Status, ActiveCount: c.ActiveCount,
-			DistanceM:     &d,
-			LatestReport:  newLatestReport(c.LatestPlayerCount, c.LatestRunQuality, c.LatestReportAt),
-			DrinkingWater: c.DrinkingWater, Toilets: c.Toilets, Parking: c.Parking, Fenced: c.Fenced,
-			Covered: c.Covered, Fee: c.Fee, Access: c.Access, RimType: c.RimType, NetType: c.NetType,
-			FeeAmountCents: c.FeeAmountCents, FeeCurrency: c.FeeCurrency, FeeNote: c.FeeNote,
-			NextRunAt: nextRunPtr(c.NextRunAt),
-		})
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"courts": out, "seeding": seeding})
+	s.listCourts(w, r, gen.CourtsInBBoxParams{
+		MinLng: minLng, MinLat: minLat, MaxLng: maxLng, MaxLat: maxLat,
+		CenterLng: &lng, CenterLat: &lat, RadiusM: &radius, MaxRows: 100,
+	})
 }
 
 func (s *Server) listCourtsInBBox(w http.ResponseWriter, r *http.Request, bbox string) {
@@ -309,31 +279,37 @@ func (s *Server) listCourtsInBBox(w http.ResponseWriter, r *http.Request, bbox s
 		writeError(w, http.StatusBadRequest, "bbox coordinates must be finite, in range, and ordered")
 		return
 	}
-	q := r.URL.Query()
-	rows, err := s.store.Queries.CourtsInBBox(r.Context(), gen.CourtsInBBoxParams{
-		MinLng: vals[0], MinLat: vals[1], MaxLng: vals[2], MaxLat: vals[3],
-		Indoor:   optBool(q, "indoor"),
-		Lit:      optBool(q, "lit"),
-		HasHoops: optBool(q, "has_hoops"),
-		Public:   optBool(q, "public"),
-		Free:     optBool(q, "free"),
-		Covered:  optBool(q, "covered"),
-		Surface:  optSurface(q),
-		Water:    optBool(q, "water"),
-		Toilets:  optBool(q, "toilets"),
-		Parking:  optBool(q, "parking"),
-		Fenced:   optBool(q, "fenced"),
-		MinHoops: optInt(q, "min_hoops"),
+	s.listCourts(w, r, gen.CourtsInBBoxParams{
+		MinLng: vals[0], MinLat: vals[1], MaxLng: vals[2], MaxLat: vals[3], MaxRows: 200,
 	})
+}
+
+// listCourts runs the shared viewport/near-me query with the request's
+// filters, queues seeding for the area, and writes the pin payload.
+func (s *Server) listCourts(w http.ResponseWriter, r *http.Request, params gen.CourtsInBBoxParams) {
+	q := r.URL.Query()
+	params.Indoor = optBool(q, "indoor")
+	params.Lit = optBool(q, "lit")
+	params.HasHoops = optBool(q, "has_hoops")
+	params.Public = optBool(q, "public")
+	params.Free = optBool(q, "free")
+	params.Covered = optBool(q, "covered")
+	params.Surface = optSurface(q)
+	params.Water = optBool(q, "water")
+	params.Toilets = optBool(q, "toilets")
+	params.Parking = optBool(q, "parking")
+	params.Fenced = optBool(q, "fenced")
+	params.MinHoops = optInt(q, "min_hoops")
+	rows, err := s.store.Queries.CourtsInBBox(r.Context(), params)
 	if err != nil {
-		s.internalError(w, "courts in bbox", err)
+		s.internalError(w, "list courts", err)
 		return
 	}
-	s.requestSeeding(r.Context(), vals[0], vals[1], vals[2], vals[3])
-	seeding := s.viewportSeeding(r.Context(), vals[0], vals[1], vals[2], vals[3])
+	s.requestSeeding(r.Context(), params.MinLng, params.MinLat, params.MaxLng, params.MaxLat)
+	seeding := s.viewportSeeding(r.Context(), params.MinLng, params.MinLat, params.MaxLng, params.MaxLat)
 	out := make([]courtSummary, 0, len(rows))
 	for _, c := range rows {
-		out = append(out, courtSummary{
+		summary := courtSummary{
 			ID: c.ID, Name: c.Name, Lat: c.Lat, Lng: c.Lng, Address: c.Address,
 			HoopCount: c.HoopCount, Indoor: c.Indoor, Surface: c.Surface, Lighting: c.Lighting,
 			IsPublic: c.IsPublic, Source: c.Source, Status: c.Status, ActiveCount: c.ActiveCount,
@@ -342,7 +318,12 @@ func (s *Server) listCourtsInBBox(w http.ResponseWriter, r *http.Request, bbox s
 			Covered: c.Covered, Fee: c.Fee, Access: c.Access, RimType: c.RimType, NetType: c.NetType,
 			FeeAmountCents: c.FeeAmountCents, FeeCurrency: c.FeeCurrency, FeeNote: c.FeeNote,
 			NextRunAt: nextRunPtr(c.NextRunAt),
-		})
+		}
+		if c.DistanceM >= 0 { // -1 is the query's "no center" sentinel
+			d := c.DistanceM
+			summary.DistanceM = &d
+		}
+		out = append(out, summary)
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"courts": out, "seeding": seeding})
 }
@@ -415,6 +396,13 @@ func (s *Server) handleCreateCourt(w http.ResponseWriter, r *http.Request) {
 	}
 	if msg := rules.NormalizeFee(&req.Fee, &req.FeeAmountCents, &req.FeeCurrency, &req.FeeNote, nil); msg != "" {
 		writeError(w, http.StatusBadRequest, msg)
+		return
+	}
+	// Court names reach the public map and every favoriter's pushes.
+	if !s.screenText(w, r, "court_name", req.Name) {
+		return
+	}
+	if req.FeeNote != nil && !s.screenText(w, r, "court_fee_note", *req.FeeNote) {
 		return
 	}
 
@@ -516,6 +504,9 @@ func (s *Server) handleVoteCourt(w http.ResponseWriter, r *http.Request) {
 	// promoted (re-promoting would re-award its submitter).
 	status, changed := rules.DecideCourtStatus(court.Status,
 		int(weighted.WeightedUpvotes), int(weighted.NetWeighted))
+	if rules.NeedsAdminReview(court.Status, int(weighted.NetWeighted)) {
+		s.flagVotedDownCourt(r.Context(), courtID, uid)
+	}
 	if changed && status == rules.CourtRejected {
 		if err := s.store.Queries.SetCourtStatus(r.Context(), gen.SetCourtStatusParams{ID: courtID, Status: "rejected"}); err != nil {
 			s.internalError(w, "reject court", err)
@@ -535,6 +526,27 @@ func (s *Server) handleVoteCourt(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"net_votes": stats.NetVotes, "status": status})
+}
+
+const votedDownReason = "community voted this verified court down"
+
+// flagVotedDownCourt queues one open admin flag for a verified court the
+// votes would have hidden. Best-effort: the vote itself already landed.
+func (s *Server) flagVotedDownCourt(ctx context.Context, courtID, voter uuid.UUID) {
+	open, err := s.store.Queries.HasOpenFlag(ctx, gen.HasOpenFlagParams{
+		EntityType: "court", EntityID: courtID, Reason: votedDownReason,
+	})
+	if err != nil || open {
+		if err != nil {
+			s.log.Error("check open court flag", "court", courtID, "err", err)
+		}
+		return
+	}
+	if err := s.store.Queries.CreateFlag(ctx, gen.CreateFlagParams{
+		UserID: voter, EntityType: "court", EntityID: courtID, Reason: votedDownReason,
+	}); err != nil {
+		s.log.Error("flag voted-down court", "court", courtID, "err", err)
+	}
 }
 
 type flagRequest struct {
@@ -632,6 +644,9 @@ func (s *Server) handlePatchCourtAttributes(w http.ResponseWriter, r *http.Reque
 	if msg := rules.NormalizeFee(&req.Fee, &req.FeeAmountCents, &req.FeeCurrency, &req.FeeNote,
 		current.FeeCurrency); msg != "" {
 		writeError(w, http.StatusBadRequest, msg)
+		return
+	}
+	if req.FeeNote != nil && !s.screenText(w, r, "court_fee_note", *req.FeeNote) {
 		return
 	}
 	if _, err := s.store.Queries.UpdateCourtAttributes(r.Context(), gen.UpdateCourtAttributesParams{

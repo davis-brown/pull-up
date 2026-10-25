@@ -1,10 +1,15 @@
 package api_test
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
 	"testing"
+
+	"github.com/google/uuid"
+
+	"github.com/davisbrown/pull-up/server/internal/store/gen"
 )
 
 // Rucker Park, NYC — matches internal/store's integration test fixtures.
@@ -297,6 +302,44 @@ func TestVoteCourtRejection(t *testing.T) {
 	}
 }
 
+// Votes hide a pending court, but a verified one only goes to the admin
+// queue: otherwise three throwaway accounts could wipe any real court.
+func TestVoteDownVerifiedCourtFlagsInsteadOfHiding(t *testing.T) {
+	ts, st := newTestServer(t)
+	submitter := registerUser(t, ts, "submitter3@test.local", "Submitter3")
+	court := createTestCourt(t, ts, submitter.AccessToken, "Real Court", ruckerLat, ruckerLng)
+	for _, email := range []string{"up1@test.local", "up2@test.local"} {
+		voter := registerUser(t, ts, email, "Upvoter")
+		resp := doJSON(t, ts, http.MethodPost, "/courts/"+court.ID+"/vote", voter.AccessToken, map[string]any{"vote": 1})
+		resp.Body.Close()
+	}
+	var last map[string]any
+	for _, email := range []string{"dv1@test.local", "dv2@test.local", "dv3@test.local", "dv4@test.local", "dv5@test.local", "dv6@test.local"} {
+		voter := registerUser(t, ts, email, "Downvoter")
+		resp := doJSON(t, ts, http.MethodPost, "/courts/"+court.ID+"/vote", voter.AccessToken, map[string]any{"vote": -1})
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("downvote: status %d: %s", resp.StatusCode, readBody(t, resp))
+		}
+		last = decodeJSON[map[string]any](t, resp)
+	}
+	if last["status"] != "verified" {
+		t.Fatalf("status = %v, want verified (votes must not hide a verified court)", last["status"])
+	}
+	flags, err := st.Queries.ListOpenFlags(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	n := 0
+	for _, f := range flags {
+		if f.EntityType == "court" && f.EntityID.String() == court.ID {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Fatalf("open court flags = %d, want exactly 1", n)
+	}
+}
+
 func TestPatchCourtAttributes(t *testing.T) {
 	ts, _ := newTestServer(t)
 	u := registerUser(t, ts, "attr@test.local", "Attr")
@@ -339,5 +382,37 @@ func TestCourtsResponseHasSeeding(t *testing.T) {
 	// that the response includes a boolean `seeding` field and still decodes.
 	if body.Seeding {
 		t.Errorf("expected seeding=false without a wired seeder, got true")
+	}
+}
+
+// A dense viewport holds more courts than one response returns; the cut must
+// keep the courts where people are playing.
+func TestBBoxKeepsLiveCourtsPastTheLimit(t *testing.T) {
+	ts, st := newTestServer(t)
+	u := registerUser(t, ts, "bbox-live@test.local", "Hooper")
+	ctx := context.Background()
+	var live uuid.UUID
+	for i := 0; i < 201; i++ {
+		c, err := st.Queries.CreateCourt(ctx, gen.CreateCourtParams{
+			Name: "Court " + strconv.Itoa(i), Lat: ruckerLat + float64(i)*0.0001, Lng: ruckerLng, IsPublic: true,
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		live = c.ID // the last one inserted, least likely to survive an unordered cut
+	}
+	if _, err := st.Queries.CreateCheckIn(ctx, gen.CreateCheckInParams{
+		CourtID: live, UserID: uuid.MustParse(u.User.ID), Source: "manual", PartySize: 1,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	bbox := strconv.FormatFloat(ruckerLng-0.01, 'f', -1, 64) + "," + strconv.FormatFloat(ruckerLat-0.01, 'f', -1, 64) + "," +
+		strconv.FormatFloat(ruckerLng+0.01, 'f', -1, 64) + "," + strconv.FormatFloat(ruckerLat+0.03, 'f', -1, 64)
+	resp := doJSON(t, ts, http.MethodGet, "/courts?bbox="+bbox, "", nil)
+	got := decodeJSON[struct {
+		Courts []courtResp `json:"courts"`
+	}](t, resp)
+	if len(got.Courts) != 200 || got.Courts[0].ID != live.String() {
+		t.Fatalf("got %d courts, first %v; want 200 with the live court first", len(got.Courts), got.Courts[0].ID)
 	}
 }

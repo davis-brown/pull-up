@@ -16,7 +16,12 @@ import (
 	"github.com/davisbrown/pull-up/server/internal/store/gen"
 )
 
-const uploadURLTTL = 10 * time.Minute
+const (
+	uploadURLTTL = 10 * time.Minute
+	// maxPhotosPerDay bounds one account's court uploads: photos go visible
+	// on upload, so without a cap a script can flood galleries and storage.
+	maxPhotosPerDay = 10
+)
 
 func (s *Server) handleCreatePhoto(w http.ResponseWriter, r *http.Request) {
 	courtID, err := uuid.Parse(chi.URLParam(r, "id"))
@@ -30,6 +35,15 @@ func (s *Server) handleCreatePhoto(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		s.internalError(w, "get court", err)
+		return
+	}
+	recent, err := s.store.Queries.CountRecentPhotosByUser(r.Context(), userID(r))
+	if err != nil {
+		s.internalError(w, "count recent photos", err)
+		return
+	}
+	if recent >= maxPhotosPerDay {
+		writeError(w, http.StatusTooManyRequests, "photo limit reached for today — try again tomorrow")
 		return
 	}
 	key := fmt.Sprintf("courts/%s/%s.jpg", courtID, uuid.NewString())
@@ -188,16 +202,17 @@ func (s *Server) handleUnregisterPushToken(w http.ResponseWriter, r *http.Reques
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// notifyRunStarted alerts favoriters when a court's first active check-in
-// lands (0 → 1 transition). Fire-and-forget from the check-in handler.
-// Counts check-in ROWS, not the party-size headcount: exactly one active row
-// means this check-in started the run, whatever its party size.
-func (s *Server) notifyRunStarted(courtID, actor uuid.UUID) {
+// notifyRunStarted alerts favoriters when a check-in lands at an empty court.
+// The caller decides "empty" under the court lock; this only applies the
+// cooldown, so a check-in/check-out loop can't push on every cycle.
+func (s *Server) notifyRunStarted(courtID, actor, checkInID uuid.UUID) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	count, err := s.store.Queries.CountActiveCheckInRows(ctx, courtID)
-	if err != nil || count != 1 {
+	recent, err := s.store.Queries.CourtHadRecentCheckIn(ctx, gen.CourtHadRecentCheckInParams{
+		CourtID: courtID, ExcludeID: checkInID,
+	})
+	if err != nil || recent {
 		return
 	}
 	tokens, err := s.store.Queries.ListFavoriterPushTokens(ctx, gen.ListFavoriterPushTokensParams{
@@ -266,7 +281,8 @@ func (s *Server) handleOAuth(w http.ResponseWriter, r *http.Request) {
 	}
 	email := identity.Email
 	if email == "" {
-		// Apple can withhold email on subsequent logins; synthesize a stable one.
+		// Apple can withhold email, and an unverified one is dropped by
+		// Verify; synthesize a stable placeholder.
 		email = fmt.Sprintf("%s-%s@users.pullup.local", identity.Provider, identity.Subject)
 	}
 	created, err := s.store.Queries.CreateOAuthUser(r.Context(), gen.CreateOAuthUserParams{

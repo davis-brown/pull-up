@@ -79,6 +79,8 @@ func (v *OAuthVerifier) Verify(ctx context.Context, provider, idToken string) (*
 		jwt.RegisteredClaims
 		Email string `json:"email"`
 		Name  string `json:"name"`
+		// Google sends a bool, Apple has sent the string "true".
+		EmailVerified any `json:"email_verified"`
 	}{}
 	token, err := jwt.ParseWithClaims(idToken, &claims, kf.Keyfunc,
 		jwt.WithExpirationRequired(),
@@ -103,10 +105,16 @@ func (v *OAuthVerifier) Verify(ctx context.Context, provider, idToken string) (*
 	if claims.Subject == "" {
 		return nil, ErrInvalidToken
 	}
+	// An unverified address was never proven to be the signer's; keeping it
+	// would let them squat someone else's email here.
+	email := ""
+	if claims.EmailVerified == true || claims.EmailVerified == "true" {
+		email = strings.ToLower(claims.Email)
+	}
 	return &OAuthIdentity{
 		Provider: provider,
 		Subject:  claims.Subject,
-		Email:    strings.ToLower(claims.Email),
+		Email:    email,
 		Name:     claims.Name,
 	}, nil
 }
