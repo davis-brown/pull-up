@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Platform,
@@ -68,7 +68,7 @@ export default function MapScreen() {
   const hours = useMemo(() => scrubHours(new Date()), []);
   const [scrubHour, setScrubHour] = useState(hours[0]);
   const { data } = useCourtsInBBox(bbox, filters);
-  const courts = data?.courts ?? [];
+  const courts = useMemo(() => data?.courts ?? [], [data]);
   const seeding = data?.seeding ?? false;
   const tooLarge = bbox ? viewportTooLarge(bbox) : false;
   const state = courtsDisplayState({
@@ -166,6 +166,11 @@ export default function MapScreen() {
         lng: (bbox.minLng + bbox.maxLng) / 2,
       }
     : (center ?? FALLBACK_CENTER);
+
+  const openCourt = useCallback(
+    (id: string) => router.push(`/court/${safePathSegment(id)}`),
+    [router],
+  );
 
   const selectSearchCourt = (court: CourtSearchHit) => {
     setSearchOpen(false);
@@ -438,7 +443,7 @@ export default function MapScreen() {
           activeFilterCount={activeFilterCount}
           bias={searchBias}
           onApplyFilters={setFilters}
-          onSelect={(id) => router.push(`/court/${safePathSegment(id)}`)}
+          onSelect={openCourt}
           onSearchCourt={selectSearchCourt}
           onSearchArea={selectSearchArea}
           onAddCourt={() => router.push("/court/new")}

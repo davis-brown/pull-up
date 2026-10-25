@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
   Keyboard,
@@ -74,22 +74,25 @@ export function CourtsSheet({
   const sheetHeight = Math.max(areaHeight * EXPANDED_RATIO, peek);
   const travel = sheetHeight - peek;
 
-  const snap = (open: boolean) => {
-    setExpanded(open);
-    if (!open) {
-      // Collapsing always returns to the list and clears any search.
-      Keyboard.dismiss();
-      setMode("list");
-      setDraft("");
-      setSubmitted("");
-    }
-    Animated.spring(y, {
-      toValue: open ? 0 : travel,
-      useNativeDriver: true,
-      bounciness: 0,
-      speed: 16,
-    }).start();
-  };
+  const snap = useCallback(
+    (open: boolean) => {
+      setExpanded(open);
+      if (!open) {
+        // Collapsing always returns to the list and clears any search.
+        Keyboard.dismiss();
+        setMode("list");
+        setDraft("");
+        setSubmitted("");
+      }
+      Animated.spring(y, {
+        toValue: open ? 0 : travel,
+        useNativeDriver: true,
+        bounciness: 0,
+        speed: 16,
+      }).start();
+    },
+    [y, travel],
+  );
   const open = (next: Mode) => {
     setMode(next);
     if (!expanded) snap(true);
@@ -164,11 +167,15 @@ export function CourtsSheet({
     const query = draft.trim();
     if (query.length >= 2) setSubmitted(query);
   };
-  const select = (id: string | null) => {
-    if (id == null) return;
-    snap(false);
-    onSelect(id);
-  };
+  // Stable, so the memoized court rows skip re-rendering with the sheet.
+  const select = useCallback(
+    (id: string | null) => {
+      if (id == null) return;
+      snap(false);
+      onSelect(id);
+    },
+    [snap, onSelect],
+  );
 
   return (
     <View pointerEvents="box-none" style={StyleSheet.absoluteFill} onLayout={onLayout}>

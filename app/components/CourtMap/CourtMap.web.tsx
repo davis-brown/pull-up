@@ -8,9 +8,10 @@ import type {
   StyleSpecification,
 } from "maplibre-gl";
 import { useEffect, useRef } from "react";
-import Map, {
+import {
   AttributionControl,
   GeolocateControl,
+  Map,
   Marker,
   type MapRef,
 } from "react-map-gl/maplibre";
