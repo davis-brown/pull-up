@@ -143,3 +143,21 @@ func TestPhotoUploadFlow(t *testing.T) {
 		t.Fatalf("photos after upload = %+v, want 1", list.Photos)
 	}
 }
+
+// Photos go visible on upload, so one account's daily uploads are capped.
+func TestCourtPhotoDailyCap(t *testing.T) {
+	ts, _ := newTestServer(t)
+	u := registerUser(t, ts, "photo-cap@test.local", "Uploader")
+	court := createTestCourt(t, ts, u.AccessToken, "Gallery Court", ruckerLat, ruckerLng)
+	for i := 0; i < 11; i++ {
+		resp := doJSON(t, ts, http.MethodPost, "/courts/"+court.ID+"/photos", u.AccessToken, map[string]any{})
+		want := http.StatusCreated
+		if i == 10 {
+			want = http.StatusTooManyRequests
+		}
+		if resp.StatusCode != want {
+			t.Fatalf("upload %d: status %d, want %d: %s", i+1, resp.StatusCode, want, readBody(t, resp))
+		}
+		resp.Body.Close()
+	}
+}

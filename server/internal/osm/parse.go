@@ -263,14 +263,13 @@ func chargeCurrency(raw string) string {
 			return code
 		}
 	}
+	// Codes must already be written in capitals: lowercase words like "per"
+	// or "for" in "5 per hour" are not currencies.
 	for _, field := range strings.FieldsFunc(raw, func(r rune) bool {
 		return !unicode.IsLetter(r)
 	}) {
-		if len(field) == 3 {
-			upper := strings.ToUpper(field)
-			if isISOCurrencyCode(upper) {
-				return upper
-			}
+		if isISOCurrencyCode(field) {
+			return field
 		}
 	}
 	return ""

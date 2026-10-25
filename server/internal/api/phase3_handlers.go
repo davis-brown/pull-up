@@ -112,9 +112,18 @@ func (s *Server) handleCreateSession(w http.ResponseWriter, r *http.Request) {
 	}); err != nil {
 		s.log.Error("rsvp creator", "session", session.ID, "err", err)
 	}
-	s.runBackground("notify session planned", func() {
-		s.notifySessionPlanned(courtID, court.Name, uid, session.StartsAt)
+	// One planned-run push per planner per court per day, so planning in a
+	// loop can't spam the court's favoriters and the planner's followers.
+	recent, err := s.store.Queries.PlannerHadRecentSessionAtCourt(r.Context(), gen.PlannerHadRecentSessionAtCourtParams{
+		CourtID: courtID, CreatedBy: uid, ExcludeID: session.ID,
 	})
+	if err != nil {
+		s.log.Error("planned-run push cooldown", "court", courtID, "err", err)
+	} else if !recent {
+		s.runBackground("notify session planned", func() {
+			s.notifySessionPlanned(courtID, court.Name, uid, session.StartsAt)
+		})
+	}
 	// Notify seekers whose bucket this run lands in.
 	if date, windowKey, ok := bucketForSessionTime(session.StartsAt); ok {
 		s.runBackground("notify run intent converted", func() {

@@ -223,6 +223,15 @@ func TestWebAuthUsesSameOriginHttpOnlyRefreshCookie(t *testing.T) {
 		t.Fatal("cookie refresh exposed refresh token in JSON")
 	}
 
+	// Web refresh tokens are accepted only from the cookie, never the body.
+	resp = doJSONHeaders(t, ts, http.MethodPost, "/auth/refresh", "", map[string]any{
+		"refresh_token": rotated[0].Value,
+	}, webHeaders)
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("web body-token refresh: status %d, want 401", resp.StatusCode)
+	}
+	resp.Body.Close()
+
 	badOrigin := map[string]string{
 		"Origin":             "https://attacker.test",
 		"X-Forwarded-Host":   "app.test",

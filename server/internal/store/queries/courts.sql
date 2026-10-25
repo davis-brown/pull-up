@@ -1,4 +1,8 @@
 -- name: CourtsInBBox :many
+-- Map pins for a viewport. With center_lng/center_lat/radius_m set it is the
+-- "near me" list: the caller passes a bbox covering the circle (keeps the
+-- && index scan unconditional), and rows are cut to the circle and sorted by
+-- distance; without a center, distance_m is NULL and live courts come first.
 SELECT
     c.id, c.name,
     ST_Y(c.location::geometry)::float8 AS lat,
@@ -9,6 +13,8 @@ SELECT
     c.fee_amount_cents, c.fee_currency, c.fee_note,
     c.rim_type, c.net_type,
     c.source, c.status,
+    -- -1 sentinel without a center: sqlc can't type this column nullable.
+    coalesce(ST_Distance(c.location, ST_SetSRID(ST_MakePoint(sqlc.narg(center_lng)::float8, sqlc.narg(center_lat)::float8), 4326)::geography), -1)::float8 AS distance_m,
     ac.active_count,
     lr.player_count AS latest_player_count,
     lr.run_quality  AS latest_run_quality,
@@ -40,6 +46,9 @@ WHERE c.status <> 'rejected'
   AND c.location && ST_MakeEnvelope(
         sqlc.arg(min_lng)::float8, sqlc.arg(min_lat)::float8,
         sqlc.arg(max_lng)::float8, sqlc.arg(max_lat)::float8, 4326)::geography
+  AND (sqlc.narg(center_lng)::float8 IS NULL OR ST_DWithin(c.location,
+        ST_SetSRID(ST_MakePoint(sqlc.narg(center_lng)::float8, sqlc.narg(center_lat)::float8), 4326)::geography,
+        sqlc.narg(radius_m)::float8))
   AND (sqlc.narg('indoor')::bool   IS NULL OR c.indoor = sqlc.narg('indoor'))
   AND (sqlc.narg('lit')::bool      IS NULL OR c.lighting = sqlc.narg('lit'))
   AND (sqlc.narg('has_hoops')::bool IS NULL OR (sqlc.narg('has_hoops') = false) OR c.hoop_count > 0)
@@ -60,71 +69,10 @@ WHERE c.status <> 'rejected'
   AND (sqlc.narg('parking')::bool  IS NULL OR (sqlc.narg('parking') = false) OR c.parking = true)
   AND (sqlc.narg('fenced')::bool   IS NULL OR (sqlc.narg('fenced') = false) OR c.fenced = true)
   AND (sqlc.narg('min_hoops')::int IS NULL OR c.hoop_count >= sqlc.narg('min_hoops'))
-LIMIT 200;
-
--- name: CourtsNearby :many
-SELECT
-    c.id, c.name,
-    ST_Y(c.location::geometry)::float8 AS lat,
-    ST_X(c.location::geometry)::float8 AS lng,
-    c.address, c.hoop_count, c.indoor, c.surface, c.lighting, c.is_public,
-    c.drinking_water, c.toilets, c.parking, c.fenced,
-    c.covered, c.fee, c.access,
-    c.fee_amount_cents, c.fee_currency, c.fee_note,
-    c.rim_type, c.net_type,
-    c.source, c.status,
-    ST_Distance(c.location, ST_SetSRID(ST_MakePoint(sqlc.arg(lng)::float8, sqlc.arg(lat)::float8), 4326)::geography)::float8 AS distance_m,
-    ac.active_count,
-    lr.player_count AS latest_player_count,
-    lr.run_quality  AS latest_run_quality,
-    coalesce(lr.created_at, 'epoch'::timestamptz) AS latest_report_at,
-    coalesce(nr.next_run_at, 'epoch'::timestamptz) AS next_run_at
-FROM courts c
-LEFT JOIN LATERAL (
-    SELECT coalesce(sum(ci.party_size), 0)::int AS active_count
-    FROM check_ins ci
-    WHERE ci.court_id = c.id AND ci.checked_out_at IS NULL AND ci.expires_at > now()
-) ac ON true
-LEFT JOIN LATERAL (
-    SELECT cr.player_count, cr.run_quality, cr.created_at
-    FROM crowd_reports cr
-    WHERE cr.court_id = c.id AND cr.created_at > now() - interval '2 hours'
-    ORDER BY cr.created_at DESC
-    LIMIT 1
-) lr ON true
-LEFT JOIN LATERAL (
-    -- Earliest run in the next 24h: drives the map pin's run badge.
-    SELECT s.starts_at AS next_run_at
-    FROM sessions s
-    WHERE s.court_id = c.id AND s.canceled_at IS NULL
-      AND s.starts_at > now() AND s.starts_at < now() + interval '24 hours'
-    ORDER BY s.starts_at
-    LIMIT 1
-) nr ON true
-WHERE c.status <> 'rejected'
-  AND ST_DWithin(c.location, ST_SetSRID(ST_MakePoint(sqlc.arg(lng)::float8, sqlc.arg(lat)::float8), 4326)::geography, sqlc.arg(radius_m)::float8)
-  AND (sqlc.narg('indoor')::bool   IS NULL OR c.indoor = sqlc.narg('indoor'))
-  AND (sqlc.narg('lit')::bool      IS NULL OR c.lighting = sqlc.narg('lit'))
-  AND (sqlc.narg('has_hoops')::bool IS NULL OR (sqlc.narg('has_hoops') = false) OR c.hoop_count > 0)
-  -- public/free are tri-state: true keeps only open-to-all/no-charge courts,
-  -- false keeps only the restricted/pay-to-play ones, NULL is unfiltered.
-  -- Unknown (NULL) access and fee read as public and free respectively, so a
-  -- court with no data surfaces under `true` and is excluded by `false`.
-  AND (sqlc.narg('public')::bool IS NULL
-       OR (sqlc.narg('public') = true  AND c.is_public = true AND (c.access IS NULL OR c.access = 'public'))
-       OR (sqlc.narg('public') = false AND (c.is_public = false OR c.access IN ('private','customers'))))
-  AND (sqlc.narg('free')::bool IS NULL
-       OR (sqlc.narg('free') = true  AND (c.fee IS NULL OR c.fee = false))
-       OR (sqlc.narg('free') = false AND c.fee = true))
-  AND (sqlc.narg('covered')::bool  IS NULL OR c.covered = sqlc.narg('covered'))
-  AND (sqlc.narg('surface')::text  IS NULL OR c.surface = sqlc.narg('surface'))
-  AND (sqlc.narg('water')::bool    IS NULL OR (sqlc.narg('water') = false) OR c.drinking_water = true)
-  AND (sqlc.narg('toilets')::bool  IS NULL OR (sqlc.narg('toilets') = false) OR c.toilets = true)
-  AND (sqlc.narg('parking')::bool  IS NULL OR (sqlc.narg('parking') = false) OR c.parking = true)
-  AND (sqlc.narg('fenced')::bool   IS NULL OR (sqlc.narg('fenced') = false) OR c.fenced = true)
-  AND (sqlc.narg('min_hoops')::int IS NULL OR c.hoop_count >= sqlc.narg('min_hoops'))
-ORDER BY distance_m
-LIMIT 100;
+-- A zoomed-out dense viewport holds more than 200 courts: keep the live ones,
+-- and a stable order so pins don't reshuffle between pans.
+ORDER BY distance_m, ac.active_count DESC, c.id
+LIMIT sqlc.arg(max_rows);
 
 -- name: SearchCourtsByName :many
 SELECT
@@ -275,6 +223,12 @@ WHERE v.court_id = $1 AND (c.submitted_by IS NULL OR v.user_id <> c.submitted_by
 -- name: CreateFlag :exec
 INSERT INTO flags (user_id, entity_type, entity_id, reason)
 VALUES ($1, $2, $3, $4);
+
+-- name: HasOpenFlag :one
+SELECT EXISTS (
+    SELECT 1 FROM flags
+    WHERE entity_type = $1 AND entity_id = $2 AND reason = $3 AND resolved_at IS NULL
+)::bool AS open;
 
 -- name: UpdateCourtAttributes :one
 -- Structured crowd correction: each arg is coalesced so only provided fields change.

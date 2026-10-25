@@ -164,11 +164,16 @@ func (s *Seeder) ViewportSeeding(ctx context.Context, minLng, minLat, maxLng, ma
 
 // DrainOnce claims and imports the next tile, then spaces the next Overpass
 // call by courtesyDelay. Reports whether it did any work.
+// It skips (false) when another drain holds the lock.
 func (s *Seeder) DrainOnce(ctx context.Context) bool {
 	if !s.mu.TryLock() {
 		return false
 	}
 	defer s.mu.Unlock()
+	return s.drainLocked(ctx)
+}
+
+func (s *Seeder) drainLocked(ctx context.Context) bool {
 	row, err := s.queries.ClaimNextSeedTile(ctx)
 	if err != nil {
 		if !errors.Is(err, pgx.ErrNoRows) {
@@ -191,7 +196,12 @@ func (s *Seeder) Run(ctx context.Context) {
 		if ctx.Err() != nil {
 			return
 		}
-		if s.DrainOnce(ctx) {
+		// Wait for the lock rather than skip: a busy /internal/drain is not
+		// an empty queue, and treating it as one idles Run for idleFallback.
+		s.mu.Lock()
+		worked := s.drainLocked(ctx)
+		s.mu.Unlock()
+		if worked {
 			continue
 		}
 		select {

@@ -173,6 +173,7 @@ func TestParseCharge(t *testing.T) {
 		{"no currency", map[string]string{"charge": "5"}, nil, ""},
 		{"bare dollar sign is ambiguous", map[string]string{"charge": "$5"}, nil, ""},
 		{"no amount", map[string]string{"charge": "yes"}, nil, ""},
+		{"lowercase word is not a currency", map[string]string{"charge": "5 per hour"}, nil, ""},
 		{"absent", map[string]string{}, nil, ""},
 		{"over the column ceiling", map[string]string{"charge": "999999 USD"}, nil, ""},
 	}

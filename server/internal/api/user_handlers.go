@@ -112,6 +112,9 @@ func (s *Server) handlePatchMe(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "display_name must be 1-50 characters")
 			return
 		}
+		if !s.screenText(w, r, "display_name", trimmed) {
+			return
+		}
 		req.DisplayName = &trimmed
 	}
 	if req.JerseyNumber.Value != nil && (*req.JerseyNumber.Value < 0 || *req.JerseyNumber.Value > 99) {

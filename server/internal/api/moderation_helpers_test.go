@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -162,5 +163,32 @@ func TestOutageThrottleIsConcurrencySafe(t *testing.T) {
 	}
 	if count != 1 {
 		t.Errorf("%d concurrent callers were allowed to report, want exactly 1", count)
+	}
+}
+
+// Court names and display names reach the public map and push notifications,
+// so they go through the same filter as chat. Both handlers screen before
+// touching the store, which this Server deliberately lacks.
+func TestNamesAreScreened(t *testing.T) {
+	s, done := newScreeningServer(t, func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte(`{"success":true,"result":{"response":"unsafe\nS10"}}`))
+	})
+	defer done()
+
+	cases := []struct {
+		name    string
+		handler http.HandlerFunc
+		body    string
+	}{
+		{"court name", s.handleCreateCourt, `{"name":"vile","lat":40.8,"lng":-73.9}`},
+		{"register display name", s.handleRegister, `{"email":"a@b.co","password":"longenough","display_name":"vile"}`},
+		{"patch display name", s.handlePatchMe, `{"display_name":"vile"}`},
+	}
+	for _, tc := range cases {
+		rec := httptest.NewRecorder()
+		tc.handler(rec, httptest.NewRequest(http.MethodPost, "/x", strings.NewReader(tc.body)))
+		if rec.Code != http.StatusUnprocessableEntity {
+			t.Errorf("%s: status %d, want 422: %s", tc.name, rec.Code, rec.Body.String())
+		}
 	}
 }

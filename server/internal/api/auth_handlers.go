@@ -54,6 +54,9 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "display_name is required (max 50 chars)")
 		return
 	}
+	if !s.screenText(w, r, "display_name", req.DisplayName) {
+		return
+	}
 
 	hash, err := auth.HashPassword(req.Password)
 	if err != nil {
@@ -427,12 +430,11 @@ func refreshTokenFromRequest(r *http.Request, bodyToken string) string {
 	if !isWebClient(r) {
 		return bodyToken
 	}
+	// Web refresh tokens live only in the HttpOnly cookie, never the body.
 	if cookie, err := r.Cookie(refreshCookieName); err == nil {
 		return cookie.Value
 	}
-	// One migration request may exchange a legacy localStorage token for the
-	// HttpOnly cookie. New web clients send an empty body thereafter.
-	return bodyToken
+	return ""
 }
 
 func (s *Server) writeTokenResponse(

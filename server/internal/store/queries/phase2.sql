@@ -5,6 +5,10 @@ INSERT INTO court_photos (court_id, user_id, storage_key, status)
 VALUES ($1, $2, $3, 'pending')
 RETURNING id, court_id, user_id, storage_key, status, created_at;
 
+-- name: CountRecentPhotosByUser :one
+SELECT count(*)::int FROM court_photos
+WHERE user_id = $1 AND created_at > now() - interval '24 hours';
+
 -- name: ListCourtPhotos :many
 SELECT id, user_id, storage_key, created_at
 FROM court_photos

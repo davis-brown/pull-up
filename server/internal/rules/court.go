@@ -25,18 +25,26 @@ const (
 // DecideCourtStatus applies the verification thresholds to a fresh weighted
 // tally and reports the court's resulting status, plus whether it changed.
 //
-// Rejection is checked first and applies from any status, so a court that was
-// verified can still be voted down. Promotion only lifts a pending court --
-// re-promoting a verified one would re-award its submitter.
+// Rejection is checked first but only hides a pending court: a verified court
+// voted down goes to the admin queue instead (see NeedsAdminReview), so a few
+// accounts or one farmed reputation can't wipe real courts off the map.
+// Promotion only lifts a pending court -- re-promoting a verified one would
+// re-award its submitter.
 func DecideCourtStatus(current string, weightedUpvotes, netWeighted int) (status string, changed bool) {
 	switch {
-	case netWeighted <= RejectNetVotes && current != CourtRejected:
+	case netWeighted <= RejectNetVotes && current == CourtPending:
 		return CourtRejected, true
 	case weightedUpvotes >= VerifyUpvotes && current == CourtPending:
 		return CourtVerified, true
 	default:
 		return current, false
 	}
+}
+
+// NeedsAdminReview reports a verified court the community has voted down to
+// the rejection threshold; only an admin may hide it.
+func NeedsAdminReview(current string, netWeighted int) bool {
+	return current == CourtVerified && netWeighted <= RejectNetVotes
 }
 
 // -- pay-to-play detail -----------------------------------------------------

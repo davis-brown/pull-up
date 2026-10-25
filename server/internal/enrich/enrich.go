@@ -159,11 +159,16 @@ func (e *Enricher) signal() {
 }
 
 // DrainOnce claims and enriches the next requested court; reports if it worked.
+// It skips (false) when another drain holds the lock.
 func (e *Enricher) DrainOnce(ctx context.Context) bool {
 	if !e.mu.TryLock() {
 		return false
 	}
 	defer e.mu.Unlock()
+	return e.drainLocked(ctx)
+}
+
+func (e *Enricher) drainLocked(ctx context.Context) bool {
 	claim, err := e.queries.ClaimNextCourtEnrichment(ctx)
 	if err != nil {
 		if !errors.Is(err, pgx.ErrNoRows) {
@@ -180,7 +185,12 @@ func (e *Enricher) Run(ctx context.Context) {
 		if ctx.Err() != nil {
 			return
 		}
-		if e.DrainOnce(ctx) {
+		// Wait for the lock rather than skip: a busy /internal/drain is not
+		// an empty queue, and treating it as one idles Run for idleFallback.
+		e.mu.Lock()
+		worked := e.drainLocked(ctx)
+		e.mu.Unlock()
+		if worked {
 			continue // enrichClaimed already spaces its own Overpass/Nominatim calls
 		}
 		select {

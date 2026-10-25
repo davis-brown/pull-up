@@ -298,12 +298,32 @@ func (q *Queries) ListCourtGames(ctx context.Context, arg ListCourtGamesParams) 
 
 const listGameParticipants = `-- name: ListGameParticipants :many
 SELECT p.game_id, p.user_id, p.team, p.confirmed_at,
-    u.display_name, u.avatar_url
+    u.display_name, u.avatar_url,
+    (
+        (
+            p.user_id = $1
+            OR NOT u.is_private
+            OR EXISTS (
+                SELECT 1 FROM follows f
+                WHERE f.follower_id = $1 AND f.followee_id = p.user_id
+            )
+        )
+        AND NOT EXISTS (
+            SELECT 1 FROM blocked_users b
+            WHERE (b.blocker_id = $1 AND b.blocked_id = p.user_id)
+               OR (b.blocker_id = p.user_id AND b.blocked_id = $1)
+        )
+    )::bool AS visible
 FROM game_participants p
 JOIN users u ON u.id = p.user_id
-WHERE p.game_id = ANY($1::uuid[])
+WHERE p.game_id = ANY($2::uuid[])
 ORDER BY p.team, u.display_name
 `
+
+type ListGameParticipantsParams struct {
+	ViewerID uuid.UUID   `json:"viewer_id"`
+	GameIds  []uuid.UUID `json:"game_ids"`
+}
 
 type ListGameParticipantsRow struct {
 	GameID      uuid.UUID  `json:"game_id"`
@@ -312,10 +332,14 @@ type ListGameParticipantsRow struct {
 	ConfirmedAt *time.Time `json:"confirmed_at"`
 	DisplayName string     `json:"display_name"`
 	AvatarUrl   *string    `json:"avatar_url"`
+	Visible     bool       `json:"visible"`
 }
 
-func (q *Queries) ListGameParticipants(ctx context.Context, gameIds []uuid.UUID) ([]ListGameParticipantsRow, error) {
-	rows, err := q.db.Query(ctx, listGameParticipants, gameIds)
+// visible applies the attendee-list rule (self, public, or followed, and
+// never across a block) for viewer_id, the zero UUID for anonymous viewers;
+// the caller anonymizes hidden players so team sizes stay true.
+func (q *Queries) ListGameParticipants(ctx context.Context, arg ListGameParticipantsParams) ([]ListGameParticipantsRow, error) {
+	rows, err := q.db.Query(ctx, listGameParticipants, arg.ViewerID, arg.GameIds)
 	if err != nil {
 		return nil, err
 	}
@@ -330,6 +354,7 @@ func (q *Queries) ListGameParticipants(ctx context.Context, gameIds []uuid.UUID)
 			&i.ConfirmedAt,
 			&i.DisplayName,
 			&i.AvatarUrl,
+			&i.Visible,
 		); err != nil {
 			return nil, err
 		}

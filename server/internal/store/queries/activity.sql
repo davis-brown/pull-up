@@ -10,6 +10,20 @@ WHERE user_id = $1 AND checked_out_at IS NULL;
 -- name: LockUserForCheckIn :one
 SELECT id FROM users WHERE id = $1 FOR UPDATE;
 
+-- Serializes check-ins at one court so each sees the headcount before it.
+-- NO KEY UPDATE leaves the FK share locks other tables take on courts alone.
+-- name: LockCourtForCheckIn :one
+SELECT id FROM courts WHERE id = $1 AND status <> 'rejected' FOR NO KEY UPDATE;
+
+-- name: CourtHadRecentCheckIn :one
+-- Run-started push cooldown: any other check-in here in the last 2 hours
+-- means this is not a new run, however briefly the court sat empty.
+SELECT EXISTS (
+    SELECT 1 FROM check_ins
+    WHERE court_id = sqlc.arg(court_id) AND id <> sqlc.arg(exclude_id)
+      AND created_at > now() - interval '2 hours'
+)::bool AS recent;
+
 -- name: CreateCheckIn :one
 INSERT INTO check_ins (court_id, user_id, source, distance_m, expires_at, party_size, has_ball)
 VALUES (

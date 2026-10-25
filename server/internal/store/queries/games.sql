@@ -64,8 +64,26 @@ WHERE g.id = sqlc.arg('game_id')
   );
 
 -- name: ListGameParticipants :many
+-- visible applies the attendee-list rule (self, public, or followed, and
+-- never across a block) for viewer_id, the zero UUID for anonymous viewers;
+-- the caller anonymizes hidden players so team sizes stay true.
 SELECT p.game_id, p.user_id, p.team, p.confirmed_at,
-    u.display_name, u.avatar_url
+    u.display_name, u.avatar_url,
+    (
+        (
+            p.user_id = sqlc.arg('viewer_id')
+            OR NOT u.is_private
+            OR EXISTS (
+                SELECT 1 FROM follows f
+                WHERE f.follower_id = sqlc.arg('viewer_id') AND f.followee_id = p.user_id
+            )
+        )
+        AND NOT EXISTS (
+            SELECT 1 FROM blocked_users b
+            WHERE (b.blocker_id = sqlc.arg('viewer_id') AND b.blocked_id = p.user_id)
+               OR (b.blocker_id = p.user_id AND b.blocked_id = sqlc.arg('viewer_id'))
+        )
+    )::bool AS visible
 FROM game_participants p
 JOIN users u ON u.id = p.user_id
 WHERE p.game_id = ANY(sqlc.arg('game_ids')::uuid[])

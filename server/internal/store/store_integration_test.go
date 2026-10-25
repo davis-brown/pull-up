@@ -89,6 +89,15 @@ func createCourt(t *testing.T, st *store.Store, name string, lat, lng float64, s
 // Rucker Park, NYC.
 const ruckerLat, ruckerLng = 40.829256, -73.936192
 
+// nearby builds the "near me" form of CourtsInBBox: a center and radius
+// inside a box generously larger than the circle.
+func nearby(lng, lat, radiusM float64) gen.CourtsInBBoxParams {
+	return gen.CourtsInBBoxParams{
+		MinLng: lng - 1, MinLat: lat - 1, MaxLng: lng + 1, MaxLat: lat + 1,
+		CenterLng: &lng, CenterLat: &lat, RadiusM: &radiusM, MaxRows: 100,
+	}
+}
+
 func TestCourtsNearbyRadius(t *testing.T) {
 	st := testStore(t)
 	ctx := context.Background()
@@ -98,9 +107,7 @@ func TestCourtsNearbyRadius(t *testing.T) {
 	// ~0.01 deg latitude ≈ 1.1 km north.
 	createCourt(t, st, "Far Court", ruckerLat+0.05, ruckerLng, uid) // ~5.5 km
 
-	rows, err := st.Queries.CourtsNearby(ctx, gen.CourtsNearbyParams{
-		Lng: ruckerLng, Lat: ruckerLat, RadiusM: 2000,
-	})
+	rows, err := st.Queries.CourtsInBBox(ctx, nearby(ruckerLng, ruckerLat, 2000))
 	if err != nil {
 		t.Fatalf("nearby: %v", err)
 	}
@@ -111,9 +118,7 @@ func TestCourtsNearbyRadius(t *testing.T) {
 		t.Errorf("distance to same point = %f m, want ~0", rows[0].DistanceM)
 	}
 
-	all, err := st.Queries.CourtsNearby(ctx, gen.CourtsNearbyParams{
-		Lng: ruckerLng, Lat: ruckerLat, RadiusM: 10_000,
-	})
+	all, err := st.Queries.CourtsInBBox(ctx, nearby(ruckerLng, ruckerLat, 10_000))
 	if err != nil {
 		t.Fatalf("nearby wide: %v", err)
 	}
@@ -135,13 +140,16 @@ func TestCourtsInBBox(t *testing.T) {
 
 	rows, err := st.Queries.CourtsInBBox(ctx, gen.CourtsInBBoxParams{
 		MinLng: ruckerLng - 0.01, MinLat: ruckerLat - 0.01,
-		MaxLng: ruckerLng + 0.01, MaxLat: ruckerLat + 0.01,
+		MaxLng: ruckerLng + 0.01, MaxLat: ruckerLat + 0.01, MaxRows: 200,
 	})
 	if err != nil {
 		t.Fatalf("bbox: %v", err)
 	}
 	if len(rows) != 1 || rows[0].ID != in.ID {
 		t.Fatalf("want only Inside court, got %d rows", len(rows))
+	}
+	if rows[0].DistanceM != -1 {
+		t.Errorf("bbox without a center: distance_m = %f, want the -1 sentinel", rows[0].DistanceM)
 	}
 }
 
@@ -919,16 +927,16 @@ func TestCourtFilters(t *testing.T) {
 	}
 
 	litArg := true
-	rows, err := st.Queries.CourtsNearby(ctx, gen.CourtsNearbyParams{
-		Lng: ruckerLng, Lat: ruckerLat, RadiusM: 5000, Lit: &litArg,
-	})
+	params := nearby(ruckerLng, ruckerLat, 5000)
+	params.Lit = &litArg
+	rows, err := st.Queries.CourtsInBBox(ctx, params)
 	if err != nil {
 		t.Fatalf("nearby lit: %v", err)
 	}
 	if len(rows) != 1 || rows[0].ID != lit.ID {
 		t.Fatalf("lit filter returned %d rows, want only Lit Court", len(rows))
 	}
-	all, _ := st.Queries.CourtsNearby(ctx, gen.CourtsNearbyParams{Lng: ruckerLng, Lat: ruckerLat, RadiusM: 5000})
+	all, _ := st.Queries.CourtsInBBox(ctx, nearby(ruckerLng, ruckerLat, 5000))
 	if len(all) != 2 {
 		t.Errorf("no-filter returned %d, want 2", len(all))
 	}

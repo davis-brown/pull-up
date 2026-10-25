@@ -322,3 +322,53 @@ func TestUnconfirmedGamesExpire(t *testing.T) {
 		t.Errorf("confirmed game was swept away")
 	}
 }
+
+// Confirmed games are public, but a private player is only named to
+// themselves and their followers, like on every other attendee list.
+func TestCourtGamesHidePrivatePlayers(t *testing.T) {
+	ts, st := newTestServer(t)
+	winner := registerUser(t, ts, "game-public@test.local", "Public Winner")
+	loser := registerUser(t, ts, "game-private@test.local", "Private Loser")
+	court := createTestCourt(t, ts, winner.AccessToken, "Privacy Court", ruckerLat, ruckerLng)
+	seedCheckIns(t, st, court.ID, winner.User.ID, loser.User.ID)
+	doJSON(t, ts, http.MethodPatch, "/me", loser.AccessToken, map[string]any{"is_private": true}).Body.Close()
+
+	resp := doJSON(t, ts, http.MethodPost, "/courts/"+court.ID+"/games", winner.AccessToken, map[string]any{
+		"team_a": []string{winner.User.ID}, "team_b": []string{loser.User.ID}, "winning_team": 0,
+	})
+	game := decodeJSON[gameResp](t, resp)
+	resp = doJSON(t, ts, http.MethodPost, "/games/"+game.Game.ID+"/confirm", loser.AccessToken, nil)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("confirm: status %d: %s", resp.StatusCode, readBody(t, resp))
+	}
+	resp.Body.Close()
+
+	names := func(token string) map[string]bool {
+		resp := doJSON(t, ts, http.MethodGet, "/courts/"+court.ID+"/games", token, nil)
+		listed := decodeJSON[struct {
+			Games []struct {
+				Players []struct {
+					UserID      string `json:"user_id"`
+					DisplayName string `json:"display_name"`
+				} `json:"players"`
+			} `json:"games"`
+		}](t, resp)
+		if len(listed.Games) != 1 || len(listed.Games[0].Players) != 2 {
+			t.Fatalf("listed games = %+v, want one game with two players", listed.Games)
+		}
+		out := map[string]bool{}
+		for _, p := range listed.Games[0].Players {
+			out[p.DisplayName] = true
+			if p.DisplayName == "A player" && p.UserID != "" {
+				t.Errorf("hidden player leaks user_id %q", p.UserID)
+			}
+		}
+		return out
+	}
+	if anon := names(""); anon["Private Loser"] || !anon["A player"] || !anon["Public Winner"] {
+		t.Errorf("anonymous viewer sees %v, want the private player hidden", anon)
+	}
+	if self := names(loser.AccessToken); !self["Private Loser"] {
+		t.Errorf("private player viewing their own game sees %v", self)
+	}
+}

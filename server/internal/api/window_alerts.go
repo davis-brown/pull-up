@@ -68,20 +68,15 @@ func validTimezone(name string) bool {
 }
 
 // notifyWindowAlerts pushes eligible favoriters when this check-in carried
-// the court's live headcount across the threshold. Fire-and-forget; partySize
-// is the new check-in's contribution, used to detect the crossing.
-func (s *Server) notifyWindowAlerts(courtID, actor uuid.UUID, partySize int) {
+// the court's live headcount across the threshold. Fire-and-forget; before and
+// count are the headcount around this check-in, taken under the court lock.
+func (s *Server) notifyWindowAlerts(courtID, actor uuid.UUID, before, count int) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	count, err := s.store.Queries.CountActiveCheckIns(ctx, courtID)
-	if err != nil {
-		s.log.Error("window alert count", "court", courtID, "err", err)
-		return
-	}
 	// Crossing-only: never alert on check-ins after the threshold, or the
 	// wobble as players come and go would re-fire.
-	if int(count) < windowAlertThreshold || int(count)-partySize >= windowAlertThreshold {
+	if count < windowAlertThreshold || before >= windowAlertThreshold {
 		return
 	}
 

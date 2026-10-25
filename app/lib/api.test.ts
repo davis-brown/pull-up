@@ -70,10 +70,12 @@ beforeEach(async () => {
 });
 
 describe("native session storage and refresh", () => {
-  it("migrates legacy keys to one atomic token pair and refreshes once", async () => {
+  it("refreshes a stored pair once and writes the rotated pair", async () => {
     useStatefulStorage({
-      "pullup.access_token": "expired-token",
-      "pullup.refresh_token": "valid-refresh-token",
+      "pullup.token_pair": JSON.stringify({
+        accessToken: "expired-token",
+        refreshToken: "valid-refresh-token",
+      }),
     });
     const fetchMock = global.fetch as jest.Mock;
     fetchMock
@@ -89,8 +91,6 @@ describe("native session storage and refresh", () => {
       accessToken: "new-access",
       refreshToken: "new-refresh",
     });
-    expect(mockSet).not.toHaveBeenCalledWith("pullup.access_token", expect.anything());
-    expect(mockSet).not.toHaveBeenCalledWith("pullup.refresh_token", expect.anything());
     expect(fetchMock.mock.calls[2][1].headers.Authorization).toBe("Bearer new-access");
   });
 
@@ -279,15 +279,12 @@ describe("web cookie contract", () => {
     jest.resetModules();
     jest.clearAllMocks();
     platformOS = "web";
-    useStatefulStorage({
-      "pullup.access_token": "legacy-access",
-      "pullup.refresh_token": "legacy-refresh",
-    });
+    useStatefulStorage();
     (global as unknown as { fetch: jest.Mock }).fetch = jest.fn();
     client = await import("./api");
   });
 
-  it("removes legacy web tokens and migrates refresh into the cookie flow once", async () => {
+  it("refreshes through the cookie alone and keeps tokens out of storage", async () => {
     const fetchMock = global.fetch as jest.Mock;
     fetchMock
       .mockResolvedValueOnce(fakeResponse(401, { error: "missing access token" }))
@@ -299,12 +296,8 @@ describe("web cookie contract", () => {
 
     await expect(client.api("/me")).resolves.toEqual({ ok: true });
 
-    expect(stored["pullup.access_token"]).toBeUndefined();
-    expect(stored["pullup.refresh_token"]).toBeUndefined();
     expect(mockSet).not.toHaveBeenCalled();
-    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({
-      refresh_token: "legacy-refresh",
-    });
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({});
     for (const [, options] of fetchMock.mock.calls) {
       expect(options.credentials).toBe("include");
       expect(options.headers["X-Pull-Up-Platform"]).toBe("web");
