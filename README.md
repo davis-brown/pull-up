@@ -242,7 +242,10 @@ get-the-app banner, hidden when unset). See `app/.env.example`.
 Anyone signed in can report a court, photo, or crowd report (flag icons in
 the app → `POST /flags`). Admins get a moderation queue (Profile → Profile
 settings → "Moderation queue") to review open flags, reject courts, remove
-photos, and resolve reports.
+photos, remove reported messages/reports/runs, suspend abusive players, and
+resolve reports. New court photos and avatars remain private until an admin
+approves them in the image review queue. Production text posting requires
+current community consent and a successful content-safety check.
 
 Admin rights are managed in-app with a security model designed to avoid
 both self-escalation and lock-out:
@@ -252,8 +255,9 @@ both self-escalation and lock-out:
 - **Every admin after that** is promoted (or demoted) by an existing admin
   from the moderation screen via `POST /admin/users/{id}/admin`, gated by
   `is_admin` checked live per request, never baked into the JWT.
-- **Demoting the last remaining admin is rejected** server-side, so the
-  account base can never lose moderation access entirely.
+- **Demoting the last remaining admin is rejected** server-side. Permanent
+  account deletion remains available to every player, including the last
+  admin; assign another moderator first to keep the review queue staffed.
 - **Every promote/demote is recorded** in the `admin_actions` audit table
   and shown in the moderation screen's "Recent admin activity" feed.
 
