@@ -11,6 +11,7 @@ import {
 import { Avatar } from "@/components/Avatar";
 import { Button, Card, Chip, ErrorText, Field, FullScreenLoader } from "@/components/ui";
 import { SignInScreenCta } from "@/components/SignInCta";
+import { accountEmailLabel } from "@/lib/account";
 import { api } from "@/lib/api";
 import { deviceTimezone } from "@/lib/push-registration";
 import { useAuth } from "@/lib/auth-context";
@@ -296,7 +297,7 @@ function ProfileSettingsContent() {
           <Button title="Save name" variant="secondary" busy={savingName} onPress={() => void saveName()} />
         ) : null}
         <Text style={[t.type.caption, { color: t.colors.textSecondary, marginTop: t.spacing.sm }]}>
-          {user?.email}
+          {accountEmailLabel(user?.email)}
         </Text>
         <Text style={[t.type.caption, { color: t.colors.textSecondary, marginTop: 2 }]}>
           Reputation {user?.reputation ?? 0}
@@ -604,6 +605,9 @@ function ProfileSettingsContent() {
           </Pressable>
           <Pressable onPress={() => router.push("/terms")} hitSlop={8}>
             <Text style={[t.type.caption, { color: t.colors.textSecondary }]}>Terms of Service</Text>
+          </Pressable>
+          <Pressable onPress={() => router.push("/support" as Href)} hitSlop={8}>
+            <Text style={[t.type.caption, { color: t.colors.textSecondary }]}>Support</Text>
           </Pressable>
         </View>
       </Card>
