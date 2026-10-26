@@ -91,7 +91,8 @@ function AppleButton({ onError, guard }: { onError: (msg: string) => void; guard
       const name = [credential.fullName?.givenName, credential.fullName?.familyName]
         .filter(Boolean)
         .join(" ");
-      await oauthSignIn("apple", credential.identityToken, name || undefined);
+      if (!credential.authorizationCode) throw new Error("No authorization code from Apple");
+      await oauthSignIn("apple", credential.identityToken, name || undefined, credential.authorizationCode);
     } catch (e) {
       if ((e as { code?: string }).code === "ERR_REQUEST_CANCELED") return;
       onError(getErrorMessage(e, "Apple sign-in failed"));

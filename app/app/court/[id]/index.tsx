@@ -357,6 +357,7 @@ export default function CourtDetailScreen() {
                     tap one for its source and license.
                   </Text>
                 )}
+                {uploadPhoto.isSuccess && <Text style={[t.type.caption, { color: t.colors.textSecondary }]}>Photo submitted for review. It will appear after approval.</Text>}
                 <ErrorText message={photoError ?? photoQueryError?.message ?? null} />
               </View>
             )}
@@ -382,6 +383,7 @@ export default function CourtDetailScreen() {
                     No photos yet — add the first one.
                   </Text>
                 )}
+                {uploadPhoto.isSuccess && <Text style={[t.type.caption, { color: t.colors.textSecondary }]}>Photo submitted for review. It will appear after approval.</Text>}
                 <ErrorText message={photoError ?? photoQueryError?.message ?? null} />
               </View>
             )}

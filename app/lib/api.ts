@@ -1,5 +1,6 @@
 import { backgroundStorage as storage, platformOS } from "./storage";
 import type { User } from "./types";
+import { CONTENT_CONSENT_VERSION } from "./community";
 
 // Web is always same-origin (the web Worker proxies /api). Native gets
 // EXPO_PUBLIC_API_URL from eas.json; if missing, dev bundles fall back to the
@@ -624,11 +625,14 @@ export function oauthLogin(
   provider: "google" | "apple",
   idToken: string,
   displayName?: string,
+  authorizationCode?: string,
 ): Promise<User> {
   return runCookieMutating(() => authenticate("/auth/oauth", {
     provider,
+    terms_version: CONTENT_CONSENT_VERSION,
     id_token: idToken,
     ...(displayName ? { display_name: displayName } : {}),
+    ...(authorizationCode ? { authorization_code: authorizationCode } : {}),
   }));
 }
 
@@ -647,7 +651,7 @@ export async function register(
     "/auth/register",
     {
       method: "POST",
-      body: JSON.stringify({ email, password, display_name: displayName }),
+      body: JSON.stringify({ email, password, display_name: displayName, terms_version: CONTENT_CONSENT_VERSION }),
     },
     null,
     epoch,

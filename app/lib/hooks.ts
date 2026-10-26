@@ -515,6 +515,29 @@ export function useConfirmCourtFact(courtId: string) {
   });
 }
 
+export interface MediaReview { key: string; purpose: "court" | "avatar"; preview_path: string }
+
+export function useMediaReviews() {
+  return useQuery({
+    queryKey: ["admin", "media"],
+    refetchInterval: 60_000,
+    queryFn: async () => (await api<{ reviews: MediaReview[] }>("/admin/media")).reviews,
+  });
+}
+
+export function useReviewMedia() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (review: { key: string; approve: boolean }) =>
+      api<void>("/admin/media/review", { method: "POST", body: JSON.stringify(review) }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ["admin", "media"] });
+      void qc.invalidateQueries({ queryKey: ["courts"] });
+      void qc.invalidateQueries({ queryKey: ["users"] });
+    },
+  });
+}
+
 export function useAdminFlags() {
   return useQuery({
     queryKey: ["admin", "flags"],
@@ -579,6 +602,15 @@ export function useResolveFlag() {
     mutationFn: (flagId: string) =>
       api<void>(`/admin/flags/${idSegment(flagId)}/resolve`, { method: "POST" }),
     onSuccess: () => void qc.invalidateQueries({ queryKey: ["admin", "flags"] }),
+  });
+}
+
+export function useRemoveContent() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (content: { entity_type: string; entity_id: string }) =>
+      api<void>("/admin/content/remove", { method: "POST", body: JSON.stringify(content) }),
+    onSuccess: () => void qc.invalidateQueries(),
   });
 }
 
