@@ -18,8 +18,7 @@ import (
 
 const (
 	uploadURLTTL = 10 * time.Minute
-	// maxPhotosPerDay bounds one account's court uploads: photos go visible
-	// on upload, so without a cap a script can flood galleries and storage.
+	// maxPhotosPerDay bounds upload storage and the pre-publication review queue.
 	maxPhotosPerDay = 10
 )
 
@@ -235,9 +234,11 @@ func (s *Server) notifyRunStarted(courtID, actor, checkInID uuid.UUID) {
 }
 
 type oauthRequest struct {
-	Provider    string `json:"provider"`
-	IDToken     string `json:"id_token"`
-	DisplayName string `json:"display_name,omitempty"`
+	Provider          string `json:"provider"`
+	IDToken           string `json:"id_token"`
+	DisplayName       string `json:"display_name,omitempty"`
+	AuthorizationCode string `json:"authorization_code,omitempty"`
+	TermsVersion      string `json:"terms_version,omitempty"`
 }
 
 func (s *Server) handleOAuth(w http.ResponseWriter, r *http.Request) {
@@ -254,11 +255,43 @@ func (s *Server) handleOAuth(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "invalid identity token")
 		return
 	}
+	var appleToken []byte
+	if req.Provider == "apple" {
+		if !s.apple.Enabled() {
+			writeError(w, http.StatusServiceUnavailable, "Apple sign-in is temporarily unavailable")
+			return
+		}
+		var freshToken string
+		appleToken, freshToken, err = s.apple.Exchange(r.Context(), req.AuthorizationCode)
+		if err != nil {
+			writeError(w, http.StatusBadGateway, "Could not complete Apple sign-in. Please try again.")
+			return
+		}
+		fresh, verifyErr := s.oauth.Verify(r.Context(), "apple", freshToken)
+		if verifyErr != nil || fresh.Subject != identity.Subject {
+			writeError(w, http.StatusUnauthorized, "Apple authorization did not match this account")
+			return
+		}
+	}
 
-	user, err := s.store.Queries.GetUserByOAuth(r.Context(), gen.GetUserByOAuthParams{
+	tx, err := s.store.Pool.Begin(r.Context())
+	if err != nil {
+		s.internalError(w, "begin OAuth sign-in", err)
+		return
+	}
+	defer tx.Rollback(r.Context())
+	queries := s.store.Queries.WithTx(tx)
+	user, err := queries.GetUserByOAuth(r.Context(), gen.GetUserByOAuthParams{
 		AuthProvider: identity.Provider, OauthSubject: &identity.Subject,
 	})
 	if err == nil {
+		if !s.saveOAuthAuthorization(w, r, tx, user.ID, appleToken, req.TermsVersion) {
+			return
+		}
+		if err := tx.Commit(r.Context()); err != nil {
+			s.internalError(w, "commit OAuth sign-in", err)
+			return
+		}
 		s.issueTokens(w, r, user.ID, user)
 		return
 	}
@@ -279,13 +312,20 @@ func (s *Server) handleOAuth(w http.ResponseWriter, r *http.Request) {
 	if len(displayName) > 50 {
 		displayName = displayName[:50]
 	}
+	if s.cfg.ModerationRequired && req.TermsVersion != contentConsentVersion {
+		writeError(w, http.StatusBadRequest, "accept the current terms before creating an account")
+		return
+	}
+	if !s.screenText(w, r, "display_name", displayName) {
+		return
+	}
 	email := identity.Email
 	if email == "" {
 		// Apple can withhold email, and an unverified one is dropped by
 		// Verify; synthesize a stable placeholder.
 		email = fmt.Sprintf("%s-%s@users.pullup.local", identity.Provider, identity.Subject)
 	}
-	created, err := s.store.Queries.CreateOAuthUser(r.Context(), gen.CreateOAuthUserParams{
+	created, err := queries.CreateOAuthUser(r.Context(), gen.CreateOAuthUserParams{
 		Email:        email,
 		DisplayName:  displayName,
 		AuthProvider: identity.Provider,
@@ -300,7 +340,25 @@ func (s *Server) handleOAuth(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, "create oauth user", err)
 		return
 	}
+	if !s.saveOAuthAuthorization(w, r, tx, created.ID, appleToken, req.TermsVersion) {
+		return
+	}
+	if err := tx.Commit(r.Context()); err != nil {
+		s.internalError(w, "commit OAuth registration", err)
+		return
+	}
 	s.issueTokens(w, r, created.ID, created)
+}
+
+func (s *Server) saveOAuthAuthorization(w http.ResponseWriter, r *http.Request, tx pgx.Tx, uid uuid.UUID, token []byte, version string) bool {
+	if len(token) == 0 && version != contentConsentVersion {
+		return true
+	}
+	if _, err := tx.Exec(r.Context(), `UPDATE users SET apple_refresh_token=coalesce($2,apple_refresh_token), content_consent_version=CASE WHEN $3=$4 THEN $3 ELSE content_consent_version END WHERE id=$1`, uid, token, version, contentConsentVersion); err != nil {
+		s.internalError(w, "save Apple authorization", err)
+		return false
+	}
+	return true
 }
 
 func (s *Server) handleCheckInHistory(w http.ResponseWriter, r *http.Request) {

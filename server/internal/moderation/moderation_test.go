@@ -114,7 +114,7 @@ func TestCheckBlocksUnsafe(t *testing.T) {
 
 // The whole point of fail-open: a classifier outage must not stop people
 // posting. Each of these returns an error AND a safe verdict.
-func TestCheckFailsOpen(t *testing.T) {
+func TestCheckReportsUnavailable(t *testing.T) {
 	cases := []struct {
 		name    string
 		handler http.HandlerFunc
@@ -126,17 +126,17 @@ func TestCheckFailsOpen(t *testing.T) {
 		{"unparseable body", func(w http.ResponseWriter, r *http.Request) {
 			_, _ = w.Write([]byte(`not json`))
 		}},
+		{"unrecognized verdict", func(w http.ResponseWriter, r *http.Request) {
+			_, _ = w.Write([]byte(`{"success":true,"result":{"response":"unavailable"}}`))
+		}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			srv := httptest.NewServer(tc.handler)
 			defer srv.Close()
-			v, err := New("acct", "tok").WithEndpoint(srv.URL).Check(context.Background(), "hello")
+			_, err := New("acct", "tok").WithEndpoint(srv.URL).Check(context.Background(), "hello")
 			if err == nil {
 				t.Error("want an error so the caller logs the outage")
-			}
-			if !v.Safe {
-				t.Error("verdict blocks on an outage; moderation must fail open")
 			}
 		})
 	}

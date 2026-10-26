@@ -10,11 +10,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/davisbrown/pull-up/server/internal/config"
 	"github.com/davisbrown/pull-up/server/internal/moderation"
 )
 
-// screenText must block only on a definite unsafe verdict, and let the post
-// through in every other case including outages.
+// Posts require a safe verdict; outages must not silently disable screening.
 func newScreeningServer(t *testing.T, handler http.HandlerFunc) (*Server, func()) {
 	t.Helper()
 	upstream := httptest.NewServer(handler)
@@ -61,16 +61,33 @@ func TestScreenTextAllowsSafe(t *testing.T) {
 	}
 }
 
-// An outage must not stop people posting.
-func TestScreenTextFailsOpenOnOutage(t *testing.T) {
+// An outage must never publish unscreened text.
+func TestScreenTextFailsClosedOnOutage(t *testing.T) {
 	s, done := newScreeningServer(t, func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusServiceUnavailable)
 	})
 	defer done()
 
 	rec := httptest.NewRecorder()
-	if !s.screenText(rec, httptest.NewRequest(http.MethodPost, "/x", nil), "court_message", "hello") {
-		t.Fatal("screenText blocked a post during a classifier outage")
+	if s.screenText(rec, httptest.NewRequest(http.MethodPost, "/x", nil), "court_message", "hello") || rec.Code != http.StatusServiceUnavailable {
+		t.Fatal("screenText allowed a post during a classifier outage")
+	}
+}
+
+func TestProductionRequiresModeration(t *testing.T) {
+	s := &Server{cfg: &config.Config{ModerationRequired: true}}
+	rec := httptest.NewRecorder()
+	if s.screenText(rec, httptest.NewRequest(http.MethodPost, "/x", nil), "court_message", "hello") || rec.Code != http.StatusServiceUnavailable {
+		t.Fatal("production allowed unscreened text without credentials")
+	}
+}
+
+func TestProductionRegistrationRequiresConsentBeforeScreening(t *testing.T) {
+	s := &Server{cfg: &config.Config{ModerationRequired: true}}
+	rec := httptest.NewRecorder()
+	s.handleRegister(rec, httptest.NewRequest(http.MethodPost, "/auth/register", strings.NewReader(`{"email":"player@example.com","password":"password123","display_name":"Player"}`)))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("registration without consent: %d", rec.Code)
 	}
 }
 

@@ -74,6 +74,26 @@ func TestInternalMediaAuthorizationAndDeletionQueue(t *testing.T) {
 	}
 	resp.Body.Close()
 	resp = internalPost("/internal/media/authorize", map[string]string{"key": photo.StorageKey})
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("uploaded photo was public before review: %d", resp.StatusCode)
+	}
+	resp.Body.Close()
+	resp = internalPost("/internal/media/authorize", map[string]any{"key": photo.StorageKey, "review": true})
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("review preview not authorized: %d", resp.StatusCode)
+	}
+	resp.Body.Close()
+	resp = doJSON(t, ts, http.MethodPost, "/admin/media/review", owner.AccessToken, map[string]any{"key": photo.StorageKey, "approve": true})
+	if resp.StatusCode != http.StatusForbidden {
+		t.Fatalf("non-admin approved media: %d", resp.StatusCode)
+	}
+	resp.Body.Close()
+	resp = doJSON(t, ts, http.MethodPost, "/admin/media/review", admin.AccessToken, map[string]any{"key": photo.StorageKey, "approve": true})
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("approve media: %d", resp.StatusCode)
+	}
+	resp.Body.Close()
+	resp = internalPost("/internal/media/authorize", map[string]string{"key": photo.StorageKey})
 	if resp.StatusCode != http.StatusNoContent {
 		t.Fatalf("authorize visible photo: status %d", resp.StatusCode)
 	}
@@ -176,8 +196,8 @@ func TestAvatarFinalizeBeforePatchStillClaims(t *testing.T) {
 	resp = doJSON(t, ts, http.MethodGet, "/users/"+u.User.ID, "", nil)
 	if p := decodeJSON[struct {
 		AvatarURL *string `json:"avatar_url"`
-	}](t, resp); p.AvatarURL == nil || *p.AvatarURL != body.AvatarURL {
-		t.Errorf("avatar not set after finalize+patch")
+	}](t, resp); p.AvatarURL != nil {
+		t.Errorf("avatar published before moderator approval")
 	}
 }
 

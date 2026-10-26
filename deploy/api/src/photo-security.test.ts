@@ -107,6 +107,10 @@ describe("upload authorization", () => {
     await expect(
       verifyUploadSignature(secret, `${KEY}x`, { expiresAt, signature }, nowMs),
     ).resolves.toBe(false);
+    // An upload capability cannot be reused as a moderator preview.
+    await expect(
+      verifyUploadSignature(secret, `review:${KEY}`, { expiresAt, signature }, nowMs),
+    ).resolves.toBe(false);
     await expect(
       verifyUploadSignature(
         secret,

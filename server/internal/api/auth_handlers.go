@@ -16,9 +16,10 @@ import (
 )
 
 type credentialsRequest struct {
-	Email       string `json:"email"`
-	Password    string `json:"password"`
-	DisplayName string `json:"display_name,omitempty"`
+	Email        string `json:"email"`
+	Password     string `json:"password"`
+	DisplayName  string `json:"display_name,omitempty"`
+	TermsVersion string `json:"terms_version,omitempty"`
 }
 
 type tokenResponse struct {
@@ -52,6 +53,10 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.DisplayName == "" || len(req.DisplayName) > 50 {
 		writeError(w, http.StatusBadRequest, "display_name is required (max 50 chars)")
+		return
+	}
+	if s.cfg != nil && s.cfg.ModerationRequired && req.TermsVersion != contentConsentVersion {
+		writeError(w, http.StatusBadRequest, "accept the current terms before creating an account")
 		return
 	}
 	if !s.screenText(w, r, "display_name", req.DisplayName) {
@@ -91,6 +96,12 @@ func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// A takeover of an unverified account kills links sent for the old password.
+	if req.TermsVersion == contentConsentVersion {
+		if _, err := tx.Exec(r.Context(), `UPDATE users SET content_consent_version=$2 WHERE id=$1`, user.ID, req.TermsVersion); err != nil {
+			s.internalError(w, "record registration consent", err)
+			return
+		}
+	}
 	if err := q.InvalidateEmailVerificationTokens(r.Context(), user.ID); err != nil {
 		s.internalError(w, "invalidate email verification tokens", err)
 		return

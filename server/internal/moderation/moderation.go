@@ -4,7 +4,7 @@
 // TEXT ONLY. Photo uploads are not covered here, nor by Cloudflare's CSAM
 // Scanning Tool (court photos are served `private, no-store` and never enter
 // the cache it hashes from). Photo moderation is the court_photos
-// pending/flagged/removed state machine plus human review.
+// media_reviews queue plus human approval before publication.
 package moderation
 
 import (
@@ -86,9 +86,9 @@ type aiResponse struct {
 
 // Check classifies text.
 //
-// FAIL-OPEN: any transport error, timeout, or unparseable response returns a
-// safe verdict together with the error, so callers can log it. A disabled
-// client returns safe with no error.
+// Callers must reject posts on errors, regardless of the returned verdict.
+// A disabled client returns safe with no error for local development; the
+// production API separately requires configured moderation credentials.
 func (c *Client) Check(ctx context.Context, text string) (Verdict, error) {
 	if !c.Enabled() {
 		return Verdict{Safe: true}, nil
@@ -137,12 +137,17 @@ func (c *Client) Check(ctx context.Context, text string) (Verdict, error) {
 		}
 		return Verdict{Safe: true}, fmt.Errorf("workers ai: %s", msg)
 	}
-	return parseVerdict(parsed.Result.Response), nil
+	verdict := parseVerdict(parsed.Result.Response)
+	first := strings.TrimSpace(strings.Split(strings.ToLower(strings.TrimSpace(parsed.Result.Response)), "\n")[0])
+	if first != "safe" && first != "unsafe" {
+		return Verdict{}, fmt.Errorf("unrecognized moderation verdict")
+	}
+	return verdict, nil
 }
 
 // parseVerdict reads Llama Guard's output: "safe", or "unsafe" on the first
 // line followed by comma-separated category codes on the next. Anything
-// unrecognised is treated as SAFE, per the fail-open stance.
+// unrecognised output is rejected by Check before it reaches a caller.
 func parseVerdict(raw string) Verdict {
 	lines := strings.Split(strings.TrimSpace(strings.ToLower(raw)), "\n")
 	if len(lines) == 0 {

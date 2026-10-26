@@ -1,12 +1,14 @@
 package api
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/getsentry/sentry-go"
+	"github.com/google/uuid"
 )
 
 // moderationOutageInterval throttles outage reporting: a broken classifier
@@ -31,8 +33,7 @@ func (t *outageThrottle) allow(now time.Time, every time.Duration) bool {
 }
 
 // reportModerationOutage is the only signal that moderation has silently
-// stopped working: screenText fails open, so a bad or expired token looks
-// exactly like normal operation. The message is a fixed string so Sentry
+// stopped working. The message is a fixed string so Sentry
 // groups every occurrence into one issue.
 func (s *Server) reportModerationOutage(surface string, cause error) {
 	if !s.moderationOutage.allow(time.Now(), moderationOutageInterval) {
@@ -46,7 +47,7 @@ func (s *Server) reportModerationOutage(surface string, cause error) {
 		// Pin the grouping so every outage lands in one Sentry issue.
 		scope.SetFingerprint([]string{"text-moderation-unavailable"})
 		// No-op unless SENTRY_DSN was set at startup.
-		sentry.CaptureMessage("text moderation unavailable — posts are going unscreened")
+		sentry.CaptureMessage("text moderation unavailable — posting is paused")
 	})
 }
 
@@ -54,19 +55,39 @@ func (s *Server) reportModerationOutage(surface string, cause error) {
 // it comes back unsafe, writes the rejection and reports false. Used as a
 // guard after validation and before any write.
 //
-// Fails open: a classifier outage (or unset Workers AI credentials, as in
-// local dev and CI) lets the post through. The rejection message
+// Production fails closed on missing credentials and classifier outages.
+// Unconfigured local development and tests may still post. The rejection message
 // deliberately does not name the violated category, which would be a
 // hill-climbing signal for anyone probing the filter.
 func (s *Server) screenText(w http.ResponseWriter, r *http.Request, surface, text string) bool {
-	if strings.TrimSpace(text) == "" || !s.moderator.Enabled() {
+	if strings.TrimSpace(text) == "" {
 		return true
+	}
+	if s.cfg != nil && s.cfg.ModerationRequired && userID(r) != uuid.Nil {
+		var accepted bool
+		if err := s.store.Pool.QueryRow(r.Context(), `SELECT content_consent_version=$2 FROM users WHERE id=$1`, userID(r), contentConsentVersion).Scan(&accepted); err != nil {
+			s.internalError(w, "check content consent", err)
+			return false
+		}
+		if !accepted {
+			writeError(w, http.StatusForbidden, "Review and accept the updated community terms before posting.")
+			return false
+		}
+	}
+	if !s.moderator.Enabled() {
+		if s.cfg == nil || !s.cfg.ModerationRequired {
+			return true
+		}
+		s.reportModerationOutage(surface, errors.New("moderation credentials missing"))
+		writeError(w, http.StatusServiceUnavailable, "Content checks are temporarily unavailable. Please try again later.")
+		return false
 	}
 	verdict, err := s.moderator.Check(r.Context(), text)
 	if err != nil {
 		s.log.Error("text moderation unavailable", "surface", surface, "err", err)
 		s.reportModerationOutage(surface, err)
-		return true
+		writeError(w, http.StatusServiceUnavailable, "Content checks are temporarily unavailable. Please try again later.")
+		return false
 	}
 	if !verdict.Safe {
 		s.log.Info("text moderation blocked a post",
