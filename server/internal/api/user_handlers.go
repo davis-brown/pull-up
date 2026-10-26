@@ -210,6 +210,12 @@ func (s *Server) handlePatchMe(w http.ResponseWriter, r *http.Request) {
 		}
 		// Keep the current public avatar until the new upload is approved.
 		req.AvatarURL.Set = false
+	} else if req.AvatarURL.Set {
+		// Clearing the avatar also cancels a pending one, as DELETE /me/avatar does.
+		if _, err := s.store.Pool.Exec(r.Context(), `DELETE FROM media_reviews WHERE owner_id=$1 AND purpose='avatar'`, uid); err != nil {
+			s.internalError(w, "cancel pending avatar", err)
+			return
+		}
 	}
 	var jerseyNumber *int16
 	if req.JerseyNumber.Value != nil {

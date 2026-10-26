@@ -33,23 +33,24 @@ func (s *Server) requireAuth(next http.Handler) http.Handler {
 			writeError(w, http.StatusUnauthorized, "invalid or expired token")
 			return
 		}
-		var suspended bool
-		if err := s.store.Pool.QueryRow(r.Context(), `SELECT suspended_at IS NOT NULL FROM users WHERE id=$1`, userID).Scan(&suspended); err != nil {
-			if errors.Is(err, pgx.ErrNoRows) {
-				writeError(w, http.StatusUnauthorized, "account no longer available")
-			} else {
-				s.internalError(w, "check account status", err)
+		// Suspension blocks participation, so only writes pay for the lookup;
+		// reads are the bulk of authenticated traffic.
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			var suspended bool
+			if err := s.store.Pool.QueryRow(r.Context(), `SELECT suspended_at IS NOT NULL FROM users WHERE id=$1`, userID).Scan(&suspended); err != nil {
+				if errors.Is(err, pgx.ErrNoRows) {
+					writeError(w, http.StatusUnauthorized, "account no longer available")
+				} else {
+					s.internalError(w, "check account status", err)
+				}
+				return
 			}
-			return
-		}
-		// Suspended players can still inspect and permanently delete their account.
-		if suspended && r.URL.Path != "/api/v1/me" && r.URL.Path != "/api/v1/me/content-consent" {
-			writeError(w, http.StatusForbidden, "account suspended; contact support or delete your account in settings")
-			return
-		}
-		if suspended && r.Method == http.MethodPatch {
-			writeError(w, http.StatusForbidden, "account suspended")
-			return
+			// Suspended players can still permanently delete their account.
+			deleting := r.Method == http.MethodDelete && r.URL.Path == "/api/v1/me"
+			if suspended && !deleting && r.URL.Path != "/api/v1/me/content-consent" {
+				writeError(w, http.StatusForbidden, "account suspended; contact support or delete your account in settings")
+				return
+			}
 		}
 		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), userIDKey, userID)))
 	})

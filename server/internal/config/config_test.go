@@ -56,3 +56,28 @@ func TestLoadAllowsDefaultsOnlyInExplicitTestEnvironment(t *testing.T) {
 		t.Fatal("test defaults were not populated")
 	}
 }
+
+func TestLoadRequiresAppleTokenConfigInProduction(t *testing.T) {
+	t.Setenv("APP_ENV", "production")
+	t.Setenv("DATABASE_URL", "postgres://example")
+	t.Setenv("JWT_SECRET", strings.Repeat("j", 32))
+	t.Setenv("UPLOAD_SIGNING_SECRET", strings.Repeat("u", 32))
+	t.Setenv("INTERNAL_TASK_SECRET", strings.Repeat("i", 32))
+	t.Setenv("APPLE_AUDIENCES", "")
+	if _, err := Load(); err != nil {
+		t.Fatalf("Apple disabled: %v", err)
+	}
+	t.Setenv("APPLE_AUDIENCES", "com.example.app")
+	t.Setenv("APPLE_CLIENT_ID", "com.example.app")
+	t.Setenv("APPLE_TEAM_ID", "TEAM123")
+	t.Setenv("APPLE_KEY_ID", "KEY123")
+	t.Setenv("APPLE_PRIVATE_KEY", "not a key")
+	t.Setenv("APPLE_TOKEN_ENCRYPTION_KEY", strings.Repeat("k", 32))
+	if _, err := Load(); err == nil || !strings.Contains(err.Error(), "APPLE_PRIVATE_KEY") {
+		t.Fatalf("invalid Apple key error = %v", err)
+	}
+	t.Setenv("APPLE_TEAM_ID", "")
+	if _, err := Load(); err == nil || !strings.Contains(err.Error(), "APPLE_TEAM_ID") {
+		t.Fatalf("missing Apple team error = %v", err)
+	}
+}

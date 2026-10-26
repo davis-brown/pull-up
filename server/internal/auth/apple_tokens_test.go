@@ -3,22 +3,49 @@ package auth
 import (
 	"bytes"
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/golang-jwt/jwt/v5"
 )
 
+func testAppleKey(t *testing.T) (*ecdsa.PrivateKey, string) {
+	t.Helper()
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	der, err := x509.MarshalPKCS8PrivateKey(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return key, string(pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: der}))
+}
+
 func TestAppleTokenExchangeAndRevocation(t *testing.T) {
+	signingKey, signingPEM := testAppleKey(t)
 	calls := 0
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls++
 		if err := r.ParseForm(); err != nil {
 			t.Error(err)
 		}
-		if r.Form.Get("client_id") != "com.example.app" || r.Form.Get("client_secret") != "test-signing-jwt" {
-			t.Error("missing Apple client authentication")
+		if r.Form.Get("client_id") != "com.example.app" {
+			t.Error("missing Apple client id")
+		}
+		var claims jwt.RegisteredClaims
+		secret, err := jwt.ParseWithClaims(r.Form.Get("client_secret"), &claims, func(*jwt.Token) (any, error) { return &signingKey.PublicKey, nil },
+			jwt.WithValidMethods([]string{"ES256"}), jwt.WithIssuer("TEAM123"), jwt.WithSubject("com.example.app"), jwt.WithAudience("https://appleid.apple.com"), jwt.WithExpirationRequired())
+		if err != nil || secret.Header["kid"] != "KEY123" {
+			t.Errorf("invalid client secret: %v", err)
 		}
 		switch r.URL.Path {
 		case "/auth/token":
@@ -35,7 +62,7 @@ func TestAppleTokenExchangeAndRevocation(t *testing.T) {
 		}
 	}))
 	defer upstream.Close()
-	a := NewAppleTokens("com.example.app", "test-signing-jwt", strings.Repeat("k", 32))
+	a := NewAppleTokens("com.example.app", "TEAM123", "KEY123", signingPEM, strings.Repeat("k", 32))
 	a.endpoint = upstream.URL
 	encrypted, identity, err := a.Exchange(context.Background(), "one-time-code")
 	if err != nil || identity != "fresh-identity" {
@@ -57,19 +84,23 @@ func TestAppleTokenExchangeAndRevocation(t *testing.T) {
 }
 
 func TestAppleTokensDoNotLeakErrorBodies(t *testing.T) {
+	_, signingPEM := testAppleKey(t)
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(400)
 		_, _ = w.Write([]byte("sensitive-response-body"))
 	}))
 	defer upstream.Close()
-	a := NewAppleTokens("client", "jwt", strings.Repeat("k", 32))
+	a := NewAppleTokens("client", "team", "kid", signingPEM, strings.Repeat("k", 32))
 	a.endpoint = upstream.URL
 	_, _, err := a.Exchange(context.Background(), "code")
 	if err == nil || strings.Contains(err.Error(), "sensitive-response-body") {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if NewAppleTokens("client", "jwt", "short").Enabled() {
+	if NewAppleTokens("client", "team", "kid", signingPEM, "short").Enabled() {
 		t.Fatal("accepted short encryption key")
+	}
+	if NewAppleTokens("client", "team", "kid", "not a key", strings.Repeat("k", 32)).Enabled() {
+		t.Fatal("accepted invalid signing key")
 	}
 	if _, _, err := a.Exchange(context.Background(), ""); err == nil {
 		t.Fatal("accepted missing code")
