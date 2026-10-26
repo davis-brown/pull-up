@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"crypto/subtle"
+	"errors"
 	"net/http"
 	"net/url"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 )
 
 type ctxKey int
@@ -30,6 +32,25 @@ func (s *Server) requireAuth(next http.Handler) http.Handler {
 		if err != nil {
 			writeError(w, http.StatusUnauthorized, "invalid or expired token")
 			return
+		}
+		// Suspension blocks participation, so only writes pay for the lookup;
+		// reads are the bulk of authenticated traffic.
+		if r.Method != http.MethodGet && r.Method != http.MethodHead {
+			var suspended bool
+			if err := s.store.Pool.QueryRow(r.Context(), `SELECT suspended_at IS NOT NULL FROM users WHERE id=$1`, userID).Scan(&suspended); err != nil {
+				if errors.Is(err, pgx.ErrNoRows) {
+					writeError(w, http.StatusUnauthorized, "account no longer available")
+				} else {
+					s.internalError(w, "check account status", err)
+				}
+				return
+			}
+			// Suspended players can still permanently delete their account.
+			deleting := r.Method == http.MethodDelete && r.URL.Path == "/api/v1/me"
+			if suspended && !deleting && r.URL.Path != "/api/v1/me/content-consent" {
+				writeError(w, http.StatusForbidden, "account suspended; contact support or delete your account in settings")
+				return
+			}
 		}
 		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), userIDKey, userID)))
 	})

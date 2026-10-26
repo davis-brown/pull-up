@@ -1,6 +1,6 @@
 import { Redirect, useRouter } from "expo-router";
 import { useState } from "react";
-import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, View } from "react-native";
 import { AuthGate } from "@/components/AuthGate";
 import { QueryError } from "@/components/QueryError";
 import { Button, Card, ErrorText, Field, Overline } from "@/components/ui";
@@ -13,10 +13,14 @@ import {
   useAdminSetPhotoStatus,
   useResolveFlag,
   useSetUserAdmin,
+  useMediaReviews,
+  useReviewMedia,
+  useRemoveContent,
 } from "@/lib/hooks";
 import { useTheme } from "@/lib/theme";
 import { safePathSegment } from "@/lib/routes";
 import type { AdminUser, Flag } from "@/lib/types";
+import { resolveApiURL } from "@/lib/api";
 
 const entityLabels: Record<Flag["entity_type"], string> = {
   court: "Court",
@@ -39,10 +43,16 @@ function FlagRow({ flag }: { flag: Flag }) {
   const resolveFlag = useResolveFlag();
   const setCourtStatus = useAdminSetCourtStatus();
   const setPhotoStatus = useAdminSetPhotoStatus();
+  const removeContent = useRemoveContent();
   const [error, setError] = useState<string | null>(null);
+  const [confirmingSuspend, setConfirmingSuspend] = useState(false);
 
-  const busy = resolveFlag.isPending || setCourtStatus.isPending || setPhotoStatus.isPending;
+  const busy = resolveFlag.isPending || setCourtStatus.isPending || setPhotoStatus.isPending || removeContent.isPending;
   const onError = (e: Error) => setError(e.message);
+  const remove = () => removeContent.mutate(
+    { entity_type: flag.entity_type, entity_id: flag.entity_id },
+    { onSuccess: () => resolveFlag.mutate(flag.id, { onError }), onError },
+  );
 
   return (
     <Card>
@@ -101,6 +111,16 @@ function FlagRow({ flag }: { flag: Flag }) {
             />
           </View>
         )}
+        {["report", "message", "session", "user"].includes(flag.entity_type) && (
+          <View style={styles.actionButton}>
+            <Button
+              title={flag.entity_type === "user" ? "Suspend player" : "Remove content"}
+              variant="danger"
+              busy={busy}
+              onPress={() => (flag.entity_type === "user" ? setConfirmingSuspend(true) : remove())}
+            />
+          </View>
+        )}
         <View style={styles.actionButton}>
           <Button
             title="Resolve"
@@ -110,6 +130,18 @@ function FlagRow({ flag }: { flag: Flag }) {
           />
         </View>
       </View>
+      {confirmingSuspend && (
+        <Card tone="warning">
+          <Text style={[t.type.label, { color: t.colors.warning }]}>Suspend this player?</Text>
+          <Text style={[t.type.caption, { color: t.colors.textSecondary, marginTop: t.spacing.xs, marginBottom: t.spacing.sm }]}>
+            This cannot be undone. Their name and avatar are wiped, their photos,
+            messages, reports and runs are removed, and they are signed out
+            everywhere. They can still delete their account.
+          </Text>
+          <Button title="Suspend player" variant="danger" busy={busy} onPress={remove} />
+          <Button title="Cancel" variant="ghost" onPress={() => setConfirmingSuspend(false)} />
+        </Card>
+      )}
     </Card>
   );
 }
@@ -239,6 +271,7 @@ function AdminContent() {
       style={{ backgroundColor: t.colors.background }}
       contentContainerStyle={{ padding: t.spacing.lg }}
     >
+      <MediaReviewQueue />
       <SectionLabel>Flags</SectionLabel>
       {isLoading ? (
         <ActivityIndicator size="large" color={t.colors.accent} />
@@ -255,6 +288,34 @@ function AdminContent() {
       <AdminManagementCard />
       <AdminActionsCard />
     </ScrollView>
+  );
+}
+
+function MediaReviewQueue() {
+  const t = useTheme();
+  const reviews = useMediaReviews();
+  const review = useReviewMedia();
+  return (
+    <View style={{ marginBottom: t.spacing.lg }}>
+      <SectionLabel>Image review</SectionLabel>
+      <Text style={[t.type.body, { color: t.colors.textSecondary }]}>
+        Uploaded court photos and avatars stay private until approved. Reject sexual, hateful, violent, abusive, or unrelated images.
+      </Text>
+      {reviews.isLoading && <ActivityIndicator />}
+      {reviews.error && <QueryError error={reviews.error} onRetry={() => void reviews.refetch()} />}
+      <ErrorText message={review.error?.message ?? null} />
+      {reviews.data?.length === 0 && <Text style={{ color: t.colors.textMuted }}>No images awaiting review.</Text>}
+      {reviews.data?.map((item) => (
+        <Card key={item.key}>
+          <Text style={{ color: t.colors.textPrimary }}>{item.purpose === "avatar" ? "Player avatar" : "Court photo"}</Text>
+          <Image source={{ uri: resolveApiURL(item.preview_path) }} style={{ width: "100%", height: 240 }} resizeMode="contain" accessibilityLabel="Image awaiting moderation" />
+          <View style={styles.actions}>
+            <Button title="Approve" busy={review.isPending} onPress={() => review.mutate({ key: item.key, approve: true })} />
+            <Button title="Reject" variant="danger" busy={review.isPending} onPress={() => review.mutate({ key: item.key, approve: false })} />
+          </View>
+        </Card>
+      ))}
+    </View>
   );
 }
 

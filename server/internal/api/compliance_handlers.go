@@ -1,8 +1,10 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -39,8 +41,8 @@ func (s *Server) handleDeleteMe(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if count <= 1 {
-			writeError(w, http.StatusConflict, "transfer admin access before deleting the last admin")
-			return
+			// Deletion must remain available even to the last moderator.
+			s.log.Warn("last administrator is deleting their account")
 		}
 	}
 	if err := q.DetachUserFromCourts(r.Context(), &uid); err != nil {
@@ -49,6 +51,12 @@ func (s *Server) handleDeleteMe(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := q.DetachUserFromResolvedFlags(r.Context(), &uid); err != nil {
 		s.internalError(w, "detach flags", err)
+		return
+	}
+	// Atomically retain only the encrypted provider token for revocation.
+	// A temporary Apple outage must not prevent deletion of personal data.
+	if _, err := tx.Exec(r.Context(), `INSERT INTO apple_revocations (encrypted_token, client_id) SELECT apple_refresh_token, $2 FROM users WHERE id=$1 AND apple_refresh_token IS NOT NULL`, uid, s.cfg.AppleClientID); err != nil {
+		s.internalError(w, "queue Apple revocation", err)
 		return
 	}
 	n, err := q.DeleteUser(r.Context(), uid)
@@ -65,6 +73,11 @@ func (s *Server) handleDeleteMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.log.Info("account deleted", "user", uid)
+	s.runBackground("apple-revocation", func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		s.drainAppleRevocations(ctx)
+	})
 	w.WriteHeader(http.StatusNoContent)
 }
 

@@ -1,6 +1,8 @@
 import { Link, useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useState } from "react";
-import { KeyboardAvoidingView, Platform, StyleSheet, Text, View } from "react-native";
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from "react-native";
+import { OAuthButtons } from "@/components/OAuthButtons";
+import { TermsCheckbox, TERMS_REQUIRED_MESSAGE } from "@/components/TermsAgreement";
 import { Button, ErrorText, Field } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
 import { getErrorMessage } from "@/lib/errors";
@@ -16,6 +18,7 @@ export default function RegisterScreen() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
 
   const submit = async () => {
     setError(null);
@@ -39,64 +42,76 @@ export default function RegisterScreen() {
 
   return (
     <KeyboardAvoidingView
-      style={[styles.container, { backgroundColor: t.colors.background }]}
+      style={[styles.flex, { backgroundColor: t.colors.background }]}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
-      <Text
-        style={[
-          t.type.title,
-          styles.center,
-          { color: t.colors.textPrimary, marginBottom: t.spacing.lg },
-        ]}
-      >
-        Join the run
-      </Text>
-      <Field
-        label="Display name"
-        value={displayName}
-        onChangeText={setDisplayName}
-        autoCapitalize="words"
-        placeholder="How other players see you"
-      />
-      <Field
-        label="Email"
-        value={email}
-        onChangeText={setEmail}
-        keyboardType="email-address"
-        autoComplete="email"
-        placeholder="you@example.com"
-      />
-      <Field
-        label="Password"
-        value={password}
-        onChangeText={setPassword}
-        secureTextEntry
-        placeholder="At least 8 characters"
-      />
-      <ErrorText message={error} />
-      <Button
-        title="Create account"
-        onPress={submit}
-        busy={busy}
-        disabled={!email || password.length < 8 || !displayName.trim()}
-      />
-      <View style={[styles.footer, { marginTop: t.spacing.lg }]}>
-        <Text style={[t.type.body, { color: t.colors.textSecondary }]}>
-          Already have an account?{" "}
-        </Text>
-        <Link
-          href={(next ? `/login?next=${encodeURIComponent(next)}` : "/login") as Href}
-          style={[t.type.bodyMedium, { color: t.colors.accent }]}
+      {/* Scrolls on small phones now that Terms and social sign-in sit here. */}
+      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
+        <Text
+          style={[
+            t.type.title,
+            styles.center,
+            { color: t.colors.textPrimary, marginBottom: t.spacing.lg },
+          ]}
         >
-          Sign in
-        </Link>
-      </View>
+          Join the run
+        </Text>
+        <Field
+          label="Display name"
+          value={displayName}
+          onChangeText={setDisplayName}
+          autoCapitalize="words"
+          placeholder="How other players see you"
+        />
+        <Field
+          label="Email"
+          value={email}
+          onChangeText={setEmail}
+          keyboardType="email-address"
+          autoComplete="email"
+          placeholder="you@example.com"
+        />
+        <Field
+          label="Password"
+          value={password}
+          onChangeText={setPassword}
+          secureTextEntry
+          placeholder="At least 8 characters"
+        />
+        <TermsCheckbox
+          accepted={acceptedTerms}
+          onChange={(next) => {
+            setAcceptedTerms(next);
+            if (next && error === TERMS_REQUIRED_MESSAGE) setError(null);
+          }}
+        />
+        <ErrorText message={error} />
+        <Button
+          title="Create account"
+          onPress={submit}
+          busy={busy}
+          disabled={!acceptedTerms || !email || password.length < 8 || !displayName.trim()}
+        />
+        <OAuthButtons guard={() => (acceptedTerms ? null : TERMS_REQUIRED_MESSAGE)} />
+        <View style={[styles.footer, { marginTop: t.spacing.lg }]}>
+          <Text style={[t.type.body, { color: t.colors.textSecondary }]}>
+            Already have an account?{" "}
+          </Text>
+          <Link
+            href={(next ? `/login?next=${encodeURIComponent(next)}` : "/login") as Href}
+            style={[t.type.bodyMedium, { color: t.colors.accent }]}
+          >
+            Sign in
+          </Link>
+        </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 24, justifyContent: "center" },
+  flex: { flex: 1 },
+  container: { flexGrow: 1, padding: 24, justifyContent: "center" },
   center: { textAlign: "center" },
   footer: { flexDirection: "row", justifyContent: "center" },
 });

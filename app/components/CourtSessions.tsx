@@ -143,6 +143,18 @@ function SessionRow({
             {going ? "Going" : "I'm in"}
           </Text>
         </Pressable>
+        {!mine && (
+          // The organizer's note is user-generated content (Guideline 1.2).
+          <Pressable
+            onPress={() => router.push(`/flag?entityType=session&entityId=${safePathSegment(session.id)}`)}
+            hitSlop={8}
+            style={styles.cancelButton}
+            accessibilityRole="button"
+            accessibilityLabel="Report this run"
+          >
+            <Ionicons name="flag-outline" size={18} color={t.colors.textMuted} />
+          </Pressable>
+        )}
         {mine && (
           <Pressable
             onPress={() =>

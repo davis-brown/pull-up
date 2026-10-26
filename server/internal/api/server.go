@@ -26,6 +26,7 @@ type Server struct {
 	store            *store.Store
 	issuer           *auth.Issuer
 	oauth            *auth.OAuthVerifier
+	apple            *auth.AppleTokens
 	log              *slog.Logger
 	seeder           *seeder.Seeder     // nil when auto-seeding is disabled
 	enricher         *enrich.Enricher   // nil when enrichment is disabled
@@ -44,7 +45,8 @@ func NewServer(cfg *config.Config, st *store.Store, log *slog.Logger, sd *seeder
 		cfg:             cfg,
 		store:           st,
 		issuer:          auth.NewIssuer(cfg.JWTSecret, cfg.AccessTokenTTL),
-		oauth:           auth.NewOAuthVerifier(cfg.GoogleClientIDs, cfg.AppleAudiences),
+		oauth:           auth.NewOAuthVerifier(cfg.GoogleClientIDs, cfg.AppleAudiences, cfg.AppleKeysURL),
+		apple:           auth.NewAppleTokens(cfg.AppleClientID, cfg.AppleTeamID, cfg.AppleKeyID, cfg.ApplePrivateKey, cfg.AppleTokenEncryptionKey),
 		log:             log,
 		seeder:          sd,
 		enricher:        en,
@@ -107,6 +109,7 @@ func (s *Server) Routes() http.Handler {
 		MaxAge:           7200,
 	}))
 
+	r.Post("/api/v1/auth/apple/notifications", s.handleAppleNotification)
 	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
@@ -170,6 +173,8 @@ func (s *Server) Routes() http.Handler {
 			}
 
 			r.Get("/me", s.handleGetMe)
+			r.Get("/me/content-consent", s.handleContentConsent)
+			r.Post("/me/content-consent", s.handleContentConsent)
 			r.Patch("/me", s.handlePatchMe)
 			r.Delete("/me", s.handleDeleteMe)
 			r.Post("/me/avatar", s.handleCreateAvatarUpload)
@@ -223,6 +228,9 @@ func (s *Server) Routes() http.Handler {
 			r.Group(func(r chi.Router) {
 				r.Use(s.requireAdmin)
 				r.Get("/admin/flags", s.handleListFlags)
+				r.Post("/admin/content/remove", s.handleAdminRemoveContent)
+				r.Get("/admin/media", s.handleAdminMediaReviews)
+				r.Post("/admin/media/review", s.handleAdminReviewMedia)
 				r.Post("/admin/flags/{id}/resolve", s.handleResolveFlag)
 				r.Post("/admin/courts/{id}/status", s.handleAdminSetCourtStatus)
 				r.Post("/admin/photos/{id}/status", s.handleAdminSetPhotoStatus)

@@ -31,6 +31,7 @@ WITH candidates AS (
     WHERE q.requested_at <= now()
       AND (q.claimed_at IS NULL OR q.claimed_at < now() - interval '5 minutes')
       AND q.storage_key NOT IN (SELECT storage_key FROM pending_uploads)
+      AND q.storage_key NOT IN (SELECT storage_key FROM media_reviews)
       AND NOT EXISTS (
           SELECT 1 FROM users u WHERE u.avatar_url = '/photos/' || q.storage_key
       )
@@ -182,7 +183,7 @@ func (q *Queries) ListStalePendingUploads(ctx context.Context, batchSize int32) 
 
 const markCourtPhotoUploaded = `-- name: MarkCourtPhotoUploaded :execrows
 UPDATE court_photos
-SET status = 'visible'
+SET status = status
 WHERE storage_key = $1 AND status IN ('pending', 'visible')
 `
 
