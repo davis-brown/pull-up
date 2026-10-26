@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { usePathname } from "expo-router";
+import { usePathname, useRouter } from "expo-router";
 import { useState } from "react";
 import { Modal, ScrollView, Text, View } from "react-native";
 import { TermsCheckbox } from "./TermsAgreement";
@@ -17,6 +17,7 @@ export function CommunityConsent() {
 function ConsentForAccount({ userId }: { userId: string }) {
   const t = useTheme();
   const path = usePathname();
+  const router = useRouter();
   const { signOut } = useAuth();
   const [accepted, setAccepted] = useState(false);
   const qc = useQueryClient();
@@ -43,6 +44,7 @@ function ConsentForAccount({ userId }: { userId: string }) {
           <TermsCheckbox accepted={accepted} onChange={setAccepted} />
           <ErrorText message={consent.error?.message ?? status.error?.message ?? null} />
           <Button title="Agree and continue" disabled={!accepted} busy={consent.isPending} onPress={() => consent.mutate()} />
+          <Button title="Account settings and deletion" variant="ghost" onPress={() => router.push("/profile-settings")} />
           <Button title="Sign out and browse courts" variant="ghost" onPress={() => void signOut()} />
         </View>
       </ScrollView>

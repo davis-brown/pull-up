@@ -93,8 +93,9 @@ func TestPushTokenRegistration(t *testing.T) {
 }
 
 func TestPhotoUploadFlow(t *testing.T) {
-	ts, _ := newTestServer(t)
+	ts, st := newTestServer(t)
 	u := registerUser(t, ts, "shutterbug@test.local", "Shutterbug")
+	bootstrapAdmin(t, st, u.User.ID)
 	court := createTestCourt(t, ts, u.AccessToken, "Photogenic Court", ruckerLat, ruckerLng)
 
 	resp := doJSON(t, ts, http.MethodGet, "/courts/"+court.ID+"/photos", "", nil)
@@ -139,12 +140,20 @@ func TestPhotoUploadFlow(t *testing.T) {
 	list := decodeJSON[struct {
 		Photos []map[string]any `json:"photos"`
 	}](t, resp)
+	if len(list.Photos) != 0 {
+		t.Fatalf("unreviewed photos published: %+v", list.Photos)
+	}
+	reviewMedia(t, ts, u.AccessToken, storageKey, true)
+	resp = doJSON(t, ts, http.MethodGet, "/courts/"+court.ID+"/photos", "", nil)
+	list = decodeJSON[struct {
+		Photos []map[string]any `json:"photos"`
+	}](t, resp)
 	if len(list.Photos) != 1 {
-		t.Fatalf("photos after upload = %+v, want 1", list.Photos)
+		t.Fatalf("photos after approval = %+v, want 1", list.Photos)
 	}
 }
 
-// Photos go visible on upload, so one account's daily uploads are capped.
+// Cap each account's daily uploads to bound storage and the review queue.
 func TestCourtPhotoDailyCap(t *testing.T) {
 	ts, _ := newTestServer(t)
 	u := registerUser(t, ts, "photo-cap@test.local", "Uploader")
