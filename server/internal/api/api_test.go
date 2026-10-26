@@ -60,7 +60,7 @@ func newTestServer(t *testing.T) (*httptest.Server, *store.Store) {
 		t.Fatalf("migrate: %v", err)
 	}
 	if _, err := st.Pool.Exec(ctx,
-		"TRUNCATE object_deletion_queue, users, refresh_tokens, courts, check_ins, crowd_reports, court_votes, court_photos, flags, seed_regions, admin_actions CASCADE"); err != nil {
+		"TRUNCATE apple_revocations, object_deletion_queue, users, refresh_tokens, courts, check_ins, crowd_reports, court_votes, court_photos, flags, seed_regions, admin_actions CASCADE"); err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 

@@ -451,14 +451,6 @@ func TestAdminPromoteDemoteAndLastAdminGuard(t *testing.T) {
 		t.Fatalf("demote last admin: status %d, want 400: %s", resp.StatusCode, readBody(t, resp))
 	}
 	resp.Body.Close()
-	// Account deletion uses the same serialized invariant and cannot remove
-	// the final admin through a different endpoint.
-	resp = doJSON(t, ts, http.MethodDelete, "/me", regular.AccessToken, nil)
-	if resp.StatusCode != http.StatusConflict {
-		defer resp.Body.Close()
-		t.Fatalf("delete last admin: status %d, want 409: %s", resp.StatusCode, readBody(t, resp))
-	}
-	resp.Body.Close()
 
 	resp = doJSON(t, ts, http.MethodGet, "/admin/flags", first.AccessToken, nil)
 	if resp.StatusCode != http.StatusForbidden {
@@ -486,4 +478,10 @@ func TestAdminPromoteDemoteAndLastAdminGuard(t *testing.T) {
 	if actions.Actions[1].Action != "promote" || actions.Actions[1].TargetName != "Promotable Pat" {
 		t.Errorf("oldest action = %+v, want the initial promotion of Promotable Pat", actions.Actions[1])
 	}
+	// The last-admin demotion guard must not prevent permanent account deletion.
+	resp = doJSON(t, ts, http.MethodDelete, "/me", regular.AccessToken, nil)
+	if resp.StatusCode != http.StatusNoContent {
+		t.Fatalf("delete last admin: status %d, want 204", resp.StatusCode)
+	}
+	resp.Body.Close()
 }

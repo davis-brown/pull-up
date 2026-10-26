@@ -18,12 +18,14 @@ interface OptionalBindings {
   CORS_ORIGINS?: string;
   GOOGLE_CLIENT_IDS?: string;
   APPLE_AUDIENCES?: string;
+  APPLE_CLIENT_ID?: string;
+  APPLE_CLIENT_SECRET?: string;
+  APPLE_TOKEN_ENCRYPTION_KEY?: string;
   SENTRY_DSN?: string;
   EMAIL_FROM?: string;
   WEB_ORIGIN?: string;
   // Workers AI text moderation (Llama Guard). Both must be present for the
-  // Go API to screen chat messages and notes; with either missing it
-  // accepts text unscreened rather than failing closed.
+  // Go API to screen public text; production posting pauses if either is missing.
   CLOUDFLARE_ACCOUNT_ID?: string;
   CLOUDFLARE_AI_TOKEN?: string;
   // Enables the enricher's Mapillary photo source; empty leaves it off and
@@ -97,6 +99,9 @@ export class ApiContainer extends Container<RuntimeEnv> {
       CORS_ORIGINS: env.CORS_ORIGINS?.trim() || DENY_ALL_CORS_ORIGIN,
       GOOGLE_CLIENT_IDS: env.GOOGLE_CLIENT_IDS ?? "",
       APPLE_AUDIENCES: env.APPLE_AUDIENCES ?? "",
+      APPLE_CLIENT_ID: env.APPLE_CLIENT_ID ?? "",
+      APPLE_CLIENT_SECRET: env.APPLE_CLIENT_SECRET ?? "",
+      APPLE_TOKEN_ENCRYPTION_KEY: env.APPLE_TOKEN_ENCRYPTION_KEY ?? "",
       SENTRY_DSN: env.SENTRY_DSN ?? "",
       CLOUDFLARE_ACCOUNT_ID: env.CLOUDFLARE_ACCOUNT_ID ?? "",
       CLOUDFLARE_AI_TOKEN: env.CLOUDFLARE_AI_TOKEN ?? "",
@@ -519,10 +524,10 @@ async function validatedUploadStream(
   };
 }
 
-async function authorizeMedia(env: RuntimeEnv, key: string): Promise<boolean> {
+async function authorizeMedia(env: RuntimeEnv, key: string, review = false): Promise<boolean> {
   const response = await fetchContainerInternal(env, `${INTERNAL_PREFIX}/media/authorize`, {
     method: "POST",
-    body: JSON.stringify({ key }),
+    body: JSON.stringify({ key, review }),
   }, 15_000);
   if (response.status === 204) return true;
   if (response.status === 404 || response.status === 410) {
@@ -575,7 +580,12 @@ async function handlePhotoRead(
 
   let authorized: boolean;
   try {
-    authorized = await authorizeMedia(env, key);
+    const preview = new URL(request.url).searchParams.get("review");
+    const parts = preview && /^([1-9][0-9]{9})\.([0-9a-f]{64})$/.exec(preview);
+    const review = !!parts && await verifyUploadSignature(env.UPLOAD_SIGNING_SECRET, `review:${key}`, {
+      expiresAt: parts[1]!, signature: parts[2]!,
+    });
+    authorized = await authorizeMedia(env, key, review);
   } catch (error) {
     console.error(JSON.stringify({
       message: "media authorization failed",

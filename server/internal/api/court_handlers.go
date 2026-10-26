@@ -402,6 +402,15 @@ func (s *Server) handleCreateCourt(w http.ResponseWriter, r *http.Request) {
 	if !s.screenText(w, r, "court_name", req.Name) {
 		return
 	}
+	if req.Address != nil {
+		if len(*req.Address) > 300 {
+			writeError(w, http.StatusBadRequest, "address must be at most 300 characters")
+			return
+		}
+		if !s.screenText(w, r, "court_address", *req.Address) {
+			return
+		}
+	}
 	if req.FeeNote != nil && !s.screenText(w, r, "court_fee_note", *req.FeeNote) {
 		return
 	}

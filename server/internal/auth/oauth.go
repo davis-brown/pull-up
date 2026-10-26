@@ -2,11 +2,13 @@ package auth
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/MicahParks/keyfunc/v3"
 	"github.com/golang-jwt/jwt/v5"
@@ -32,8 +34,8 @@ type providerConfig struct {
 type OAuthVerifier struct {
 	providers map[string]providerConfig
 
-	mu    sync.Mutex
-	jwks  map[string]keyfunc.Keyfunc
+	mu   sync.Mutex
+	jwks map[string]keyfunc.Keyfunc
 }
 
 // NewOAuthVerifier configures providers from comma-separated audience lists
@@ -142,4 +144,36 @@ func splitList(s string) []string {
 		}
 	}
 	return out
+}
+
+type AppleEvent struct {
+	Type    string `json:"type"`
+	Subject string `json:"sub"`
+	Time    int64  `json:"event_time"`
+}
+
+// Notifications carry an events JSON string rather than an identity subject.
+func (v *OAuthVerifier) VerifyAppleEvent(ctx context.Context, payload string) (*AppleEvent, error) {
+	cfg, ok := v.providers["apple"]
+	if !ok {
+		return nil, ErrInvalidToken
+	}
+	kf, err := v.keyfuncFor(ctx, "apple", cfg.jwksURL)
+	if err != nil {
+		return nil, err
+	}
+	claims := struct {
+		jwt.RegisteredClaims
+		Events string `json:"events"`
+	}{}
+	token, err := jwt.ParseWithClaims(payload, &claims, kf.Keyfunc,
+		jwt.WithValidMethods([]string{"RS256", "ES256"}), jwt.WithIssuer("https://appleid.apple.com"), jwt.WithAudience(cfg.audiences...), jwt.WithIssuedAt(), jwt.WithLeeway(time.Minute))
+	if err != nil || !token.Valid || claims.IssuedAt == nil {
+		return nil, ErrInvalidToken
+	}
+	var event AppleEvent
+	if err := json.Unmarshal([]byte(claims.Events), &event); err != nil || event.Subject == "" || event.Time <= 0 {
+		return nil, ErrInvalidToken
+	}
+	return &event, nil
 }

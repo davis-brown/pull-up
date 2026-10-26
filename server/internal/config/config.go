@@ -30,14 +30,18 @@ type Config struct {
 	// OAuth audiences; empty disables the provider. GoogleClientIDs is a
 	// comma-separated list of OAuth client IDs (web + iOS + Android);
 	// AppleAudiences is normally the iOS bundle id.
-	GoogleClientIDs string
-	AppleAudiences  string
+	GoogleClientIDs         string
+	AppleAudiences          string
+	AppleClientID           string
+	AppleClientSecret       string
+	AppleTokenEncryptionKey string
 	// SentryDSN enables server-side crash/error reporting when set.
 	SentryDSN string
 	// Workers AI credentials for text moderation. Both must be set; with
 	// either empty, user text is accepted unscreened (local dev and CI).
 	CloudflareAccountID string
 	CloudflareAIToken   string
+	ModerationRequired  bool
 	// MapillaryToken enables the enricher's Mapillary photo source. Optional;
 	// empty leaves it off and Commons still runs.
 	MapillaryToken string
@@ -73,9 +77,13 @@ func Load() (*Config, error) {
 		Enrich:                   getenv("ENRICH", "true") != "false",
 		GoogleClientIDs:          getenv("GOOGLE_CLIENT_IDS", ""),
 		AppleAudiences:           getenv("APPLE_AUDIENCES", ""),
+		AppleClientID:            os.Getenv("APPLE_CLIENT_ID"),
+		AppleClientSecret:        os.Getenv("APPLE_CLIENT_SECRET"),
+		AppleTokenEncryptionKey:  os.Getenv("APPLE_TOKEN_ENCRYPTION_KEY"),
 		SentryDSN:                os.Getenv("SENTRY_DSN"),
 		CloudflareAccountID:      os.Getenv("CLOUDFLARE_ACCOUNT_ID"),
 		CloudflareAIToken:        os.Getenv("CLOUDFLARE_AI_TOKEN"),
+		ModerationRequired:       os.Getenv("APP_ENV") == "production",
 		MapillaryToken:           os.Getenv("MAPILLARY_TOKEN"),
 		RateLimitAuthPerMin:      getenvInt("RATE_LIMIT_AUTH_PER_MIN", 10),
 		RateLimitWritePerMin:     getenvInt("RATE_LIMIT_WRITE_PER_MIN", 60),
