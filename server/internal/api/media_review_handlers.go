@@ -56,8 +56,20 @@ func (s *Server) handleAdminReviewMedia(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	defer tx.Rollback(r.Context())
-	var purpose string
+	// Match avatar submission/removal: lock the owner before the review row.
+	// Re-read the review after acquiring the lock because a replacement or
+	// removal may have deleted it while this request was waiting.
 	var owner uuid.UUID
+	err = tx.QueryRow(r.Context(), `SELECT id FROM users WHERE id=(SELECT owner_id FROM media_reviews WHERE storage_key=$1) FOR UPDATE`, req.Key).Scan(&owner)
+	if errors.Is(err, pgx.ErrNoRows) {
+		writeError(w, http.StatusNotFound, "review not found")
+		return
+	}
+	if err != nil {
+		s.internalError(w, "lock media review owner", err)
+		return
+	}
+	var purpose string
 	var photo *uuid.UUID
 	err = tx.QueryRow(r.Context(), `SELECT owner_id, purpose, photo_id FROM media_reviews WHERE storage_key=$1 FOR UPDATE`, req.Key).Scan(&owner, &purpose, &photo)
 	if errors.Is(err, pgx.ErrNoRows) {
