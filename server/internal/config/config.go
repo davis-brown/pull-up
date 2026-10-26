@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/davisbrown/pull-up/server/internal/auth"
 )
 
 type Config struct {
@@ -33,8 +35,12 @@ type Config struct {
 	GoogleClientIDs         string
 	AppleAudiences          string
 	AppleClientID           string
-	AppleClientSecret       string
+	AppleTeamID             string
+	AppleKeyID              string
+	ApplePrivateKey         string // Sign in with Apple .p8 contents (PEM)
 	AppleTokenEncryptionKey string
+	// AppleKeysURL overrides Apple's JWKS endpoint; tests only.
+	AppleKeysURL string
 	// SentryDSN enables server-side crash/error reporting when set.
 	SentryDSN string
 	// Workers AI credentials for text moderation. Both must be set; with
@@ -78,7 +84,9 @@ func Load() (*Config, error) {
 		GoogleClientIDs:          getenv("GOOGLE_CLIENT_IDS", ""),
 		AppleAudiences:           getenv("APPLE_AUDIENCES", ""),
 		AppleClientID:            os.Getenv("APPLE_CLIENT_ID"),
-		AppleClientSecret:        os.Getenv("APPLE_CLIENT_SECRET"),
+		AppleTeamID:              os.Getenv("APPLE_TEAM_ID"),
+		AppleKeyID:               os.Getenv("APPLE_KEY_ID"),
+		ApplePrivateKey:          os.Getenv("APPLE_PRIVATE_KEY"),
 		AppleTokenEncryptionKey:  os.Getenv("APPLE_TOKEN_ENCRYPTION_KEY"),
 		SentryDSN:                os.Getenv("SENTRY_DSN"),
 		CloudflareAccountID:      os.Getenv("CLOUDFLARE_ACCOUNT_ID"),
@@ -116,6 +124,19 @@ func Load() (*Config, error) {
 	}
 	if len(c.InternalTaskSecret) < 32 {
 		return nil, fmt.Errorf("INTERNAL_TASK_SECRET must be at least 32 bytes")
+	}
+	// Apple sign-in requires token management, so refuse to boot a production
+	// API that would answer every Apple sign-in with 503.
+	if os.Getenv("APP_ENV") == "production" && strings.TrimSpace(c.AppleAudiences) != "" {
+		if c.AppleClientID == "" || c.AppleTeamID == "" || c.AppleKeyID == "" {
+			return nil, fmt.Errorf("APPLE_CLIENT_ID, APPLE_TEAM_ID and APPLE_KEY_ID are required when APPLE_AUDIENCES is set")
+		}
+		if _, err := auth.ParseApplePrivateKey(c.ApplePrivateKey); err != nil {
+			return nil, fmt.Errorf("APPLE_PRIVATE_KEY: %w", err)
+		}
+		if len(c.AppleTokenEncryptionKey) != 32 {
+			return nil, fmt.Errorf("APPLE_TOKEN_ENCRYPTION_KEY must be exactly 32 bytes")
+		}
 	}
 	for _, origin := range c.CORSOrigins {
 		if strings.TrimSpace(origin) == "*" {

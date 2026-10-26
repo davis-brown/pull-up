@@ -285,7 +285,9 @@ func (s *Server) handleOAuth(w http.ResponseWriter, r *http.Request) {
 		AuthProvider: identity.Provider, OauthSubject: &identity.Subject,
 	})
 	if err == nil {
-		if !s.saveOAuthAuthorization(w, r, tx, user.ID, appleToken, req.TermsVersion) {
+		// Consent is only taken at account creation; existing accounts accept
+		// updated terms explicitly through /me/content-consent.
+		if !s.saveOAuthAuthorization(w, r, tx, user.ID, appleToken, "") {
 			return
 		}
 		if err := tx.Commit(r.Context()); err != nil {

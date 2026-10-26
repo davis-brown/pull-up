@@ -40,7 +40,8 @@ type OAuthVerifier struct {
 
 // NewOAuthVerifier configures providers from comma-separated audience lists
 // (Google OAuth client IDs; the iOS bundle id for Apple). Empty = disabled.
-func NewOAuthVerifier(googleClientIDs, appleAudiences string) *OAuthVerifier {
+// appleKeysURL overrides Apple's JWKS endpoint for tests; empty in production.
+func NewOAuthVerifier(googleClientIDs, appleAudiences, appleKeysURL string) *OAuthVerifier {
 	v := &OAuthVerifier{
 		providers: map[string]providerConfig{},
 		jwks:      map[string]keyfunc.Keyfunc{},
@@ -52,9 +53,12 @@ func NewOAuthVerifier(googleClientIDs, appleAudiences string) *OAuthVerifier {
 			audiences: auds,
 		}
 	}
+	if appleKeysURL == "" {
+		appleKeysURL = "https://appleid.apple.com/auth/keys"
+	}
 	if auds := splitList(appleAudiences); len(auds) > 0 {
 		v.providers["apple"] = providerConfig{
-			jwksURL:   "https://appleid.apple.com/auth/keys",
+			jwksURL:   appleKeysURL,
 			issuers:   []string{"https://appleid.apple.com"},
 			audiences: auds,
 		}

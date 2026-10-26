@@ -4,8 +4,11 @@ import (
 	"context"
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/ecdsa"
 	"crypto/rand"
+	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"io"
@@ -13,29 +16,72 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/golang-jwt/jwt/v5"
 )
 
 // AppleTokens exchanges one-time codes and revokes Apple refresh tokens.
-// The signing JWT and the dedicated 32-byte encryption key are server secrets.
+// The .p8 signing key and the dedicated 32-byte encryption key are server secrets.
 type AppleTokens struct {
-	ClientID     string
-	clientSecret string
-	key          []byte
-	endpoint     string
-	http         *http.Client
+	ClientID   string
+	teamID     string
+	keyID      string
+	signingKey *ecdsa.PrivateKey
+	key        []byte
+	endpoint   string
+	http       *http.Client
 }
 
-func NewAppleTokens(clientID, clientSecret, encryptionKey string) *AppleTokens {
-	return &AppleTokens{ClientID: clientID, clientSecret: clientSecret, key: []byte(encryptionKey), endpoint: "https://appleid.apple.com", http: &http.Client{Timeout: 8 * time.Second}}
+// NewAppleTokens takes the Sign in with Apple key (.p8 PEM contents). An
+// unparseable key leaves token management disabled; config.Load rejects it
+// in production.
+func NewAppleTokens(clientID, teamID, keyID, privateKeyPEM, encryptionKey string) *AppleTokens {
+	signingKey, _ := ParseApplePrivateKey(privateKeyPEM)
+	return &AppleTokens{ClientID: clientID, teamID: teamID, keyID: keyID, signingKey: signingKey, key: []byte(encryptionKey), endpoint: "https://appleid.apple.com", http: &http.Client{Timeout: 8 * time.Second}}
+}
+
+func ParseApplePrivateKey(privateKeyPEM string) (*ecdsa.PrivateKey, error) {
+	block, _ := pem.Decode([]byte(privateKeyPEM))
+	if block == nil {
+		return nil, errors.New("Apple private key is not PEM")
+	}
+	parsed, err := x509.ParsePKCS8PrivateKey(block.Bytes)
+	if err != nil {
+		return nil, errors.New("Apple private key is not PKCS#8")
+	}
+	key, ok := parsed.(*ecdsa.PrivateKey)
+	if !ok {
+		return nil, errors.New("Apple private key is not an EC key")
+	}
+	return key, nil
 }
 
 func (a *AppleTokens) Enabled() bool {
-	return a != nil && a.ClientID != "" && a.clientSecret != "" && len(a.key) == 32
+	return a != nil && a.ClientID != "" && a.teamID != "" && a.keyID != "" && a.signingKey != nil && len(a.key) == 32
+}
+
+// clientSecret signs a fresh short-lived client secret per call, so there is
+// no long-lived JWT to renew (Apple caps those at six months).
+func (a *AppleTokens) clientSecret() (string, error) {
+	now := time.Now()
+	tok := jwt.NewWithClaims(jwt.SigningMethodES256, jwt.RegisteredClaims{
+		Issuer:    a.teamID,
+		Subject:   a.ClientID,
+		Audience:  jwt.ClaimStrings{"https://appleid.apple.com"},
+		IssuedAt:  jwt.NewNumericDate(now),
+		ExpiresAt: jwt.NewNumericDate(now.Add(5 * time.Minute)),
+	})
+	tok.Header["kid"] = a.keyID
+	return tok.SignedString(a.signingKey)
 }
 
 func (a *AppleTokens) post(ctx context.Context, path string, form url.Values, dst any) error {
+	secret, err := a.clientSecret()
+	if err != nil {
+		return errors.New("cannot sign Apple client secret")
+	}
 	form.Set("client_id", a.ClientID)
-	form.Set("client_secret", a.clientSecret)
+	form.Set("client_secret", secret)
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, a.endpoint+path, strings.NewReader(form.Encode()))
 	if err != nil {
 		return err

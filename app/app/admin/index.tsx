@@ -45,9 +45,14 @@ function FlagRow({ flag }: { flag: Flag }) {
   const setPhotoStatus = useAdminSetPhotoStatus();
   const removeContent = useRemoveContent();
   const [error, setError] = useState<string | null>(null);
+  const [confirmingSuspend, setConfirmingSuspend] = useState(false);
 
   const busy = resolveFlag.isPending || setCourtStatus.isPending || setPhotoStatus.isPending || removeContent.isPending;
   const onError = (e: Error) => setError(e.message);
+  const remove = () => removeContent.mutate(
+    { entity_type: flag.entity_type, entity_id: flag.entity_id },
+    { onSuccess: () => resolveFlag.mutate(flag.id, { onError }), onError },
+  );
 
   return (
     <Card>
@@ -112,10 +117,7 @@ function FlagRow({ flag }: { flag: Flag }) {
               title={flag.entity_type === "user" ? "Suspend player" : "Remove content"}
               variant="danger"
               busy={busy}
-              onPress={() => removeContent.mutate(
-                { entity_type: flag.entity_type, entity_id: flag.entity_id },
-                { onSuccess: () => resolveFlag.mutate(flag.id, { onError }), onError },
-              )}
+              onPress={() => (flag.entity_type === "user" ? setConfirmingSuspend(true) : remove())}
             />
           </View>
         )}
@@ -128,6 +130,18 @@ function FlagRow({ flag }: { flag: Flag }) {
           />
         </View>
       </View>
+      {confirmingSuspend && (
+        <Card tone="warning">
+          <Text style={[t.type.label, { color: t.colors.warning }]}>Suspend this player?</Text>
+          <Text style={[t.type.caption, { color: t.colors.textSecondary, marginTop: t.spacing.xs, marginBottom: t.spacing.sm }]}>
+            This cannot be undone. Their name and avatar are wiped, their photos,
+            messages, reports and runs are removed, and they are signed out
+            everywhere. They can still delete their account.
+          </Text>
+          <Button title="Suspend player" variant="danger" busy={busy} onPress={remove} />
+          <Button title="Cancel" variant="ghost" onPress={() => setConfirmingSuspend(false)} />
+        </Card>
+      )}
     </Card>
   );
 }

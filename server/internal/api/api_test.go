@@ -45,6 +45,12 @@ func acquireTestDBLock(t *testing.T, ctx context.Context, databaseURL string) {
 
 func newTestServer(t *testing.T) (*httptest.Server, *store.Store) {
 	t.Helper()
+	return newTestServerWith(t, nil)
+}
+
+// newTestServerWith lets a test adjust the config before the server starts.
+func newTestServerWith(t *testing.T, configure func(*config.Config)) (*httptest.Server, *store.Store) {
+	t.Helper()
 	url := os.Getenv("TEST_DATABASE_URL")
 	if url == "" {
 		t.Skip("TEST_DATABASE_URL not set; skipping API integration tests")
@@ -75,6 +81,9 @@ func newTestServer(t *testing.T) (*httptest.Server, *store.Store) {
 		CORSOrigins:          []string{"http://app.test"},
 		AutoSeed:             false,
 		InternalTaskSecret:   "test-internal-secret",
+	}
+	if configure != nil {
+		configure(cfg)
 	}
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
 	geocodeUpstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

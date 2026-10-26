@@ -24,9 +24,9 @@ Evidence: `app/components/OAuthButtons.tsx:94`, `server/internal/api/phase2_hand
 
 ### B3. Activate Apple-token management and notifications — OPEN — needs the user
 
-Configure server-side `APPLE_AUDIENCES` and `APPLE_CLIENT_ID` for the chosen app identity, `APPLE_CLIENT_SECRET` (a developer-signed Apple client-secret JWT), and a separate random **32-byte** `APPLE_TOKEN_ENCRYPTION_KEY`. These are server secrets, never `EXPO_PUBLIC_*` values. Renew the client-secret JWT before expiry; preserve the encryption key and client ID while encrypted tokens or revocation jobs exist. Key rotation needs a migration plan.
+Configure server-side `APPLE_AUDIENCES` and `APPLE_CLIENT_ID` for the chosen app identity, `APPLE_TEAM_ID`, `APPLE_KEY_ID` and `APPLE_PRIVATE_KEY` (the contents of a Sign in with Apple `.p8` key; the API signs a short-lived client secret per request, so nothing expires), and a separate random **32-byte** `APPLE_TOKEN_ENCRYPTION_KEY`. These are server secrets, never `EXPO_PUBLIC_*` values. A production API with `APPLE_AUDIENCES` set refuses to start until all of them are valid. Preserve the encryption key and client ID while encrypted tokens or revocation jobs exist. Key rotation needs a migration plan.
 
-Register `https://pull-up-api.davisbrown245.workers.dev/api/v1/auth/apple/notifications` on the primary App ID after an approved deployment. Confirm actual delivery, revoke/delete/re-register behavior, and retry recovery. Earlier Apple accounts without a captured provider token must reauthorize to capture one; deletion still works and the app links to Apple Account settings for manual disconnection. Apple sign-in returns an availability error until token-management configuration is complete.
+Register `https://pull-up-api.davisbrown245.workers.dev/api/v1/auth/apple/notifications` on the primary App ID after an approved deployment. Confirm actual delivery, revoke/delete/re-register behavior, and retry recovery. Earlier Apple accounts without a captured provider token must reauthorize to capture one; deletion still works and the app links to Apple Account settings for manual disconnection.
 
 Evidence: `server/internal/config/config.go:35`, `deploy/api/src/index.ts:22`, `app/.env.example:9`, `app/app/profile-settings.tsx:637`.
 

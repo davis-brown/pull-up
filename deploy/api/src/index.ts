@@ -19,7 +19,10 @@ interface OptionalBindings {
   GOOGLE_CLIENT_IDS?: string;
   APPLE_AUDIENCES?: string;
   APPLE_CLIENT_ID?: string;
-  APPLE_CLIENT_SECRET?: string;
+  APPLE_TEAM_ID?: string;
+  APPLE_KEY_ID?: string;
+  // Contents of the Sign in with Apple .p8 key (PEM).
+  APPLE_PRIVATE_KEY?: string;
   APPLE_TOKEN_ENCRYPTION_KEY?: string;
   SENTRY_DSN?: string;
   EMAIL_FROM?: string;
@@ -100,7 +103,9 @@ export class ApiContainer extends Container<RuntimeEnv> {
       GOOGLE_CLIENT_IDS: env.GOOGLE_CLIENT_IDS ?? "",
       APPLE_AUDIENCES: env.APPLE_AUDIENCES ?? "",
       APPLE_CLIENT_ID: env.APPLE_CLIENT_ID ?? "",
-      APPLE_CLIENT_SECRET: env.APPLE_CLIENT_SECRET ?? "",
+      APPLE_TEAM_ID: env.APPLE_TEAM_ID ?? "",
+      APPLE_KEY_ID: env.APPLE_KEY_ID ?? "",
+      APPLE_PRIVATE_KEY: env.APPLE_PRIVATE_KEY ?? "",
       APPLE_TOKEN_ENCRYPTION_KEY: env.APPLE_TOKEN_ENCRYPTION_KEY ?? "",
       SENTRY_DSN: env.SENTRY_DSN ?? "",
       CLOUDFLARE_ACCOUNT_ID: env.CLOUDFLARE_ACCOUNT_ID ?? "",
