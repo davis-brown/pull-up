@@ -18,12 +18,32 @@ try {
   // Keep the production host for invalid build-time configuration.
 }
 
+// Location purpose strings, shared by Info.plist and the expo-location plugin.
+// The plugin writes these keys after infoPlist is applied, so passing a
+// different string to each would silently ship the plugin's copy.
+const LOCATION_WHEN_IN_USE =
+  "pull-up uses your location to show nearby courts and to verify you're at a court when you check in.";
+const LOCATION_ALWAYS =
+  "With auto check-in enabled, pull-up detects when you arrive at a basketball court so you can check in without opening the app. Only court arrivals are used — your location history is never stored.";
+
+// Required-reason API declarations for the app target (React Native core and
+// Expo modules); the reasons follow Expo's documented React Native baseline.
+// Collected data types mirror the Privacy Policy (app/privacy.tsx) and must
+// match the App Privacy answers in App Store Connect. Nothing is used for
+// tracking.
+const collected = (type: string, linked = true) => ({
+  NSPrivacyCollectedDataType: `NSPrivacyCollectedDataType${type}`,
+  NSPrivacyCollectedDataTypeLinked: linked,
+  NSPrivacyCollectedDataTypeTracking: false,
+  NSPrivacyCollectedDataTypePurposes: ["NSPrivacyCollectedDataTypePurposeAppFunctionality"],
+});
+
 // Maps: MapLibre + OpenFreeMap tiles — no API keys or tokens required.
 const config: ExpoConfig = {
   name: "pull-up",
   slug: "pull-up",
   owner: "davis-team",
-  version: "0.1.0",
+  version: "1.0.0",
   scheme: "pullup",
   orientation: "portrait",
   icon: "./assets/icon.png",
@@ -34,13 +54,46 @@ const config: ExpoConfig = {
     usesAppleSignIn: true,
     associatedDomains: [`applinks:${webHost}`],
     infoPlist: {
-      NSLocationWhenInUseUsageDescription:
-        "pull-up uses your location to show nearby courts and to verify you're at a court when you check in.",
-      NSLocationAlwaysAndWhenInUseUsageDescription:
-        "With auto check-in enabled, pull-up detects when you arrive at a basketball court so you can check in without opening the app. Only court arrivals are used — your location history is never stored.",
+      NSLocationWhenInUseUsageDescription: LOCATION_WHEN_IN_USE,
+      NSLocationAlwaysAndWhenInUseUsageDescription: LOCATION_ALWAYS,
+      // Opt-in auto check-in: geofence arrivals take a one-shot fix and the
+      // check-out runs on region exit, both with the app in the background.
+      // App Review needs this explained in the review notes (2.5.4).
       UIBackgroundModes: ["location"],
       // Standard HTTPS only — skips the App Store export-compliance questionnaire.
       ITSAppUsesNonExemptEncryption: false,
+    },
+    privacyManifests: {
+      NSPrivacyTracking: false,
+      NSPrivacyTrackingDomains: [],
+      NSPrivacyAccessedAPITypes: [
+        {
+          NSPrivacyAccessedAPIType: "NSPrivacyAccessedAPICategoryUserDefaults",
+          NSPrivacyAccessedAPITypeReasons: ["CA92.1"],
+        },
+        {
+          NSPrivacyAccessedAPIType: "NSPrivacyAccessedAPICategoryFileTimestamp",
+          NSPrivacyAccessedAPITypeReasons: ["0A2A.1", "3B52.1", "C617.1"],
+        },
+        {
+          NSPrivacyAccessedAPIType: "NSPrivacyAccessedAPICategoryDiskSpace",
+          NSPrivacyAccessedAPITypeReasons: ["E174.1", "85F4.1"],
+        },
+        {
+          NSPrivacyAccessedAPIType: "NSPrivacyAccessedAPICategorySystemBootTime",
+          NSPrivacyAccessedAPITypeReasons: ["35F9.1"],
+        },
+      ],
+      NSPrivacyCollectedDataTypes: [
+        collected("EmailAddress"),
+        collected("Name"),
+        collected("UserID"),
+        collected("PreciseLocation"),
+        collected("PhotosorVideos"),
+        collected("OtherUserContent"),
+        // Sentry crash reports have the user stripped in beforeSend.
+        collected("CrashData", false),
+      ],
     },
   },
   android: {
@@ -78,7 +131,9 @@ const config: ExpoConfig = {
   },
   plugins: [
     "expo-router",
-    "expo-secure-store",
+    // Tokens are stored without biometric gating; false drops the plugin's
+    // generic NSFaceIDUsageDescription.
+    ["expo-secure-store", { faceIDPermission: false }],
     "expo-font",
     [
       "expo-splash-screen",
@@ -97,21 +152,29 @@ const config: ExpoConfig = {
     [
       "expo-location",
       {
-        locationWhenInUsePermission:
-          "pull-up uses your location to show nearby courts and to verify you're at a court when you check in.",
-        locationAlwaysAndWhenInUsePermission:
-          "With auto check-in enabled, pull-up detects when you arrive at a basketball court so you can check in without opening the app.",
+        locationWhenInUsePermission: LOCATION_WHEN_IN_USE,
+        locationAlwaysAndWhenInUsePermission: LOCATION_ALWAYS,
+        locationAlwaysPermission: LOCATION_ALWAYS,
+        // No motion APIs are used; without false the plugin adds a generic
+        // NSMotionUsageDescription that App Review flags (5.1.1).
+        motionUsagePermission: false,
         isAndroidBackgroundLocationEnabled: true,
       },
     ],
     "expo-notifications",
-    "expo-task-manager",
+    // expo-task-manager is auto-applied (it always adds the "fetch" background
+    // mode); this strips "fetch" again, see the plugin for why.
+    "./plugins/withoutBackgroundFetch",
     "expo-apple-authentication",
     "expo-sharing",
     [
       "expo-image-picker",
       {
         photosPermission: "pull-up uses your photo library so you can add pictures of courts.",
+        // Library picking only. false keeps the plugin's generic camera and
+        // microphone strings (and Android RECORD_AUDIO) out of the build.
+        cameraPermission: false,
+        microphonePermission: false,
       },
     ],
     "@maplibre/maplibre-react-native",
