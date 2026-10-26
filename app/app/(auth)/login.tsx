@@ -2,6 +2,7 @@ import { Link, useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useState } from "react";
 import { KeyboardAvoidingView, Platform, StyleSheet, Text, View } from "react-native";
 import { OAuthButtons } from "@/components/OAuthButtons";
+import { TermsNotice } from "@/components/TermsAgreement";
 import { Button, ErrorText, Field } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
 import { ApiError } from "@/lib/api";
@@ -71,7 +72,8 @@ export default function LoginScreen() {
       />
       <ErrorText message={error} />
       <Button title="Sign in" onPress={submit} busy={busy} disabled={!email || !password} />
-      <OAuthButtons />
+      {/* Apple / Google sign-in creates the account on first use. */}
+      <OAuthButtons footer={<TermsNotice />} />
       <View style={[styles.footer, { marginTop: t.spacing.lg }]}>
         <Text style={[t.type.body, { color: t.colors.textSecondary }]}>New here? </Text>
         <Link
