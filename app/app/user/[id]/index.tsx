@@ -8,7 +8,7 @@ import { QueryError } from "@/components/QueryError";
 import { SignInAction } from "@/components/SignInCta";
 import { Button, Card, ErrorText, FullScreenLoader } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
-import { useProfile, useSetFollow } from "@/lib/hooks";
+import { useBlockedUsers, useProfile, useSetBlocked, useSetFollow } from "@/lib/hooks";
 import { parseRouteId, safePathSegment } from "@/lib/routes";
 import { useTheme } from "@/lib/theme";
 
@@ -20,6 +20,9 @@ export default function ProfileScreen() {
   const { user } = useAuth();
   const { data: profile, isLoading, error, refetch } = useProfile(id);
   const setFollow = useSetFollow(id ?? "");
+  const { data: blockedUsers } = useBlockedUsers();
+  const setBlocked = useSetBlocked();
+  const [confirmingBlock, setConfirmingBlock] = useState(false);
   const [mutationError, setMutationError] = useState<string | null>(null);
 
   if (!id) {
@@ -42,6 +45,18 @@ export default function ProfileScreen() {
   }
 
   const isSelf = user?.id === profile.id;
+  const isBlocked = blockedUsers?.some((b) => b.blocked_id === profile.id) ?? false;
+
+  const changeBlocked = (blocked: boolean) => {
+    setMutationError(null);
+    setBlocked.mutate(
+      { userId: profile.id, blocked },
+      {
+        onSuccess: () => setConfirmingBlock(false),
+        onError: (e) => setMutationError(e.message),
+      },
+    );
+  };
   const isPrivateLocked = profile.is_private && !isSelf && !profile.is_following;
   const memberSince = new Date(profile.member_since).toLocaleDateString([], {
     month: "long",
@@ -137,14 +152,52 @@ export default function ProfileScreen() {
         )}
         <ErrorText message={mutationError} />
         {!isSelf && (
-          <Pressable
-            onPress={() => router.push(`/flag?entityType=user&entityId=${safePathSegment(id)}` as Href)}
-            style={styles.reportRow}
-            hitSlop={8}
-          >
-            <Ionicons name="flag-outline" size={16} color={t.colors.textMuted} />
-            <Text style={[t.type.caption, { color: t.colors.textMuted }]}>Report</Text>
-          </Pressable>
+          <View style={styles.reportRow}>
+            <Pressable
+              onPress={() => router.push(`/flag?entityType=user&entityId=${safePathSegment(id)}` as Href)}
+              style={styles.reportAction}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel={`Report ${profile.display_name}`}
+            >
+              <Ionicons name="flag-outline" size={16} color={t.colors.textMuted} />
+              <Text style={[t.type.caption, { color: t.colors.textMuted }]}>Report</Text>
+            </Pressable>
+            {user && (
+              <Pressable
+                onPress={() => (isBlocked ? changeBlocked(false) : setConfirmingBlock(true))}
+                disabled={setBlocked.isPending}
+                style={styles.reportAction}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={`${isBlocked ? "Unblock" : "Block"} ${profile.display_name}`}
+              >
+                <Ionicons name="ban-outline" size={16} color={isBlocked ? t.colors.accent : t.colors.danger} />
+                <Text style={[t.type.caption, { color: isBlocked ? t.colors.accent : t.colors.danger }]}>
+                  {isBlocked ? "Unblock" : "Block"}
+                </Text>
+              </Pressable>
+            )}
+          </View>
+        )}
+        {confirmingBlock && !isBlocked && (
+          <Card tone="warning">
+            <Text style={[t.type.label, { color: t.colors.warning }]}>
+              Block {profile.display_name}?
+            </Text>
+            <Text style={[t.type.caption, { color: t.colors.textSecondary, marginTop: t.spacing.xs, marginBottom: t.spacing.sm }]}>
+              You won't see their messages, crowd reports, or planned runs, and
+              any follows between you are removed. You can unblock them in
+              Profile settings.
+            </Text>
+            <Button
+              title={`Block ${profile.display_name}`}
+              variant="danger"
+              busy={setBlocked.isPending}
+              onPress={() => changeBlocked(true)}
+            />
+            <Button title="Cancel" variant="ghost" onPress={() => setConfirmingBlock(false)} />
+          </Card>
         )}
       </View>
     </ScrollView>
@@ -169,5 +222,6 @@ const styles = StyleSheet.create({
   stat: { alignItems: "center" },
   countRow: { flexDirection: "row", justifyContent: "space-around", marginTop: 12 },
   countItem: { alignItems: "center", paddingVertical: 8, paddingHorizontal: 24 },
-  reportRow: { flexDirection: "row", alignItems: "center", gap: 6, justifyContent: "center", marginTop: 12 },
+  reportRow: { flexDirection: "row", alignItems: "center", gap: 24, justifyContent: "center", marginTop: 12 },
+  reportAction: { flexDirection: "row", alignItems: "center", gap: 6 },
 });

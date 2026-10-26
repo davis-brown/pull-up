@@ -9,7 +9,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { SignInAction } from "@/components/SignInCta";
+import { SignInAction, useSignInDetour } from "@/components/SignInCta";
 import { QueryError } from "@/components/QueryError";
 import { Card, ErrorText, Overline } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
@@ -31,10 +31,18 @@ export function CourtChat({ courtId }: { courtId: string }) {
   const { data: messages, error: queryError, refetch } = useCourtMessages(courtId);
   const send = useSendMessage(courtId);
   const setBlocked = useSetBlocked();
+  const detour = useSignInDetour();
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
-  // Which message's report/block actions are expanded (tap the header row).
+  // Which message's report/block actions are expanded (the "…" button), and
+  // whether its block is awaiting confirmation.
   const [actionsFor, setActionsFor] = useState<string | null>(null);
+  const [confirmingBlock, setConfirmingBlock] = useState(false);
+
+  const toggleActions = (id: string) => {
+    setConfirmingBlock(false);
+    setActionsFor(actionsFor === id ? null : id);
+  };
 
   const submit = () => {
     const body = draft.trim();
@@ -71,46 +79,71 @@ export function CourtChat({ courtId }: { courtId: string }) {
                       {mine ? "You" : m.display_name}
                     </Text>
                   </Pressable>
-                  <Pressable
-                    onPress={() => user && !mine && setActionsFor(actionsFor === m.id ? null : m.id)}
-                    disabled={mine || !user}
-                    hitSlop={4}
-                  >
-                    <Text style={[t.type.caption, { color: t.colors.textMuted }]}>
-                      {"  ·  "}
-                      {messageTimeLabel(m.created_at)}
-                    </Text>
-                  </Pressable>
+                  <Text style={[t.type.caption, styles.time, { color: t.colors.textMuted }]}>
+                    {"  ·  "}
+                    {messageTimeLabel(m.created_at)}
+                  </Text>
+                  {!mine && (
+                    <Pressable
+                      onPress={() => toggleActions(m.id)}
+                      hitSlop={10}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Report or block ${m.display_name}`}
+                    >
+                      <Ionicons name="ellipsis-horizontal" size={16} color={t.colors.textMuted} />
+                    </Pressable>
+                  )}
                 </View>
                 <Text style={[t.type.body, { color: t.colors.textPrimary, marginTop: 1 }]}>
                   {m.body}
                 </Text>
                 {actionsFor === m.id && !mine && (
-                  <View style={styles.actionsRow}>
-                    <Pressable
-                      onPress={() => {
-                        setActionsFor(null);
-                        router.push(`/flag?entityType=message&entityId=${safePathSegment(m.id)}`);
-                      }}
-                      hitSlop={6}
-                    >
-                      <Text style={[t.type.caption, { color: t.colors.textSecondary }]}>Report</Text>
-                    </Pressable>
-                    <Pressable
-                      onPress={() => {
-                        setActionsFor(null);
-                        setBlocked.mutate(
-                          { userId: m.user_id, blocked: true },
-                          { onError: (e) => setError(e.message) },
-                        );
-                      }}
-                      hitSlop={6}
-                    >
-                      <Text style={[t.type.caption, { color: t.colors.danger }]}>
-                        Block {m.display_name}
+                  confirmingBlock ? (
+                    <View style={styles.actionsRow}>
+                      <Text style={[t.type.caption, styles.confirmText, { color: t.colors.textSecondary }]}>
+                        Block {m.display_name}? You won&apos;t see their messages.
                       </Text>
-                    </Pressable>
-                  </View>
+                      <Pressable
+                        onPress={() => {
+                          setActionsFor(null);
+                          setConfirmingBlock(false);
+                          setBlocked.mutate(
+                            { userId: m.user_id, blocked: true },
+                            { onError: (e) => setError(e.message) },
+                          );
+                        }}
+                        hitSlop={6}
+                        accessibilityRole="button"
+                      >
+                        <Text style={[t.type.caption, { color: t.colors.danger }]}>Block</Text>
+                      </Pressable>
+                      <Pressable onPress={() => setConfirmingBlock(false)} hitSlop={6} accessibilityRole="button">
+                        <Text style={[t.type.caption, { color: t.colors.textSecondary }]}>Cancel</Text>
+                      </Pressable>
+                    </View>
+                  ) : (
+                    <View style={styles.actionsRow}>
+                      <Pressable
+                        onPress={() => {
+                          setActionsFor(null);
+                          router.push(`/flag?entityType=message&entityId=${safePathSegment(m.id)}`);
+                        }}
+                        hitSlop={6}
+                        accessibilityRole="button"
+                      >
+                        <Text style={[t.type.caption, { color: t.colors.textSecondary }]}>Report message</Text>
+                      </Pressable>
+                      <Pressable
+                        onPress={() => (user ? setConfirmingBlock(true) : detour())}
+                        hitSlop={6}
+                        accessibilityRole="button"
+                      >
+                        <Text style={[t.type.caption, { color: t.colors.danger }]}>
+                          Block {m.display_name}
+                        </Text>
+                      </Pressable>
+                    </View>
+                  )
                 )}
               </View>
             );
@@ -172,7 +205,9 @@ export function CourtChat({ courtId }: { courtId: string }) {
 const styles = StyleSheet.create({
   message: { paddingVertical: 5 },
   headerRow: { flexDirection: "row", alignItems: "center" },
-  actionsRow: { flexDirection: "row", gap: 18, marginTop: 4 },
+  time: { flex: 1 },
+  actionsRow: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 18, marginTop: 4 },
+  confirmText: { flexBasis: "100%" },
   inputRow: { flexDirection: "row", alignItems: "flex-end", gap: 8 },
   input: {
     flex: 1,
