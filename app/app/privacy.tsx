@@ -27,7 +27,7 @@ export default function PrivacyScreen() {
     >
       <Text style={[t.type.title, { color: t.colors.textPrimary }]}>Privacy Policy</Text>
       <Text style={[t.type.caption, { color: t.colors.textMuted, marginTop: 4 }]}>
-        Effective July 20, 2026 · pull-up
+        Effective October 26, 2026 · pull-up
       </Text>
 
       <Section title="What we collect">
@@ -49,6 +49,10 @@ export default function PrivacyScreen() {
 
       <Section title="Services we rely on">
         {"Hosting, transactional verification email, and photo storage run on Cloudflare; the database is hosted by Neon. Push notifications are delivered through Expo's push service. Court locations come from OpenStreetMap; Nominatim looks up missing court addresses and explicit area-search terms (never your identity). Court photos may be displayed from Wikimedia Commons. If you sign in with Google or Apple, their privacy policies also apply to that sign-in. If the app crashes, a sanitized crash report (device model, OS version, and error stack trace, with request queries and identifiers removed) is sent to Sentry so we can fix the bug."}
+      </Section>
+
+      <Section title="Content safety and retention">
+        {"Public text you submit, including display names, court names, notes and messages, is sent to Cloudflare Workers AI for automated safety checks. Do not include sensitive personal information in public posts. New accounts consent to this processing before social sign-in or registration. Uploaded court photos and avatars stay private until a moderator approves them.\n\nAccount deletion removes the account and associated content from the app immediately. Image files are queued for removal on the next hourly cleanup; service outages may delay physical removal, but the files are no longer publicly accessible. Encrypted Apple authorization tokens are kept only to complete revocation and are erased after Apple confirms it. Other account data is retained until you delete it or your account. Infrastructure backups follow the hosting providers' retention policies; contact us for retention and deletion questions."}
       </Section>
 
       <Section title="Deleting your account">

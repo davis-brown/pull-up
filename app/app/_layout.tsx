@@ -16,6 +16,7 @@ import { useEffect, useRef, useState } from "react";
 import { Pressable } from "react-native";
 import * as Sentry from "@sentry/react-native";
 import { AuthProvider } from "@/lib/auth-context";
+import { CommunityConsent } from "@/components/CommunityConsent";
 // Side-effect import: registers the geofence background task at startup so
 // headless launches (geofence event with the app killed) can handle events.
 import { geofencingSupported, refreshGeofences } from "@/lib/geofencing";
@@ -223,6 +224,7 @@ function ThemedApp() {
         <Stack.Screen name="terms" options={{ title: "Terms of Service" }} />
         <Stack.Screen name="support" options={{ title: "Support" }} />
       </Stack>
+      <CommunityConsent />
     </>
   );
 }

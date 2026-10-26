@@ -4,6 +4,7 @@ describe("accountEmailLabel", () => {
   it("shows a real email unchanged", () => {
     expect(accountEmailLabel("hooper@example.com")).toBe("hooper@example.com");
     expect(accountEmailLabel("abc@privaterelay.appleid.com")).toBe("abc@privaterelay.appleid.com");
+    expect(accountEmailLabel("abc@private.icloud.com")).toBe("abc@private.icloud.com");
   });
 
   it("replaces the server's placeholder with the provider name", () => {

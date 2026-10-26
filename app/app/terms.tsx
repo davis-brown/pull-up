@@ -24,7 +24,7 @@ export default function TermsScreen() {
     >
       <Text style={[t.type.title, { color: t.colors.textPrimary }]}>Terms of Service</Text>
       <Text style={[t.type.caption, { color: t.colors.textMuted, marginTop: 4 }]}>
-        Effective July 8, 2026 · pull-up
+        Effective October 26, 2026 · pull-up
       </Text>
 
       <Section title="The service">

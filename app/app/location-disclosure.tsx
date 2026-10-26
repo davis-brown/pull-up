@@ -19,7 +19,7 @@ const points: Array<{ icon: string; text: string }> = [
   },
   {
     icon: "basketball-outline",
-    text: "Only court arrivals are used — a check-in at a known court is the only thing created. Your movements and location history are never recorded or stored.",
+    text: "Each check-in saves the court, time, and distance from the court. Exact check-in coordinates are discarded after verification. We do not record continuous GPS history.",
   },
   {
     icon: "battery-half-outline",

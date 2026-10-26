@@ -1,0 +1,1 @@
+export const CONTENT_CONSENT_VERSION = "2026-10-26";

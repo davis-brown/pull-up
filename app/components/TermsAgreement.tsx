@@ -1,6 +1,4 @@
-// Terms acceptance for account creation. App Review (Guideline 1.2) requires
-// users of an app with user-generated content to agree to terms that make
-// clear there is no tolerance for objectionable content or abusive users.
+// Explicit agreement to community terms and content-safety processing.
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { Pressable, StyleSheet, Text, View } from "react-native";
@@ -40,7 +38,7 @@ export function TermsCheckbox({
       style={[styles.row, { marginBottom: t.spacing.md }]}
       accessibilityRole="checkbox"
       accessibilityState={{ checked: accepted }}
-      accessibilityLabel="I agree to the Terms of Service and Privacy Policy"
+      accessibilityLabel="I agree to the Terms of Service and Privacy Policy, zero tolerance for abusive content, and sending my public text to Cloudflare Workers AI for safety checks. Photos are reviewed by moderators before publication."
       hitSlop={6}
     >
       <Ionicons
@@ -50,7 +48,9 @@ export function TermsCheckbox({
       />
       <Text style={[t.type.caption, styles.text, { color: t.colors.textSecondary }]}>
         I agree to the <LegalLinks />. pull-up has zero tolerance for objectionable
-        content or abusive behavior.
+        content or abusive behavior. I consent to public text I submit being sent
+        to Cloudflare Workers AI for safety checks. Uploaded photos are reviewed
+        by moderators before publication.
       </Text>
     </Pressable>
   );

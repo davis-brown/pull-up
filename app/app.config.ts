@@ -24,7 +24,7 @@ try {
 const LOCATION_WHEN_IN_USE =
   "pull-up uses your location to show nearby courts and to verify you're at a court when you check in.";
 const LOCATION_ALWAYS =
-  "With auto check-in enabled, pull-up detects when you arrive at a basketball court so you can check in without opening the app. Only court arrivals are used — your location history is never stored.";
+  "With auto check-in enabled, pull-up detects court arrivals and saves the court and check-in time without opening the app. It does not record continuous GPS history.";
 
 // Required-reason API declarations for the app target (React Native core and
 // Expo modules); the reasons follow Expo's documented React Native baseline.
@@ -62,6 +62,10 @@ const config: ExpoConfig = {
       UIBackgroundModes: ["location"],
       // Standard HTTPS only — skips the App Store export-compliance questionnaire.
       ITSAppUsesNonExemptEncryption: false,
+      NSAppTransportSecurity: {
+        NSAllowsArbitraryLoads: false,
+        NSAllowsLocalNetworking: true,
+      },
     },
     privacyManifests: {
       NSPrivacyTracking: false,
@@ -91,8 +95,10 @@ const config: ExpoConfig = {
         collected("PreciseLocation"),
         collected("PhotosorVideos"),
         collected("OtherUserContent"),
-        // Sentry crash reports have the user stripped in beforeSend.
-        collected("CrashData", false),
+        collected("GameplayContent"),
+        collected("DeviceID"),
+        // Sentry strips account PII; conservatively disclose possible device linkage.
+        collected("CrashData"),
       ],
     },
   },

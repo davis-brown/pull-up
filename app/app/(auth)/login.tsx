@@ -1,8 +1,8 @@
 import { Link, useLocalSearchParams, useRouter, type Href } from "expo-router";
 import { useState } from "react";
-import { KeyboardAvoidingView, Platform, StyleSheet, Text, View } from "react-native";
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from "react-native";
 import { OAuthButtons } from "@/components/OAuthButtons";
-import { TermsNotice } from "@/components/TermsAgreement";
+import { TermsCheckbox, TERMS_REQUIRED_MESSAGE } from "@/components/TermsAgreement";
 import { Button, ErrorText, Field } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
 import { ApiError } from "@/lib/api";
@@ -18,6 +18,7 @@ export default function LoginScreen() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
 
   const submit = async () => {
     setError(null);
@@ -46,6 +47,7 @@ export default function LoginScreen() {
       <Text style={[t.type.display, styles.center, { color: t.colors.accent }]}>
         pull-up
       </Text>
+      <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: "center" }} keyboardShouldPersistTaps="handled">
       <Text
         style={[
           t.type.body,
@@ -73,7 +75,8 @@ export default function LoginScreen() {
       <ErrorText message={error} />
       <Button title="Sign in" onPress={submit} busy={busy} disabled={!email || !password} />
       {/* Apple / Google sign-in creates the account on first use. */}
-      <OAuthButtons footer={<TermsNotice />} />
+      <TermsCheckbox accepted={acceptedTerms} onChange={setAcceptedTerms} />
+      <OAuthButtons guard={() => acceptedTerms ? null : TERMS_REQUIRED_MESSAGE} />
       <View style={[styles.footer, { marginTop: t.spacing.lg }]}>
         <Text style={[t.type.body, { color: t.colors.textSecondary }]}>New here? </Text>
         <Link
@@ -83,6 +86,7 @@ export default function LoginScreen() {
           Create an account
         </Link>
       </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 }
