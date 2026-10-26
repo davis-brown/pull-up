@@ -99,7 +99,7 @@ Evidence: `app/app.config.ts:70`, `app/app.config.ts:92`, `app/app/_layout.tsx:4
 - App: `npm run typecheck` passed; `npm test -- --runInBand` passed **23 suites / 210 tests**; `npm run lint` passed with **0 errors / 32 warnings**.
 - Go 1.27.3: `go test ./...` passed **201 tests**, with **121 skipped** for the missing test database; `go vet ./...` passed.
 - API Worker, Node 24.22.1: typecheck and Vitest passed **3 files / 22 tests** after the tooling update; full npm audit reports **0 vulnerabilities**.
-- Local Expo web export passed. It was written outside the repository to `C:\Users\davis\OpenBot\Shared\Projects\pull-up-release-web`; this is not a deployment.
+- Local Expo web export passed. The output was written outside the repository; this is not a deployment.
 - Expo configuration introspection passed: version 1.0.0, iPhone-only, only `location` background mode, SIWA entitlement, no unused camera/microphone/motion/Face ID purpose strings, arbitrary loads disabled, four privacy API categories and nine data categories. An introspected configuration is not a built/signed application.
 - New checks cover Apple exchange/revocation/encryption tampering, wrong notification issuer/audience, both relay domains, unavailable/unknown moderation, consent-before-classification, preview-capability separation, and database-backed review/suspension/deletion/consent contracts. Database-backed checks compiled but did not execute.
 - No App Store Connect, APNs, Sentry credential, email inbox, production database, native archive, physical device, or actual cold-start state was authenticated/verified.
@@ -110,17 +110,17 @@ Evidence: `app/app.config.ts:70`, `app/app.config.ts:92`, `app/app/_layout.tsx:4
 
 ## Local commits
 
-- `a509284` — iOS permission cleanup, version and privacy declaration.
-- `6a8245a` — terms acceptance on registration.
-- `ae31bab` — reachable report/block controls.
-- `758de5c` — public Support page and synthetic-email labels.
-- `5c8122e` — API safeguards, image review, consent, suspension, Apple grants/notifications, migrations, tests and Worker dependency fix.
-- `7da11c1` — app moderation/consent UI, Apple authorization-code transport and corrected privacy copy.
+- iOS permission cleanup, version and privacy declaration.
+- terms acceptance on registration.
+- reachable report/block controls.
+- public Support page and synthetic-email labels.
+- API safeguards, image review, consent, suspension, Apple grants/notifications, migrations, tests and Worker dependency fix.
+- app moderation/consent UI, Apple authorization-code transport and corrected privacy copy.
 - The documentation commit containing this audit is listed in the final handoff.
 
 ## Sources and research cross-check
 
-The Researcher's `C:\Users\davis\OpenBot\Shared\Research\pull-up-app-store-requirements.md`, section 0, was cross-checked for all eight risks: support, background location, UGC, age metadata, review access/cold starts, Apple revocation, relay emails and privacy manifest. Product dates, device specifications and territorial legal thresholds in that report are not independently certified here.
+The local app-store requirements report, section 0, was cross-checked for all eight risks: support, background location, UGC, age metadata, review access/cold starts, Apple revocation, relay emails and privacy manifest. Product dates, device specifications and territorial legal thresholds in that report are not independently certified here.
 
 - [App Review Guidelines](https://developer.apple.com/app-store/review/guidelines/) — UGC, app completeness, login and privacy review.
 - [Apple account deletion guidance](https://developer.apple.com/help/app-review/guideline-reference/5-1-1-account-deletion) and [TN3194](https://developer.apple.com/documentation/technotes/tn3194-handling-account-deletions-and-revoking-tokens-for-sign-in-with-apple) — deletion and revocation.
