@@ -4,7 +4,7 @@
 // TEXT ONLY. Photo uploads are not covered here, nor by Cloudflare's CSAM
 // Scanning Tool (court photos are served `private, no-store` and never enter
 // the cache it hashes from). Photo moderation is the court_photos
-// media_reviews queue plus human approval before publication.
+// pending/flagged/removed state machine plus human review.
 package moderation
 
 import (

@@ -107,8 +107,7 @@ func (s *Server) drainStalePendingUploads(ctx context.Context) (int, error) {
 }
 
 type mediaKeyRequest struct {
-	Key    string `json:"key"`
-	Review bool   `json:"review,omitempty"`
+	Key string `json:"key"`
 }
 
 func (s *Server) handleInternalAuthorizeMedia(w http.ResponseWriter, r *http.Request) {
@@ -122,9 +121,6 @@ func (s *Server) handleInternalAuthorizeMedia(w http.ResponseWriter, r *http.Req
 		return
 	}
 	authorized, err := s.store.Queries.IsMediaKeyAuthorized(r.Context(), req.Key)
-	if err == nil && !authorized && req.Review {
-		err = s.store.Pool.QueryRow(r.Context(), `SELECT EXISTS (SELECT 1 FROM media_reviews WHERE storage_key=$1)`, req.Key).Scan(&authorized)
-	}
 	if err != nil {
 		s.internalError(w, "authorize media", err)
 		return
@@ -161,10 +157,6 @@ func (s *Server) handleInternalMediaUploaded(w http.ResponseWriter, r *http.Requ
 		}
 		if n == 0 {
 			writeError(w, http.StatusNotFound, "photo metadata not found")
-			return
-		}
-		if _, err := tx.Exec(r.Context(), `INSERT INTO media_reviews (storage_key, owner_id, purpose, photo_id) SELECT storage_key, user_id, 'court', id FROM court_photos WHERE storage_key=$1 AND status='pending' ON CONFLICT DO NOTHING`, req.Key); err != nil {
-			s.internalError(w, "queue court photo review", err)
 			return
 		}
 	}

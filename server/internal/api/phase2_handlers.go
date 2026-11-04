@@ -18,7 +18,8 @@ import (
 
 const (
 	uploadURLTTL = 10 * time.Minute
-	// maxPhotosPerDay bounds upload storage and the pre-publication review queue.
+	// maxPhotosPerDay bounds one account's court uploads: photos go visible
+	// on upload, so without a cap a script can flood galleries and storage.
 	maxPhotosPerDay = 10
 )
 

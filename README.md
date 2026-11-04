@@ -243,8 +243,8 @@ Anyone signed in can report a court, photo, or crowd report (flag icons in
 the app → `POST /flags`). Admins get a moderation queue (Profile → Profile
 settings → "Moderation queue") to review open flags, reject courts, remove
 photos, remove reported messages/reports/runs, suspend abusive players, and
-resolve reports. New court photos and avatars remain private until an admin
-approves them in the image review queue. Production text posting requires
+resolve reports. Court photos go public on upload; a reported photo is hidden
+at once until an admin restores or removes it. Production text posting requires
 current community consent and a successful content-safety check.
 
 Admin rights are managed in-app with a security model designed to avoid

@@ -529,10 +529,10 @@ async function validatedUploadStream(
   };
 }
 
-async function authorizeMedia(env: RuntimeEnv, key: string, review = false): Promise<boolean> {
+async function authorizeMedia(env: RuntimeEnv, key: string): Promise<boolean> {
   const response = await fetchContainerInternal(env, `${INTERNAL_PREFIX}/media/authorize`, {
     method: "POST",
-    body: JSON.stringify({ key, review }),
+    body: JSON.stringify({ key }),
   }, 15_000);
   if (response.status === 204) return true;
   if (response.status === 404 || response.status === 410) {
@@ -585,12 +585,7 @@ async function handlePhotoRead(
 
   let authorized: boolean;
   try {
-    const preview = new URL(request.url).searchParams.get("review");
-    const parts = preview && /^([1-9][0-9]{9})\.([0-9a-f]{64})$/.exec(preview);
-    const review = !!parts && await verifyUploadSignature(env.UPLOAD_SIGNING_SECRET, `review:${key}`, {
-      expiresAt: parts[1]!, signature: parts[2]!,
-    });
-    authorized = await authorizeMedia(env, key, review);
+    authorized = await authorizeMedia(env, key);
   } catch (error) {
     console.error(JSON.stringify({
       message: "media authorization failed",

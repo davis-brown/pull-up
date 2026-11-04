@@ -106,9 +106,8 @@ func TestFollowBlockedRejected(t *testing.T) {
 }
 
 func TestAvatarUploadAndClear(t *testing.T) {
-	ts, st := newTestServer(t)
+	ts, _ := newTestServer(t)
 	u := registerUser(t, ts, "avatar@test.local", "Avatar")
-	bootstrapAdmin(t, st, u.User.ID)
 
 	resp := doJSON(t, ts, http.MethodPost, "/me/avatar", u.AccessToken, nil)
 	if resp.StatusCode != http.StatusOK {
@@ -132,15 +131,8 @@ func TestAvatarUploadAndClear(t *testing.T) {
 	resp = doJSON(t, ts, http.MethodGet, "/users/"+u.User.ID, "", nil)
 	if p := decodeJSON[struct {
 		AvatarURL *string `json:"avatar_url"`
-	}](t, resp); p.AvatarURL != nil {
-		t.Fatal("unreviewed avatar published")
-	}
-	reviewMedia(t, ts, u.AccessToken, strings.TrimPrefix(body.AvatarURL, "/photos/"), true)
-	resp = doJSON(t, ts, http.MethodGet, "/users/"+u.User.ID, "", nil)
-	if p := decodeJSON[struct {
-		AvatarURL *string `json:"avatar_url"`
 	}](t, resp); p.AvatarURL == nil || *p.AvatarURL != body.AvatarURL {
-		t.Errorf("avatar not set after approval")
+		t.Errorf("avatar not set after PATCH")
 	}
 	doJSON(t, ts, http.MethodDelete, "/me/avatar", u.AccessToken, nil).Body.Close()
 	resp = doJSON(t, ts, http.MethodGet, "/users/"+u.User.ID, "", nil)
@@ -173,7 +165,6 @@ func TestAdminClearAvatar(t *testing.T) {
 	doJSON(t, ts, http.MethodPatch, "/me", target.AccessToken, map[string]any{
 		"avatar_url": avatar.AvatarURL,
 	}).Body.Close()
-	reviewMedia(t, ts, admin.AccessToken, strings.TrimPrefix(avatar.AvatarURL, "/photos/"), true)
 	resp = doJSON(t, ts, http.MethodGet, "/users/"+target.User.ID, "", nil)
 	if p := decodeJSON[struct {
 		AvatarURL *string `json:"avatar_url"`
