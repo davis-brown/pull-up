@@ -51,13 +51,13 @@ func TestAppleNotifications(t *testing.T) {
 		resp.Body.Close()
 		return resp.StatusCode
 	}
-	forwarding := func() bool {
+	eventTime := func() int64 {
 		t.Helper()
-		var on bool
-		if err := st.Pool.QueryRow(ctx, `SELECT apple_email_forwarding FROM users WHERE id=$1`, user.User.ID).Scan(&on); err != nil {
+		var at int64
+		if err := st.Pool.QueryRow(ctx, `SELECT apple_event_time FROM users WHERE id=$1`, user.User.ID).Scan(&at); err != nil {
 			t.Fatal(err)
 		}
-		return on
+		return at
 	}
 
 	resp := doJSON(t, ts, http.MethodPost, "/auth/apple/notifications", "", map[string]string{"payload": "not-a-jwt"})
@@ -65,15 +65,12 @@ func TestAppleNotifications(t *testing.T) {
 	if resp.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("unsigned notification: %d", resp.StatusCode)
 	}
-	if code := notify("email-disabled", 2000); code != http.StatusOK || forwarding() {
-		t.Fatalf("email-disabled: %d forwarding=%v", code, forwarding())
-	}
-	// An older event delivered late must not undo a newer one.
-	if code := notify("email-enabled", 1000); code != http.StatusOK || forwarding() {
-		t.Fatalf("out-of-order email-enabled applied: %d forwarding=%v", code, forwarding())
-	}
 	if code := notify("consent-revoked", 3000); code != http.StatusOK {
 		t.Fatalf("consent-revoked: %d", code)
+	}
+	// An older event delivered late must be ignored.
+	if code := notify("consent-revoked", 1000); code != http.StatusOK || eventTime() != 3000 {
+		t.Fatalf("out-of-order event applied: %d event_time=%d", code, eventTime())
 	}
 	var live int
 	if err := st.Pool.QueryRow(ctx, `SELECT count(*) FROM refresh_tokens WHERE user_id=$1 AND revoked_at IS NULL`, user.User.ID).Scan(&live); err != nil {

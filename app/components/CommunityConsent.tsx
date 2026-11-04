@@ -34,7 +34,7 @@ function ConsentForAccount({ userId }: { userId: string }) {
   });
   // Keep legal documents and account deletion accessible without consent.
   const readingOrDeleting = ["/privacy", "/terms", "/support", "/profile-settings"].includes(path);
-  const visible = !readingOrDeleting && (status.data?.accepted === false || status.isError);
+  const visible = !readingOrDeleting && status.data?.accepted === false;
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={() => void signOut()}>
       <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: "center", padding: t.spacing.lg, backgroundColor: t.colors.background }}>
