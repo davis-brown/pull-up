@@ -62,11 +62,16 @@ func (s *Server) handleInternalDrain(w http.ResponseWriter, r *http.Request) {
 	if err := s.store.Queries.DeleteExpiredAuthTokens(ctx); err != nil {
 		s.log.Error("delete expired auth tokens", "err", err)
 	}
+	staleUnverified, err := s.store.Queries.DeleteStaleUnverifiedUsers(ctx)
+	if err != nil {
+		s.log.Error("delete stale unverified users", "err", err)
+	}
 	// Last: each Apple call can take seconds, so it must not delay the cleanup above.
 	s.drainAppleRevocations(ctx)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"tiles": tiles, "courts": courts, "stale_pending_uploads": stale,
 		"streak_nudges": nudges, "expired_games": expiredGames,
+		"stale_unverified_users": staleUnverified,
 	})
 }
 
