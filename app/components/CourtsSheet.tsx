@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentRef } from "react";
 import {
   Animated,
   Keyboard,
@@ -70,7 +70,7 @@ export function CourtsSheet({
   // The collapsed sheet shows exactly the header (grabber + search row), so
   // no sliver of the list peeks out above the tab bar.
   const [peek, setPeek] = useState(DEFAULT_PEEK);
-  const input = useRef<TextInput>(null);
+  const input = useRef<ComponentRef<typeof TextInput>>(null);
   const sheetHeight = Math.max(areaHeight * EXPANDED_RATIO, peek);
   const travel = sheetHeight - peek;
 

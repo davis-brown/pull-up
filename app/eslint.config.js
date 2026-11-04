@@ -40,6 +40,10 @@ module.exports = [
       // false positives on ambient globals (per typescript-eslint's own
       // guidance to disable it for TS).
       "no-undef": "off",
+      // Same reasoning: tsc checks namespace members, and eslint-plugin-import
+      // can't follow the SDK 58 build output (it misses
+      // expo-notifications' AndroidImportance, which exists).
+      "import/namespace": "off",
 
       // Style, not correctness. The codebase deliberately uses Array<T> in
       // places for readability with long element types; both forms are fine.
@@ -49,7 +53,7 @@ module.exports = [
       // hurts readability of user-facing copy for no behavioral gain.
       "react/no-unescaped-entities": "off",
 
-      // eslint-config-expo 57 ships eslint-plugin-react-hooks v6, which
+      // eslint-config-expo 57+ ships eslint-plugin-react-hooks v6, which
       // includes the opt-in React Compiler ruleset. This app does not build
       // with the React Compiler, and these three rules flag correct,
       // intentional patterns as errors:

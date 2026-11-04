@@ -7,6 +7,8 @@ export default function TabsLayout() {
   const t = useTheme();
   const insets = useSafeAreaInsets();
   return (
+    // Casts below: React Navigation 8 types tab colors as any ColorValue, but it
+    // passes the theme strings from screenOptions, which is all Ionicons takes.
     <Tabs
       screenOptions={{
         ...navChrome(t),
@@ -27,7 +29,7 @@ export default function TabsLayout() {
           title: "Map",
           headerShown: false,
           tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={focused ? "map" : "map-outline"} size={22} color={color} />
+            <Ionicons name={focused ? "map" : "map-outline"} size={22} color={color as string} />
           ),
         }}
       />
@@ -39,7 +41,7 @@ export default function TabsLayout() {
             <Ionicons
               name={focused ? "basketball" : "basketball-outline"}
               size={22}
-              color={color}
+              color={color as string}
             />
           ),
         }}
@@ -52,7 +54,7 @@ export default function TabsLayout() {
             <Ionicons
               name={focused ? "person" : "person-outline"}
               size={22}
-              color={color}
+              color={color as string}
             />
           ),
         }}

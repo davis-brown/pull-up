@@ -1,6 +1,6 @@
 import { useRouter, type Href } from "expo-router";
 import * as Sharing from "expo-sharing";
-import { useRef, useState } from "react";
+import { useRef, useState, type ComponentRef } from "react";
 import {
   Platform,
   ScrollView,
@@ -41,7 +41,7 @@ function ProfileContent() {
   const t = useTheme();
   const { data: stats } = useMeStats();
   const { data: circleBoard } = useCircleLeaderboard();
-  const cardRef = useRef<View>(null);
+  const cardRef = useRef<ComponentRef<typeof View>>(null);
   const [sharing, setSharing] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
   const [shareError, setShareError] = useState<string | null>(null);

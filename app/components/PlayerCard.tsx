@@ -4,7 +4,7 @@
 // on-brand look rather than adapting to light/dark.
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter, type Href } from "expo-router";
-import type { Ref } from "react";
+import type { ComponentRef, Ref } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Avatar } from "@/components/Avatar";
 import { LevelBar } from "@/components/LevelBar";
@@ -34,7 +34,7 @@ export function PlayerCard({
 }: {
   user: PlayerCardUser;
   stats?: MeStats;
-  innerRef?: Ref<View>;
+  innerRef?: Ref<ComponentRef<typeof View>>;
 }) {
   const t = useTheme();
   const dark = darkTheme();
