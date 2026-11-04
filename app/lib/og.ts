@@ -16,7 +16,7 @@ export function aasaBody(cfg: OgConfig): unknown {
     applinks: {
       details: [{
         appIDs: [cfg.IOS_APP_ID],
-        components: [{ "/": "/court/*" }, { "/": "/verify-email" }],
+        components: [{ "/": "/court/*" }],
       }],
     },
   };

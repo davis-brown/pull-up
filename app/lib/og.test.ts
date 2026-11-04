@@ -16,13 +16,12 @@ const cfg: OgConfig = {
 };
 
 describe("aasaBody", () => {
-  it("scopes the app to court and email-verification paths", () => {
+  it("scopes the app to court paths", () => {
     const body = aasaBody(cfg) as {
       applinks: { details: Array<{ appIDs: string[]; components: Array<Record<string, string>> }> };
     };
     expect(body.applinks.details[0].appIDs).toEqual(["ABCDE12345.com.pullup.app"]);
-    expect(body.applinks.details[0].components[0]["/"]).toBe("/court/*");
-    expect(body.applinks.details[0].components[1]["/"]).toBe("/verify-email");
+    expect(body.applinks.details[0].components).toEqual([{ "/": "/court/*" }]);
   });
 });
 
