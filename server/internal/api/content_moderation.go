@@ -21,8 +21,6 @@ func (s *Server) handleAdminRemoveContent(w http.ResponseWriter, r *http.Request
 		return
 	}
 	statements := map[string][]string{
-		"court":   {`UPDATE courts SET status='rejected' WHERE id=$1`},
-		"photo":   {`UPDATE court_photos SET status='removed' WHERE id=$1`, `DELETE FROM media_reviews WHERE photo_id=$1`},
 		"report":  {`DELETE FROM crowd_reports WHERE id=$1`},
 		"message": {`UPDATE court_messages SET hidden_at=now() WHERE id=$1`},
 		"session": {`UPDATE sessions SET canceled_at=now() WHERE id=$1`},

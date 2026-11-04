@@ -47,8 +47,6 @@ func (s *Server) handleAppleNotification(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	switch event.Type {
-	case "email-enabled", "email-disabled":
-		_, err = tx.Exec(r.Context(), `UPDATE users SET apple_email_forwarding=$2 WHERE id=$1`, uid, event.Type == "email-enabled")
 	case "consent-revoked":
 		_, err = tx.Exec(r.Context(), `UPDATE refresh_tokens SET revoked_at=now() WHERE user_id=$1 AND revoked_at IS NULL`, uid)
 	default:
