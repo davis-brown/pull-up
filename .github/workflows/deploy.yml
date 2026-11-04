@@ -55,13 +55,14 @@ jobs:
           trap 'rm -f "$secrets_file"' EXIT
           node -e '
             const fs = require("fs");
-            const names = ["DATABASE_URL", "JWT_SECRET", "UPLOAD_SIGNING_SECRET", "INTERNAL_TASK_SECRET"];
+            // CLOUDFLARE_AI_TOKEN is required: production pauses all text
+            // posting when Llama Guard moderation is unavailable.
+            const names = ["DATABASE_URL", "JWT_SECRET", "UPLOAD_SIGNING_SECRET", "INTERNAL_TASK_SECRET", "CLOUDFLARE_AI_TOKEN"];
             // Optional: absent means the feature stays off, not that the
-            // deploy is broken. CLOUDFLARE_AI_TOKEN gates Llama Guard text
-            // moderation; without it the API accepts text unscreened.
-            // MAPILLARY_TOKEN gates the Mapillary photo source in the
-            // enricher; without it courts still get Wikimedia Commons photos.
-            const optional = ["CLOUDFLARE_AI_TOKEN", "MAPILLARY_TOKEN"];
+            // deploy is broken. MAPILLARY_TOKEN gates the Mapillary photo
+            // source in the enricher; without it courts still get Wikimedia
+            // Commons photos.
+            const optional = ["MAPILLARY_TOKEN"];
             const out = {};
             for (const name of names) {
               const value = process.env[name];
