@@ -68,7 +68,7 @@ export function Button({
     sheenX.setValue(-SHEEN_TRAVEL / 2);
     sweepLoop.current = Animated.loop(
       Animated.sequence([singleSweep(), Animated.delay(250)]),
-      { resetBeforeIteration: true },
+      { iterations: -1, resetBeforeIteration: true },
     );
     sweepLoop.current.start();
   };

@@ -1,8 +1,9 @@
 {
   "extends": "./tsconfig.json",
   "compilerOptions": {
-    "module": "commonjs",
-    "moduleResolution": "node",
+    // node16 honors package exports, the only place RN 0.88 ships its types.
+    "module": "node16",
+    "moduleResolution": "node16",
     "types": ["jest", "node"]
   },
   "exclude": []
