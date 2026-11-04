@@ -402,6 +402,15 @@ func (s *Server) handleCreateCourt(w http.ResponseWriter, r *http.Request) {
 	if !s.screenText(w, r, "court_name", req.Name) {
 		return
 	}
+	if req.Address != nil {
+		if len(*req.Address) > 300 {
+			writeError(w, http.StatusBadRequest, "address must be at most 300 characters")
+			return
+		}
+		if !s.screenText(w, r, "court_address", *req.Address) {
+			return
+		}
+	}
 	if req.FeeNote != nil && !s.screenText(w, r, "court_fee_note", *req.FeeNote) {
 		return
 	}
@@ -580,6 +589,13 @@ func (s *Server) handleCreateFlag(w http.ResponseWriter, r *http.Request) {
 	}); err != nil {
 		s.internalError(w, "create flag", err)
 		return
+	}
+	// A reported photo is hidden at once; an admin restores or removes it.
+	if req.EntityType == "photo" {
+		if _, err := s.store.Pool.Exec(r.Context(), `UPDATE court_photos SET status='flagged' WHERE id=$1 AND status='visible'`, req.EntityID); err != nil {
+			s.internalError(w, "hide reported photo", err)
+			return
+		}
 	}
 	w.WriteHeader(http.StatusCreated)
 }

@@ -38,6 +38,7 @@ interface AuthState {
     provider: "google" | "apple",
     idToken: string,
     displayName?: string,
+    authorizationCode?: string,
   ) => Promise<void>;
   signOut: () => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -225,7 +226,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     provider: "google" | "apple",
     idToken: string,
     displayName?: string,
-  ) => authenticate(() => apiClient.oauthLogin(provider, idToken, displayName));
+    authorizationCode?: string,
+  ) => authenticate(() => apiClient.oauthLogin(provider, idToken, displayName, authorizationCode));
 
   const signOut = async () => {
     operationRef.current += 1;

@@ -582,6 +582,15 @@ export function useResolveFlag() {
   });
 }
 
+export function useRemoveContent() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (content: { entity_type: string; entity_id: string }) =>
+      api<void>("/admin/content/remove", { method: "POST", body: JSON.stringify(content) }),
+    onSuccess: () => void qc.invalidateQueries(),
+  });
+}
+
 export function useAdminSetCourtStatus() {
   const qc = useQueryClient();
   return useMutation({

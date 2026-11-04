@@ -2,6 +2,7 @@ import { useFocusEffect, useRouter, type Href } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import { useCallback, useState } from "react";
 import {
+  Linking,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -11,6 +12,7 @@ import {
 import { Avatar } from "@/components/Avatar";
 import { Button, Card, Chip, ErrorText, Field, FullScreenLoader } from "@/components/ui";
 import { SignInScreenCta } from "@/components/SignInCta";
+import { accountEmailLabel } from "@/lib/account";
 import { api } from "@/lib/api";
 import { deviceTimezone } from "@/lib/push-registration";
 import { useAuth } from "@/lib/auth-context";
@@ -192,7 +194,7 @@ function ProfileSettingsContent() {
   const removePhoto = () => {
     setProfileError(null);
     clearAvatar.mutate(undefined, {
-      onSuccess: () => void refreshUser(),
+      onSuccess: () => { uploadAvatar.reset(); void refreshUser(); },
       onError: (e) => setProfileError(e.message),
     });
   };
@@ -264,6 +266,9 @@ function ProfileSettingsContent() {
       contentContainerStyle={{ padding: t.spacing.lg }}
     >
       <Card>
+        {uploadAvatar.isSuccess && (
+          <Text style={[t.type.caption, { color: t.colors.textSecondary }]}>Photo submitted for review. Your current photo stays until it is approved.</Text>
+        )}
         <View style={styles.avatarRow}>
           <Avatar
             avatarUrl={user?.avatar_url ?? null}
@@ -277,7 +282,7 @@ function ProfileSettingsContent() {
                 {uploadAvatar.isPending ? "Uploading…" : "Change photo"}
               </Text>
             </Pressable>
-            {user?.avatar_url ? (
+            {user?.avatar_url || uploadAvatar.isSuccess ? (
               <Pressable onPress={removePhoto} hitSlop={6} disabled={clearAvatar.isPending}>
                 <Text style={[t.type.caption, { color: t.colors.textMuted }]}>Remove photo</Text>
               </Pressable>
@@ -296,7 +301,7 @@ function ProfileSettingsContent() {
           <Button title="Save name" variant="secondary" busy={savingName} onPress={() => void saveName()} />
         ) : null}
         <Text style={[t.type.caption, { color: t.colors.textSecondary, marginTop: t.spacing.sm }]}>
-          {user?.email}
+          {accountEmailLabel(user?.email)}
         </Text>
         <Text style={[t.type.caption, { color: t.colors.textSecondary, marginTop: 2 }]}>
           Reputation {user?.reputation ?? 0}
@@ -515,7 +520,7 @@ function ProfileSettingsContent() {
           >
             Detect when you arrive at a court. "Ask me" sends a one-tap prompt;
             "Automatic" checks you in and out on its own. Uses low-power region
-            monitoring — your location history is never stored.
+            monitoring. Check-ins save the court, time, and distance; we do not record continuous GPS history.
           </Text>
           <View style={styles.chips}>
             {geofenceOptions.map((option) => (
@@ -605,6 +610,9 @@ function ProfileSettingsContent() {
           <Pressable onPress={() => router.push("/terms")} hitSlop={8}>
             <Text style={[t.type.caption, { color: t.colors.textSecondary }]}>Terms of Service</Text>
           </Pressable>
+          <Pressable onPress={() => router.push("/support" as Href)} hitSlop={8}>
+            <Text style={[t.type.caption, { color: t.colors.textSecondary }]}>Support</Text>
+          </Pressable>
         </View>
       </Card>
 
@@ -617,8 +625,15 @@ function ProfileSettingsContent() {
             This permanently deletes your account, check-ins, messages, photos,
             and favorites. Courts you added stay on the map without your name.
             This cannot be undone.
+            Your data disappears from the app immediately. Stored image files are
+            queued for deletion on the next hourly cleanup. Apple authorization
+            revocation is retried automatically if Apple is unavailable.
           </Text>
           <ErrorText message={deleteError} />
+          {user?.is_admin && <Text style={[t.type.caption, { color: t.colors.warning }]}>Assign another moderator before deleting your account to keep community review staffed.</Text>}
+          <Pressable onPress={() => void Linking.openURL("https://account.apple.com/")} accessibilityRole="link" hitSlop={6}>
+            <Text style={[t.type.caption, { color: t.colors.accent }]}>Signed in with Apple before this version? You can also remove pull-up access in your Apple Account settings.</Text>
+          </Pressable>
           <Button
             title="Yes, delete my account forever"
             variant="danger"

@@ -142,6 +142,22 @@ func TestPhotoUploadFlow(t *testing.T) {
 	if len(list.Photos) != 1 {
 		t.Fatalf("photos after upload = %+v, want 1", list.Photos)
 	}
+
+	// A report hides the photo at once, pending admin review.
+	resp = doJSON(t, ts, http.MethodPost, "/flags", u.AccessToken, map[string]string{
+		"entity_type": "photo", "entity_id": created.Photo.ID, "reason": "inappropriate",
+	})
+	if resp.StatusCode != http.StatusCreated {
+		t.Fatalf("report photo: status %d", resp.StatusCode)
+	}
+	resp.Body.Close()
+	resp = doJSON(t, ts, http.MethodGet, "/courts/"+court.ID+"/photos", "", nil)
+	list = decodeJSON[struct {
+		Photos []map[string]any `json:"photos"`
+	}](t, resp)
+	if len(list.Photos) != 0 {
+		t.Fatalf("reported photo still public: %+v", list.Photos)
+	}
 }
 
 // Photos go visible on upload, so one account's daily uploads are capped.

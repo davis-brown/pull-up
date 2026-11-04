@@ -13,6 +13,7 @@ import {
   useAdminSetPhotoStatus,
   useResolveFlag,
   useSetUserAdmin,
+  useRemoveContent,
 } from "@/lib/hooks";
 import { useTheme } from "@/lib/theme";
 import { safePathSegment } from "@/lib/routes";
@@ -39,10 +40,16 @@ function FlagRow({ flag }: { flag: Flag }) {
   const resolveFlag = useResolveFlag();
   const setCourtStatus = useAdminSetCourtStatus();
   const setPhotoStatus = useAdminSetPhotoStatus();
+  const removeContent = useRemoveContent();
   const [error, setError] = useState<string | null>(null);
+  const [confirmingSuspend, setConfirmingSuspend] = useState(false);
 
-  const busy = resolveFlag.isPending || setCourtStatus.isPending || setPhotoStatus.isPending;
+  const busy = resolveFlag.isPending || setCourtStatus.isPending || setPhotoStatus.isPending || removeContent.isPending;
   const onError = (e: Error) => setError(e.message);
+  const remove = () => removeContent.mutate(
+    { entity_type: flag.entity_type, entity_id: flag.entity_id },
+    { onSuccess: () => resolveFlag.mutate(flag.id, { onError }), onError },
+  );
 
   return (
     <Card>
@@ -89,6 +96,21 @@ function FlagRow({ flag }: { flag: Flag }) {
         {flag.entity_type === "photo" && (
           <View style={styles.actionButton}>
             <Button
+              title="Restore photo"
+              variant="secondary"
+              busy={busy}
+              onPress={() =>
+                setPhotoStatus.mutate(
+                  { photoId: flag.entity_id, status: "visible" },
+                  { onSuccess: () => resolveFlag.mutate(flag.id, { onError }), onError },
+                )
+              }
+            />
+          </View>
+        )}
+        {flag.entity_type === "photo" && (
+          <View style={styles.actionButton}>
+            <Button
               title="Remove photo"
               variant="danger"
               busy={busy}
@@ -101,6 +123,16 @@ function FlagRow({ flag }: { flag: Flag }) {
             />
           </View>
         )}
+        {["report", "message", "session", "user"].includes(flag.entity_type) && (
+          <View style={styles.actionButton}>
+            <Button
+              title={flag.entity_type === "user" ? "Suspend player" : "Remove content"}
+              variant="danger"
+              busy={busy}
+              onPress={() => (flag.entity_type === "user" ? setConfirmingSuspend(true) : remove())}
+            />
+          </View>
+        )}
         <View style={styles.actionButton}>
           <Button
             title="Resolve"
@@ -110,6 +142,18 @@ function FlagRow({ flag }: { flag: Flag }) {
           />
         </View>
       </View>
+      {confirmingSuspend && (
+        <Card tone="warning">
+          <Text style={[t.type.label, { color: t.colors.warning }]}>Suspend this player?</Text>
+          <Text style={[t.type.caption, { color: t.colors.textSecondary, marginTop: t.spacing.xs, marginBottom: t.spacing.sm }]}>
+            This cannot be undone. Their name and avatar are wiped, their photos,
+            messages, reports and runs are removed, and they are signed out
+            everywhere. They can still delete their account.
+          </Text>
+          <Button title="Suspend player" variant="danger" busy={busy} onPress={remove} />
+          <Button title="Cancel" variant="ghost" onPress={() => setConfirmingSuspend(false)} />
+        </Card>
+      )}
     </Card>
   );
 }

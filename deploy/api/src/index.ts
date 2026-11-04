@@ -19,12 +19,17 @@ interface OptionalBindings {
   CORS_ORIGINS?: string;
   GOOGLE_CLIENT_IDS?: string;
   APPLE_AUDIENCES?: string;
+  APPLE_CLIENT_ID?: string;
+  APPLE_TEAM_ID?: string;
+  APPLE_KEY_ID?: string;
+  // Contents of the Sign in with Apple .p8 key (PEM).
+  APPLE_PRIVATE_KEY?: string;
+  APPLE_TOKEN_ENCRYPTION_KEY?: string;
   SENTRY_DSN?: string;
   EMAIL_FROM?: string;
   WEB_ORIGIN?: string;
   // Workers AI text moderation (Llama Guard). Both must be present for the
-  // Go API to screen chat messages and notes; with either missing it
-  // accepts text unscreened rather than failing closed.
+  // Go API to screen public text; production posting pauses if either is missing.
   CLOUDFLARE_ACCOUNT_ID?: string;
   CLOUDFLARE_AI_TOKEN?: string;
   // Enables the enricher's Mapillary photo source; empty leaves it off and
@@ -101,6 +106,11 @@ export class ApiContainer extends Container<RuntimeEnv> {
       CORS_ORIGINS: env.CORS_ORIGINS?.trim() || DENY_ALL_CORS_ORIGIN,
       GOOGLE_CLIENT_IDS: env.GOOGLE_CLIENT_IDS ?? "",
       APPLE_AUDIENCES: env.APPLE_AUDIENCES ?? "",
+      APPLE_CLIENT_ID: env.APPLE_CLIENT_ID ?? "",
+      APPLE_TEAM_ID: env.APPLE_TEAM_ID ?? "",
+      APPLE_KEY_ID: env.APPLE_KEY_ID ?? "",
+      APPLE_PRIVATE_KEY: env.APPLE_PRIVATE_KEY ?? "",
+      APPLE_TOKEN_ENCRYPTION_KEY: env.APPLE_TOKEN_ENCRYPTION_KEY ?? "",
       SENTRY_DSN: env.SENTRY_DSN ?? "",
       CLOUDFLARE_ACCOUNT_ID: env.CLOUDFLARE_ACCOUNT_ID ?? "",
       CLOUDFLARE_AI_TOKEN: env.CLOUDFLARE_AI_TOKEN ?? "",

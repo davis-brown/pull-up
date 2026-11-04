@@ -7,7 +7,7 @@
 import * as AppleAuthentication from "expo-apple-authentication";
 import * as Google from "expo-auth-session/providers/google";
 import * as WebBrowser from "expo-web-browser";
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { Platform, StyleSheet, Text, View } from "react-native";
 import { Button, ErrorText } from "@/components/ui";
 import { useAuth } from "@/lib/auth-context";
@@ -26,7 +26,11 @@ function googleClientIdForPlatform(): string {
   return GOOGLE_WEB_CLIENT_ID;
 }
 
-function GoogleButton({ onError }: { onError: (msg: string) => void }) {
+// Returns an error message when sign-in must not start yet (e.g. the Terms
+// checkbox on the register screen is unticked), or null to proceed.
+type Guard = () => string | null;
+
+function GoogleButton({ onError, guard }: { onError: (msg: string) => void; guard?: Guard }) {
   const { oauthSignIn } = useAuth();
   const [request, response, promptAsync] = Google.useIdTokenAuthRequest({
     ...(Platform.OS === "ios"
@@ -52,12 +56,16 @@ function GoogleButton({ onError }: { onError: (msg: string) => void }) {
       title="Continue with Google"
       variant="secondary"
       disabled={!request}
-      onPress={() => void promptAsync()}
+      onPress={() => {
+        const blocked = guard?.();
+        if (blocked) return onError(blocked);
+        void promptAsync();
+      }}
     />
   );
 }
 
-function AppleButton({ onError }: { onError: (msg: string) => void }) {
+function AppleButton({ onError, guard }: { onError: (msg: string) => void; guard?: Guard }) {
   const { oauthSignIn } = useAuth();
   const t = useTheme();
   const [available, setAvailable] = useState(false);
@@ -69,6 +77,8 @@ function AppleButton({ onError }: { onError: (msg: string) => void }) {
   if (!available) return null;
 
   const signIn = async () => {
+    const blocked = guard?.();
+    if (blocked) return onError(blocked);
     try {
       const credential = await AppleAuthentication.signInAsync({
         requestedScopes: [
@@ -81,7 +91,8 @@ function AppleButton({ onError }: { onError: (msg: string) => void }) {
       const name = [credential.fullName?.givenName, credential.fullName?.familyName]
         .filter(Boolean)
         .join(" ");
-      await oauthSignIn("apple", credential.identityToken, name || undefined);
+      if (!credential.authorizationCode) throw new Error("No authorization code from Apple");
+      await oauthSignIn("apple", credential.identityToken, name || undefined, credential.authorizationCode);
     } catch (e) {
       if ((e as { code?: string }).code === "ERR_REQUEST_CANCELED") return;
       onError(getErrorMessage(e, "Apple sign-in failed"));
@@ -103,7 +114,14 @@ function AppleButton({ onError }: { onError: (msg: string) => void }) {
   );
 }
 
-export function OAuthButtons() {
+export function OAuthButtons({
+  guard,
+  footer,
+}: {
+  guard?: Guard;
+  /** Rendered under the buttons, only when at least one is shown. */
+  footer?: ReactNode;
+} = {}) {
   const t = useTheme();
   const [error, setError] = useState<string | null>(null);
   // The hook throws while rendering when its current platform id is absent,
@@ -122,9 +140,10 @@ export function OAuthButtons() {
         </Text>
         <View style={[styles.divider, { backgroundColor: t.colors.border }]} />
       </View>
-      {showApple && <AppleButton onError={setError} />}
-      {showGoogle && <GoogleButton onError={setError} />}
+      {showApple && <AppleButton onError={setError} guard={guard} />}
+      {showGoogle && <GoogleButton onError={setError} guard={guard} />}
       <ErrorText message={error} />
+      {footer}
     </View>
   );
 }
