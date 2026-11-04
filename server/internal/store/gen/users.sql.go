@@ -12,6 +12,28 @@ import (
 	"github.com/google/uuid"
 )
 
+const claimEmailVerificationAttempt = `-- name: ClaimEmailVerificationAttempt :one
+UPDATE email_verification_tokens
+SET attempts = attempts + 1
+WHERE token_hash = $1 AND consumed_at IS NULL AND expires_at > now()
+  AND attempts < 5
+RETURNING id, code_hash
+`
+
+type ClaimEmailVerificationAttemptRow struct {
+	ID       uuid.UUID `json:"id"`
+	CodeHash string    `json:"code_hash"`
+}
+
+// Spends one of the five guesses a code gets before it needs reissuing,
+// whether or not the guess turns out right.
+func (q *Queries) ClaimEmailVerificationAttempt(ctx context.Context, tokenHash string) (ClaimEmailVerificationAttemptRow, error) {
+	row := q.db.QueryRow(ctx, claimEmailVerificationAttempt, tokenHash)
+	var i ClaimEmailVerificationAttemptRow
+	err := row.Scan(&i.ID, &i.CodeHash)
+	return i, err
+}
+
 const clearUserAvatar = `-- name: ClearUserAvatar :exec
 UPDATE users SET avatar_url = NULL WHERE id = $1
 `
@@ -23,19 +45,25 @@ func (q *Queries) ClearUserAvatar(ctx context.Context, id uuid.UUID) error {
 
 const createEmailVerificationToken = `-- name: CreateEmailVerificationToken :exec
 
-INSERT INTO email_verification_tokens (user_id, token_hash, expires_at)
-VALUES ($1, $2, $3)
+INSERT INTO email_verification_tokens (user_id, token_hash, code_hash, expires_at)
+VALUES ($1, $2, $3, $4)
 `
 
 type CreateEmailVerificationTokenParams struct {
 	UserID    uuid.UUID `json:"user_id"`
 	TokenHash string    `json:"token_hash"`
+	CodeHash  string    `json:"code_hash"`
 	ExpiresAt time.Time `json:"expires_at"`
 }
 
 // Email verification -------------------------------------------------------
 func (q *Queries) CreateEmailVerificationToken(ctx context.Context, arg CreateEmailVerificationTokenParams) error {
-	_, err := q.db.Exec(ctx, createEmailVerificationToken, arg.UserID, arg.TokenHash, arg.ExpiresAt)
+	_, err := q.db.Exec(ctx, createEmailVerificationToken,
+		arg.UserID,
+		arg.TokenHash,
+		arg.CodeHash,
+		arg.ExpiresAt,
+	)
 	return err
 }
 
@@ -70,7 +98,8 @@ const createUser = `-- name: CreateUser :one
 INSERT INTO users (email, password_hash, display_name)
 VALUES ($1, $2, $3)
 ON CONFLICT (email) DO UPDATE
-    SET password_hash = EXCLUDED.password_hash, display_name = EXCLUDED.display_name
+    SET password_hash = EXCLUDED.password_hash, display_name = EXCLUDED.display_name,
+        created_at = now()
     WHERE users.email_verified_at IS NULL AND users.auth_provider = 'password'
 RETURNING id, email, display_name, avatar_url, reputation, created_at, is_admin,
     is_private, jersey_number, position, height_cm, style_tags,
@@ -106,7 +135,8 @@ type CreateUserRow struct {
 // Re-registering an email nobody has verified takes the account over: the
 // earlier password was never proven to belong to the inbox owner, so keeping
 // it would let whoever registered first log in once the owner verifies.
-// A verified or OAuth account returns no row (the caller's 409).
+// created_at restarts so the unverified-account purge counts from the new
+// registration. A verified or OAuth account returns no row.
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CreateUserRow, error) {
 	row := q.db.QueryRow(ctx, createUser, arg.Email, arg.PasswordHash, arg.DisplayName)
 	var i CreateUserRow
@@ -133,14 +163,33 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (CreateU
 
 const deleteExpiredAuthTokens = `-- name: DeleteExpiredAuthTokens :exec
 WITH refresh AS (DELETE FROM refresh_tokens WHERE expires_at < now())
-DELETE FROM email_verification_tokens WHERE expires_at < now()
+DELETE FROM email_verification_tokens
+WHERE consumed_at IS NOT NULL OR expires_at < now() - interval '1 day'
 `
 
 // Housekeeping for the cron drain. Expired refresh tokens can no longer be
-// replayed, so dropping them loses no reuse detection.
+// replayed, so dropping them loses no reuse detection. A verification row
+// outlives its code by a day so "send a new code" still works on it.
 func (q *Queries) DeleteExpiredAuthTokens(ctx context.Context) error {
 	_, err := q.db.Exec(ctx, deleteExpiredAuthTokens)
 	return err
+}
+
+const deleteStaleUnverifiedUsers = `-- name: DeleteStaleUnverifiedUsers :execrows
+DELETE FROM users
+WHERE email_verified_at IS NULL AND auth_provider = 'password'
+  AND created_at < now() - interval '7 days'
+`
+
+// A password account nobody verified within a week is abandoned or a
+// squatter's; deleting it frees the email. Unverified accounts can't sign
+// in, so they own nothing else.
+func (q *Queries) DeleteStaleUnverifiedUsers(ctx context.Context) (int64, error) {
+	result, err := q.db.Exec(ctx, deleteStaleUnverifiedUsers)
+	if err != nil {
+		return 0, err
+	}
+	return result.RowsAffected(), nil
 }
 
 const getRefreshTokenByHash = `-- name: GetRefreshTokenByHash :one
@@ -206,20 +255,6 @@ func (q *Queries) GetRefreshTokenByHashForUpdate(ctx context.Context, tokenHash 
 		&i.CreatedAt,
 	)
 	return i, err
-}
-
-const getUnverifiedPasswordUserByEmailForUpdate = `-- name: GetUnverifiedPasswordUserByEmailForUpdate :one
-SELECT id
-FROM users
-WHERE email = $1 AND auth_provider = 'password' AND email_verified_at IS NULL
-FOR UPDATE
-`
-
-func (q *Queries) GetUnverifiedPasswordUserByEmailForUpdate(ctx context.Context, email string) (uuid.UUID, error) {
-	row := q.db.QueryRow(ctx, getUnverifiedPasswordUserByEmailForUpdate, email)
-	var id uuid.UUID
-	err := row.Scan(&id)
-	return id, err
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
@@ -342,6 +377,29 @@ WHERE user_id = $1 AND consumed_at IS NULL
 func (q *Queries) InvalidateEmailVerificationTokens(ctx context.Context, userID uuid.UUID) error {
 	_, err := q.db.Exec(ctx, invalidateEmailVerificationTokens, userID)
 	return err
+}
+
+const reissueEmailVerificationCode = `-- name: ReissueEmailVerificationCode :one
+UPDATE email_verification_tokens t
+SET code_hash = $1, attempts = 0, expires_at = $2
+FROM users u
+WHERE t.token_hash = $3 AND t.consumed_at IS NULL
+  AND u.id = t.user_id AND u.email_verified_at IS NULL
+RETURNING u.email
+`
+
+type ReissueEmailVerificationCodeParams struct {
+	CodeHash  string    `json:"code_hash"`
+	ExpiresAt time.Time `json:"expires_at"`
+	TokenHash string    `json:"token_hash"`
+}
+
+// "Send a new code": same verification id, fresh code, attempts reset.
+func (q *Queries) ReissueEmailVerificationCode(ctx context.Context, arg ReissueEmailVerificationCodeParams) (string, error) {
+	row := q.db.QueryRow(ctx, reissueEmailVerificationCode, arg.CodeHash, arg.ExpiresAt, arg.TokenHash)
+	var email string
+	err := row.Scan(&email)
+	return email, err
 }
 
 const revokeRefreshToken = `-- name: RevokeRefreshToken :exec
@@ -510,11 +568,10 @@ func (q *Queries) UpdateUser(ctx context.Context, arg UpdateUserParams) (UpdateU
 
 const verifyEmailWithToken = `-- name: VerifyEmailWithToken :one
 WITH consumed AS (
-    UPDATE email_verification_tokens
+    UPDATE email_verification_tokens t
     SET consumed_at = now()
-    WHERE token_hash = $1
-      AND consumed_at IS NULL
-      AND expires_at > now()
+    WHERE t.id = $1
+      AND t.consumed_at IS NULL
     RETURNING user_id
 ), verified AS (
     UPDATE users u
@@ -553,8 +610,8 @@ type VerifyEmailWithTokenRow struct {
 	EmailVerified bool      `json:"email_verified"`
 }
 
-func (q *Queries) VerifyEmailWithToken(ctx context.Context, tokenHash string) (VerifyEmailWithTokenRow, error) {
-	row := q.db.QueryRow(ctx, verifyEmailWithToken, tokenHash)
+func (q *Queries) VerifyEmailWithToken(ctx context.Context, id uuid.UUID) (VerifyEmailWithTokenRow, error) {
+	row := q.db.QueryRow(ctx, verifyEmailWithToken, id)
 	var i VerifyEmailWithTokenRow
 	err := row.Scan(
 		&i.ID,
