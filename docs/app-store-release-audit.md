@@ -34,11 +34,11 @@ Evidence: `server/internal/config/config.go:35`, `deploy/api/src/index.ts:22`, `
 
 Production previously allowed text through when the classifier was missing, down, or returned an unknown answer. It now requires a safe verdict; unavailable checks return a retryable error. Coverage includes chat, run notes, crowd-report notes, court names/addresses/fee notes, and profile names, including first OAuth registration.
 
-Court photos previously became public as soon as upload finalized, and avatars bypassed prior review. New uploads now remain private in a human review queue. Administrators get signed, five-minute previews and approve or reject images; ordinary reads cannot access pending images. Pending objects survive cleanup while under review; rejected/replaced/deleted objects enter the existing deletion queue.
+Court photos and avatars go public on upload. Reporting a court photo hides it immediately (status `flagged`, bytes kept); an administrator restores or removes it from the moderation queue. Abusive avatars are removed by suspending the player.
 
 The earlier branch commits expose report/block actions on the app's UGC surfaces. Added moderator removal actions for reports, messages and runs, and account suspension that hides/removes the player's content and prevents authenticated participation. Suspended players retain access to account deletion. The last-administrator guard no longer prevents permanent account deletion.
 
-Evidence: `server/internal/api/moderation_helpers.go:62`, `server/internal/api/court_handlers.go:402`, `server/internal/api/media_review_handlers.go:16`, `server/internal/api/internal_handlers.go:156`, `server/internal/api/user_handlers.go:170`, `server/internal/api/content_moderation.go:10`, `server/internal/api/middleware.go:36`, `server/migrations/00030_media_review.sql:1`, `app/app/admin/index.tsx:285`, `app/components/CourtChat.tsx:91`, `app/components/CourtSessions.tsx:149`.
+Evidence: `server/internal/api/moderation_helpers.go:62`, `server/internal/api/court_handlers.go:402`, `server/internal/api/content_moderation.go:10`, `server/internal/api/middleware.go:36`, `app/app/admin/index.tsx`, `app/components/CourtChat.tsx:91`, `app/components/CourtSessions.tsx:149`.
 
 ### B5. Moderation operations and privacy/support publication — OPEN — needs the user
 
@@ -58,11 +58,11 @@ Evidence: `deploy/api/src/index.ts:90`, `app/lib/api.ts:18`, `server/internal/ap
 
 ### B7. Signed native build and database validation — OPEN — needs the user
 
-Authorize the next build/deployment phase separately. Run migrations 00030–00032 on a disposable PostGIS test database and execute the integration suite before any production rollout. This machine has no configured `TEST_DATABASE_URL`, PostgreSQL service, or Docker command; **121 integration tests were skipped**, including the new database-backed media, suspension, consent and deletion-queue checks.
+Authorize the next build/deployment phase separately. Run migrations 00031–00032 on a disposable PostGIS test database and execute the integration suite before any production rollout. This machine has no configured `TEST_DATABASE_URL`, PostgreSQL service, or Docker command; **121 integration tests were skipped**, including the new database-backed suspension, consent and deletion-queue checks.
 
-On a signed iPhone build/TestFlight, verify Apple sign-in with a real and hidden email, account deletion, moderation previews/approval, denied permissions, background arrival/exit, push delivery and Sentry crash symbolication. Native archive/device validation was not performed on this Windows host.
+On a signed iPhone build/TestFlight, verify Apple sign-in with a real and hidden email, account deletion, reporting a photo hides it, denied permissions, background arrival/exit, push delivery and Sentry crash symbolication. Native archive/device validation was not performed on this Windows host.
 
-Evidence: `server/internal/api/api_test.go:50`, `server/internal/api/release_integration_test.go:1`, `server/migrations/00030_media_review.sql:1`, `app/eas.json:27`.
+Evidence: `server/internal/api/api_test.go:50`, `server/internal/api/release_integration_test.go:1`, `app/eas.json:27`.
 
 ### B8. Final privacy manifest, labels and age questionnaire — OPEN — needs the user
 
@@ -114,7 +114,7 @@ Evidence: `app/app.config.ts:70`, `app/app.config.ts:92`, `app/app/_layout.tsx:4
 - terms acceptance on registration.
 - reachable report/block controls.
 - public Support page and synthetic-email labels.
-- API safeguards, image review, consent, suspension, Apple grants/notifications, migrations, tests and Worker dependency fix.
+- API safeguards, hide-on-report photos, consent, suspension, Apple grants/notifications, migrations, tests and Worker dependency fix.
 - app moderation/consent UI, Apple authorization-code transport and corrected privacy copy.
 - The documentation commit containing this audit is listed in the final handoff.
 

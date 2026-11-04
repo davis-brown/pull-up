@@ -590,6 +590,13 @@ func (s *Server) handleCreateFlag(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, "create flag", err)
 		return
 	}
+	// A reported photo is hidden at once; an admin restores or removes it.
+	if req.EntityType == "photo" {
+		if _, err := s.store.Pool.Exec(r.Context(), `UPDATE court_photos SET status='flagged' WHERE id=$1 AND status='visible'`, req.EntityID); err != nil {
+			s.internalError(w, "hide reported photo", err)
+			return
+		}
+	}
 	w.WriteHeader(http.StatusCreated)
 }
 

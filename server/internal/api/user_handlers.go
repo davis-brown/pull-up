@@ -175,19 +175,7 @@ func (s *Server) handlePatchMe(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		key := strings.TrimPrefix(value, "/photos/")
-		tx, err := s.store.Pool.Begin(r.Context())
-		if err != nil {
-			s.internalError(w, "begin avatar review", err)
-			return
-		}
-		defer tx.Rollback(r.Context())
-		// Serialize submissions and clearing so an older pending avatar can
-		// never replace a newer approved one after a delayed review.
-		if _, err := tx.Exec(r.Context(), `SELECT id FROM users WHERE id=$1 FOR UPDATE`, uid); err != nil {
-			s.internalError(w, "lock avatar owner", err)
-			return
-		}
-		claimed, err := s.store.Queries.WithTx(tx).ClaimPendingUpload(r.Context(), gen.ClaimPendingUploadParams{
+		claimed, err := s.store.Queries.ClaimPendingUpload(r.Context(), gen.ClaimPendingUploadParams{
 			StorageKey: key,
 			OwnerID:    uid,
 			Purpose:    "avatar",
@@ -196,26 +184,7 @@ func (s *Server) handlePatchMe(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusBadRequest, "avatar_url must reference a pending upload")
 			return
 		}
-		if _, err := tx.Exec(r.Context(), `DELETE FROM media_reviews WHERE owner_id=$1 AND purpose='avatar'`, uid); err != nil {
-			s.internalError(w, "replace pending avatar review", err)
-			return
-		}
-		if _, err := tx.Exec(r.Context(), `INSERT INTO media_reviews (storage_key, owner_id, purpose) VALUES ($1,$2,'avatar') ON CONFLICT DO NOTHING`, key, uid); err != nil {
-			s.internalError(w, "queue avatar review", err)
-			return
-		}
-		if err := tx.Commit(r.Context()); err != nil {
-			s.internalError(w, "commit avatar review", err)
-			return
-		}
-		// Keep the current public avatar until the new upload is approved.
-		req.AvatarURL.Set = false
-	} else if req.AvatarURL.Set {
-		// Clearing the avatar also cancels a pending one, as DELETE /me/avatar does.
-		if _, err := s.store.Pool.Exec(r.Context(), `DELETE FROM media_reviews WHERE owner_id=$1 AND purpose='avatar'`, uid); err != nil {
-			s.internalError(w, "cancel pending avatar", err)
-			return
-		}
+		req.AvatarURL.Value = &value
 	}
 	var jerseyNumber *int16
 	if req.JerseyNumber.Value != nil {
@@ -291,22 +260,8 @@ func (s *Server) handleCreateAvatarUpload(w http.ResponseWriter, r *http.Request
 }
 
 func (s *Server) handleDeleteAvatar(w http.ResponseWriter, r *http.Request) {
-	tx, err := s.store.Pool.Begin(r.Context())
-	if err != nil {
-		s.internalError(w, "begin clear avatar", err)
-		return
-	}
-	defer tx.Rollback(r.Context())
-	if err := s.store.Queries.WithTx(tx).ClearUserAvatar(r.Context(), userID(r)); err != nil {
+	if err := s.store.Queries.ClearUserAvatar(r.Context(), userID(r)); err != nil {
 		s.internalError(w, "clear avatar", err)
-		return
-	}
-	if _, err := tx.Exec(r.Context(), `DELETE FROM media_reviews WHERE owner_id=$1 AND purpose='avatar'`, userID(r)); err != nil {
-		s.internalError(w, "cancel pending avatar", err)
-		return
-	}
-	if err := tx.Commit(r.Context()); err != nil {
-		s.internalError(w, "commit clear avatar", err)
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

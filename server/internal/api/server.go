@@ -229,8 +229,6 @@ func (s *Server) Routes() http.Handler {
 				r.Use(s.requireAdmin)
 				r.Get("/admin/flags", s.handleListFlags)
 				r.Post("/admin/content/remove", s.handleAdminRemoveContent)
-				r.Get("/admin/media", s.handleAdminMediaReviews)
-				r.Post("/admin/media/review", s.handleAdminReviewMedia)
 				r.Post("/admin/flags/{id}/resolve", s.handleResolveFlag)
 				r.Post("/admin/courts/{id}/status", s.handleAdminSetCourtStatus)
 				r.Post("/admin/photos/{id}/status", s.handleAdminSetPhotoStatus)

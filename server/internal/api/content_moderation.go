@@ -33,7 +33,6 @@ func (s *Server) handleAdminRemoveContent(w http.ResponseWriter, r *http.Request
 			`UPDATE sessions SET canceled_at=now() WHERE created_by=$1`,
 			`UPDATE check_ins SET checked_out_at=now() WHERE user_id=$1 AND checked_out_at IS NULL`,
 			`UPDATE court_photos SET status='removed' WHERE user_id=$1`,
-			`DELETE FROM media_reviews WHERE owner_id=$1`,
 			`UPDATE refresh_tokens SET revoked_at=now() WHERE user_id=$1 AND revoked_at IS NULL`,
 		},
 	}
