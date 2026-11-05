@@ -12,11 +12,11 @@ export interface EmailContent {
 // sign-up.
 export function verificationCodeEmail(code: string, expires: string, nowMs = Date.now()): EmailContent {
   const minutes = Math.max(1, Math.round((Date.parse(expires) - nowMs) / 60_000));
-  const expiry = `This code expires in ${minutes} minutes. If you didn't just sign up for pull-up, ignore this email.`;
+  const expiry = `This code expires in ${minutes} minutes. If you didn't just sign up for RallyFlare, ignore this email.`;
   return {
-    subject: `${code} is your pull-up code`,
+    subject: `${code} is your RallyFlare code`,
     text: [
-      "Your pull-up verification code",
+      "Your RallyFlare verification code",
       "",
       code,
       "",
@@ -24,7 +24,7 @@ export function verificationCodeEmail(code: string, expires: string, nowMs = Dat
       expiry,
     ].join("\n"),
     html: [
-      "<h1>Your pull-up verification code</h1>",
+      "<h1>Your RallyFlare verification code</h1>",
       `<p style="font-size:32px;font-weight:bold;letter-spacing:6px">${escapeHtml(code)}</p>`,
       "<p>Enter it in the app to finish creating your account.</p>",
       `<p>${escapeHtml(expiry)}</p>`,
@@ -34,12 +34,12 @@ export function verificationCodeEmail(code: string, expires: string, nowMs = Dat
 
 export function existingAccountEmail(loginUrl: string): EmailContent {
   const lines = [
-    "Someone tried to create a pull-up account with this email address, but you already have one.",
+    "Someone tried to create a RallyFlare account with this email address, but you already have one.",
     "If it was you, sign in instead (with your password, or with Google or Apple if that's how you joined).",
     "If it wasn't you, you can ignore this email. Nothing about your account changed.",
   ];
   return {
-    subject: "You already have a pull-up account",
+    subject: "You already have a RallyFlare account",
     text: [...lines, "", loginUrl].join("\n\n"),
     html: [
       ...lines.map((line) => `<p>${escapeHtml(line)}</p>`),

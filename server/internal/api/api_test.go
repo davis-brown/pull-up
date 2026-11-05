@@ -14,10 +14,10 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"github.com/davisbrown/pull-up/server/internal/api"
-	"github.com/davisbrown/pull-up/server/internal/config"
-	"github.com/davisbrown/pull-up/server/internal/geocode"
-	"github.com/davisbrown/pull-up/server/internal/store"
+	"github.com/davis-brown/rallyflare/server/internal/api"
+	"github.com/davis-brown/rallyflare/server/internal/config"
+	"github.com/davis-brown/rallyflare/server/internal/geocode"
+	"github.com/davis-brown/rallyflare/server/internal/store"
 )
 
 // Full-stack HTTP tests against a real Postgres/PostGIS-backed Server.
@@ -26,7 +26,7 @@ import (
 // internal/store's tests truncate the same tables, and `go test ./...` runs
 // package binaries concurrently, so both take this same Postgres advisory
 // lock around setup+truncate.
-const testDBLockKey = 0x7075_6c6c_7570 // "pullup" — arbitrary, just needs to match internal/store's
+const testDBLockKey = 0x7075_6c6c_7570 // "rallyflare" — arbitrary, just needs to match internal/store's
 
 func acquireTestDBLock(t *testing.T, ctx context.Context, databaseURL string) {
 	t.Helper()
@@ -120,7 +120,7 @@ func registerUser(t *testing.T, ts *httptest.Server, email, displayName string) 
 		defer resp.Body.Close()
 		t.Fatalf("register %s: status %d: %s", email, resp.StatusCode, readBody(t, resp))
 	}
-	code := resp.Header.Get("X-Pull-Up-Email-Verification-Code")
+	code := resp.Header.Get("X-RallyFlare-Email-Verification-Code")
 	pending := decodeJSON[struct {
 		VerificationID string `json:"verification_id"`
 	}](t, resp)

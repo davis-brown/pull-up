@@ -46,8 +46,8 @@ const context = await browser.newContext({
 // Skip first-run onboarding, which otherwise covers the map.
 await context.addInitScript(() => {
   try {
-    localStorage.setItem("pullup.onboarding_seen_v1", "true");
-    localStorage.setItem("pullup.app_banner_dismissed", "true");
+    localStorage.setItem("rallyflare.onboarding_seen_v1", "true");
+    localStorage.setItem("rallyflare.app_banner_dismissed", "true");
   } catch {}
 });
 

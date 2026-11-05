@@ -10,7 +10,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
 
-	"github.com/davisbrown/pull-up/server/internal/store/gen"
+	"github.com/davis-brown/rallyflare/server/internal/store/gen"
 )
 
 // handleDeleteMe permanently deletes the account (App Store 5.1.1(v) /

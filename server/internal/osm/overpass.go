@@ -70,7 +70,7 @@ func runOverpass(ctx context.Context, endpoint, query string) ([]byte, error) {
 		return nil, err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Set("User-Agent", "pull-up-osmseed/0.1 (basketball court finder; see repository README)")
+	req.Header.Set("User-Agent", "RallyFlare-osmseed/0.1 (basketball court finder; see repository README)")
 
 	client := &http.Client{Timeout: 3 * time.Minute}
 	resp, err := client.Do(req)

@@ -47,7 +47,7 @@ export function TermsCheckbox({
         color={accepted ? t.colors.accent : t.colors.textMuted}
       />
       <Text style={[t.type.caption, styles.text, { color: t.colors.textSecondary }]}>
-        I agree to the <LegalLinks />. pull-up has zero tolerance for objectionable
+        I agree to the <LegalLinks />. RallyFlare has zero tolerance for objectionable
         content or abusive behavior. I consent to public text I submit being sent
         to Cloudflare Workers AI for safety checks. Reported photos are hidden
         until a moderator reviews them.
@@ -63,7 +63,7 @@ export function TermsNotice() {
   return (
     <View style={{ marginTop: t.spacing.sm }}>
       <Text style={[t.type.caption, styles.center, { color: t.colors.textMuted }]}>
-        By continuing, you agree to the <LegalLinks />. pull-up has zero tolerance
+        By continuing, you agree to the <LegalLinks />. RallyFlare has zero tolerance
         for objectionable content or abusive behavior.
       </Text>
     </View>

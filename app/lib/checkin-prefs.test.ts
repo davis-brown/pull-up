@@ -26,7 +26,7 @@ describe("checkin-prefs", () => {
     });
     await saveLastCheckInPrefs({ partySize: 3, hasBall: true });
     expect(mockStorage.set).toHaveBeenCalledWith(
-      "pullup.last_checkin_prefs",
+      "rallyflare.last_checkin_prefs",
       expect.any(String),
     );
     mockStorage.get.mockResolvedValue(saved);

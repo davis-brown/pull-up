@@ -12,13 +12,13 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 
-	"github.com/davisbrown/pull-up/server/internal/auth"
-	"github.com/davisbrown/pull-up/server/internal/config"
-	"github.com/davisbrown/pull-up/server/internal/enrich"
-	"github.com/davisbrown/pull-up/server/internal/geocode"
-	"github.com/davisbrown/pull-up/server/internal/moderation"
-	"github.com/davisbrown/pull-up/server/internal/seeder"
-	"github.com/davisbrown/pull-up/server/internal/store"
+	"github.com/davis-brown/rallyflare/server/internal/auth"
+	"github.com/davis-brown/rallyflare/server/internal/config"
+	"github.com/davis-brown/rallyflare/server/internal/enrich"
+	"github.com/davis-brown/rallyflare/server/internal/geocode"
+	"github.com/davis-brown/rallyflare/server/internal/moderation"
+	"github.com/davis-brown/rallyflare/server/internal/seeder"
+	"github.com/davis-brown/rallyflare/server/internal/store"
 )
 
 type Server struct {
@@ -104,7 +104,7 @@ func (s *Server) Routes() http.Handler {
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   s.cfg.CORSOrigins,
 		AllowedMethods:   []string{"GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Authorization", "Content-Type", "X-Pull-Up-Platform"},
+		AllowedHeaders:   []string{"Authorization", "Content-Type", "X-RallyFlare-Platform"},
 		AllowCredentials: true,
 		MaxAge:           7200,
 	}))

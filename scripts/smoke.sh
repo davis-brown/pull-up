@@ -47,7 +47,7 @@ STATUS=$(curl -s -D "$HDRS" -o /dev/null -w '%{http_code}' -X POST "$API/auth/re
   -d "{\"email\":\"$EMAIL\",\"password\":\"$PASS\",\"display_name\":\"Smoke Tester\"}")
 [ "$STATUS" = "429" ] && throttled register
 [ "$STATUS" = "202" ] || { echo "FAIL: expected 202 from register, got $STATUS"; exit 1; }
-VERIFY_TOKEN=$(grep -i '^X-Pull-Up-Email-Verification-Token:' "$HDRS" | tr -d '\r' | cut -d' ' -f2)
+VERIFY_TOKEN=$(grep -i '^X-RallyFlare-Email-Verification-Token:' "$HDRS" | tr -d '\r' | cut -d' ' -f2)
 [ -n "$VERIFY_TOKEN" ] || { echo "FAIL: no verification token header (is INTERNAL_TASK_SECRET the server's?)"; exit 1; }
 echo "ok: registered $EMAIL (202, verification pending)"
 

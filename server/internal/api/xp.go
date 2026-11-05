@@ -7,8 +7,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/davisbrown/pull-up/server/internal/rules"
-	"github.com/davisbrown/pull-up/server/internal/store/gen"
+	"github.com/davis-brown/rallyflare/server/internal/rules"
+	"github.com/davis-brown/rallyflare/server/internal/store/gen"
 )
 
 // XP awards. A SEPARATE track from reputation: reputation weights

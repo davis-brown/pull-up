@@ -10,7 +10,7 @@ import { useTheme } from "@/lib/theme";
 const IOS_URL = process.env.EXPO_PUBLIC_IOS_STORE_URL ?? "";
 const ANDROID_URL = process.env.EXPO_PUBLIC_ANDROID_STORE_URL ?? "";
 
-// Dismissible "pull-up is better in the app" nudge. Web only; hidden inside
+// Dismissible "RallyFlare is better in the app" nudge. Web only; hidden inside
 // the native app and once dismissed.
 export function GetTheAppBanner() {
   const t = useTheme();
@@ -28,7 +28,7 @@ export function GetTheAppBanner() {
       ]}
     >
       <Text style={[t.type.caption, { color: t.colors.textPrimary, flex: 1 }]}>
-        pull-up is better in the app.
+        RallyFlare is better in the app.
         {storeUrl ? " " : ""}
         {storeUrl ? (
           <Text

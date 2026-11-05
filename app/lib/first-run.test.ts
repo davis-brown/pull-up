@@ -24,7 +24,7 @@ describe("first-run flags", () => {
 
   it("is seen after marking", async () => {
     await markOnboardingSeen();
-    expect(mockStorage.set).toHaveBeenCalledWith("pullup.onboarding_seen_v1", "true");
+    expect(mockStorage.set).toHaveBeenCalledWith("rallyflare.onboarding_seen_v1", "true");
     mockStorage.get.mockResolvedValue("true");
     expect(await onboardingSeen()).toBe(true);
   });

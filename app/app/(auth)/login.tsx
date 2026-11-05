@@ -55,7 +55,7 @@ export default function LoginScreen() {
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
       <Text style={[t.type.display, styles.center, { color: t.colors.accent }]}>
-        pull-up
+        Rally<Text style={{ color: t.colors.gold }}>Flare</Text>
       </Text>
       <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: "center" }} keyboardShouldPersistTaps="handled">
       <Text

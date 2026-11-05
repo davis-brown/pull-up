@@ -50,7 +50,7 @@ export function Leaderboard({
             ]}
           >
             <Text
-              style={[t.type.caption, styles.rank, { color: t.colors.textSecondary }]}
+              style={[t.type.caption, styles.rank, { color: entry.rank === 1 ? t.colors.gold : t.colors.textSecondary }]}
               // The rank column is fixed-width so avatars line up whether the
               // board runs to one digit or two.
               numberOfLines={1}

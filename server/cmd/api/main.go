@@ -12,11 +12,11 @@ import (
 
 	"github.com/getsentry/sentry-go"
 
-	"github.com/davisbrown/pull-up/server/internal/api"
-	"github.com/davisbrown/pull-up/server/internal/config"
-	"github.com/davisbrown/pull-up/server/internal/enrich"
-	"github.com/davisbrown/pull-up/server/internal/seeder"
-	"github.com/davisbrown/pull-up/server/internal/store"
+	"github.com/davis-brown/rallyflare/server/internal/api"
+	"github.com/davis-brown/rallyflare/server/internal/config"
+	"github.com/davis-brown/rallyflare/server/internal/enrich"
+	"github.com/davis-brown/rallyflare/server/internal/seeder"
+	"github.com/davis-brown/rallyflare/server/internal/store"
 )
 
 var (

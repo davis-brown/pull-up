@@ -7,8 +7,8 @@ const { existsSync } = require("fs") as { existsSync: (path: string) => boolean 
 
 // Host for universal links (iOS) / app links (Android), from the same origin
 // used to build share links. Falls back to the production domain.
-const configuredWebUrl = process.env.EXPO_PUBLIC_WEB_URL ?? "https://pull-up.davisbrown.dev";
-let webHost = "pull-up.davisbrown.dev";
+const configuredWebUrl = process.env.EXPO_PUBLIC_WEB_URL ?? "https://rallyflare.davisbrown.dev";
+let webHost = "rallyflare.davisbrown.dev";
 try {
   const parsed = new URL(configuredWebUrl);
   if (parsed.protocol === "https:" || parsed.protocol === "http:") {
@@ -22,9 +22,9 @@ try {
 // The plugin writes these keys after infoPlist is applied, so passing a
 // different string to each would silently ship the plugin's copy.
 const LOCATION_WHEN_IN_USE =
-  "pull-up uses your location to show nearby courts and to verify you're at a court when you check in.";
+  "RallyFlare uses your location to show nearby courts and to verify you're at a court when you check in.";
 const LOCATION_ALWAYS =
-  "With auto check-in enabled, pull-up detects court arrivals and saves the court and check-in time without opening the app. It does not record continuous GPS history.";
+  "With auto check-in enabled, RallyFlare detects court arrivals and saves the court and check-in time without opening the app. It does not record continuous GPS history.";
 
 // Required-reason API declarations for the app target (React Native core and
 // Expo modules); the reasons follow Expo's documented React Native baseline.
@@ -40,16 +40,16 @@ const collected = (type: string, linked = true) => ({
 
 // Maps: MapLibre + OpenFreeMap tiles — no API keys or tokens required.
 const config: ExpoConfig = {
-  name: "pull-up",
+  name: "RallyFlare",
   slug: "pull-up",
   owner: "davis-team",
   version: "1.0.0",
-  scheme: "pullup",
+  scheme: "rallyflare",
   orientation: "portrait",
   icon: "./assets/icon.png",
   userInterfaceStyle: "automatic",
   ios: {
-    bundleIdentifier: "com.pullup.app",
+    bundleIdentifier: "com.rallyflare.app",
     supportsTablet: false,
     usesAppleSignIn: true,
     associatedDomains: [`applinks:${webHost}`],
@@ -103,7 +103,7 @@ const config: ExpoConfig = {
     },
   },
   android: {
-    package: "com.pullup.app",
+    package: "com.rallyflare.app",
     // Guarded so builds work before the Firebase file exists.
     ...(existsSync("./google-services.json")
       ? { googleServicesFile: "./google-services.json" }
@@ -146,11 +146,11 @@ const config: ExpoConfig = {
         image: "./assets/splash-icon.png",
         imageWidth: 200,
         resizeMode: "contain",
-        // Theme background tokens (lib/theme.ts): titanium light, gunmetal dark.
-        backgroundColor: "#F2F4F8",
+        // Theme background tokens (lib/theme.ts).
+        backgroundColor: "#FAF9FE",
         dark: {
           image: "./assets/splash-icon.png",
-          backgroundColor: "#0C0E12",
+          backgroundColor: "#161326",
         },
       },
     ],
@@ -175,7 +175,7 @@ const config: ExpoConfig = {
     [
       "expo-image-picker",
       {
-        photosPermission: "pull-up uses your photo library so you can add pictures of courts.",
+        photosPermission: "RallyFlare uses your photo library so you can add pictures of courts.",
         // Library picking only. false keeps the plugin's generic camera and
         // microphone strings (and Android RECORD_AUDIO) out of the build.
         cameraPermission: false,

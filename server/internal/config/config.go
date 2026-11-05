@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/davisbrown/pull-up/server/internal/auth"
+	"github.com/davis-brown/rallyflare/server/internal/auth"
 )
 
 type Config struct {

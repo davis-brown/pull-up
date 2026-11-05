@@ -3,7 +3,7 @@ import { storage } from "./storage";
 // Remembers the last check-in's party size and ball status so the slide-to-
 // check-in screen can default to them next time (spec 3d) — most players
 // bring the same crew and gear session to session.
-const PREFS_KEY = "pullup.last_checkin_prefs";
+const PREFS_KEY = "rallyflare.last_checkin_prefs";
 
 export interface CheckInPrefs {
   partySize: number; // 1-4

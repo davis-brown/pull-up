@@ -8,8 +8,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/davisbrown/pull-up/server/internal/store"
-	"github.com/davisbrown/pull-up/server/internal/store/gen"
+	"github.com/davis-brown/rallyflare/server/internal/store"
+	"github.com/davis-brown/rallyflare/server/internal/store/gen"
 )
 
 // bootstrapAdmin promotes a user the same way an operator would for the

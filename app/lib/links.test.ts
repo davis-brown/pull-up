@@ -14,39 +14,39 @@ describe("buildCourtLink", () => {
   });
 
   it("builds a court link from EXPO_PUBLIC_WEB_URL", () => {
-    process.env.EXPO_PUBLIC_WEB_URL = "https://pullup.app";
-    expect(buildCourtLink("abc")).toBe("https://pullup.app/court/abc");
+    process.env.EXPO_PUBLIC_WEB_URL = "https://rallyflare.app";
+    expect(buildCourtLink("abc")).toBe("https://rallyflare.app/court/abc");
   });
 
   it("appends the run param for a session", () => {
-    process.env.EXPO_PUBLIC_WEB_URL = "https://pullup.app";
+    process.env.EXPO_PUBLIC_WEB_URL = "https://rallyflare.app";
     expect(buildCourtLink("abc", "run-1")).toBe(
-      "https://pullup.app/court/abc?run=run-1",
+      "https://rallyflare.app/court/abc?run=run-1",
     );
   });
 
   it("encodes ids as path and query values", () => {
-    process.env.EXPO_PUBLIC_WEB_URL = "https://pullup.app";
+    process.env.EXPO_PUBLIC_WEB_URL = "https://rallyflare.app";
     expect(buildCourtLink("court/one", "run?one")).toBe(
-      "https://pullup.app/court/court%2Fone?run=run%3Fone",
+      "https://rallyflare.app/court/court%2Fone?run=run%3Fone",
     );
   });
 
   it("strips a trailing slash on the base", () => {
-    process.env.EXPO_PUBLIC_WEB_URL = "https://pullup.app/";
-    expect(buildCourtLink("abc")).toBe("https://pullup.app/court/abc");
+    process.env.EXPO_PUBLIC_WEB_URL = "https://rallyflare.app/";
+    expect(buildCourtLink("abc")).toBe("https://rallyflare.app/court/abc");
   });
 
   it("falls back to the default web url when unset", () => {
     delete process.env.EXPO_PUBLIC_WEB_URL;
-    expect(buildCourtLink("abc")).toBe("https://pull-up.davisbrown.dev/court/abc");
+    expect(buildCourtLink("abc")).toBe("https://rallyflare.davisbrown.dev/court/abc");
   });
 
   it("uses only the configured origin and rejects non-http configuration", () => {
-    process.env.EXPO_PUBLIC_WEB_URL = "https://pullup.app/unexpected/path";
-    expect(buildCourtLink("abc")).toBe("https://pullup.app/court/abc");
+    process.env.EXPO_PUBLIC_WEB_URL = "https://rallyflare.app/unexpected/path";
+    expect(buildCourtLink("abc")).toBe("https://rallyflare.app/court/abc");
     process.env.EXPO_PUBLIC_WEB_URL = "javascript:alert(1)";
-    expect(buildCourtLink("abc")).toBe("https://pull-up.davisbrown.dev/court/abc");
+    expect(buildCourtLink("abc")).toBe("https://rallyflare.davisbrown.dev/court/abc");
   });
 });
 
@@ -58,8 +58,8 @@ describe("buildProfileLink", () => {
   });
 
   it("builds a profile link from EXPO_PUBLIC_WEB_URL", () => {
-    process.env.EXPO_PUBLIC_WEB_URL = "https://pullup.app";
-    expect(buildProfileLink("u1")).toBe("https://pullup.app/user/u1");
+    process.env.EXPO_PUBLIC_WEB_URL = "https://rallyflare.app";
+    expect(buildProfileLink("u1")).toBe("https://rallyflare.app/user/u1");
   });
 });
 
@@ -77,13 +77,13 @@ describe("parseRunParam", () => {
 
 describe("share copy", () => {
   it("formats a court message", () => {
-    expect(courtShareMessage("Rucker Park", "https://pullup.app/court/x")).toBe(
-      "Check out Rucker Park on pull-up — https://pullup.app/court/x",
+    expect(courtShareMessage("Rucker Park", "https://rallyflare.app/court/x")).toBe(
+      "Check out Rucker Park on RallyFlare — https://rallyflare.app/court/x",
     );
   });
   it("formats a run message", () => {
     expect(
-      runShareMessage("Rucker Park", "Today 6:00 PM", "https://pullup.app/court/x?run=r"),
-    ).toBe("Pull up to Rucker Park, Today 6:00 PM — https://pullup.app/court/x?run=r");
+      runShareMessage("Rucker Park", "Today 6:00 PM", "https://rallyflare.app/court/x?run=r"),
+    ).toBe("Pull up to Rucker Park, Today 6:00 PM — https://rallyflare.app/court/x?run=r");
   });
 });

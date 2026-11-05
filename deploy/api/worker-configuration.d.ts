@@ -3,8 +3,8 @@
 interface __BaseEnv_Env {
 	PHOTOS: R2Bucket;
 	EMAIL: SendEmail;
-	EMAIL_FROM: "verify@pull-up.davisbrown.dev";
-	WEB_ORIGIN: "https://pull-up.davisbrown.dev";
+	EMAIL_FROM: "verify@rallyflare.davisbrown.dev";
+	WEB_ORIGIN: "https://rallyflare.davisbrown.dev";
 	CLOUDFLARE_ACCOUNT_ID: "720bb9fc6dc82b02f5612a450a8d6ebf";
 	DATABASE_URL: string;
 	JWT_SECRET: string;

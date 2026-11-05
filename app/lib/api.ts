@@ -7,14 +7,14 @@ import { CONTENT_CONSENT_VERSION } from "./community";
 // local server and release bundles to the production API origin — never
 // localhost in a shipped app.
 const DEV_API_URL = "http://localhost:8080";
-const PROD_API_URL = "https://pull-up-api.davisbrown245.workers.dev";
+const PROD_API_URL = "https://rallyflare-api.davisbrown245.workers.dev";
 const isDevBundle = typeof __DEV__ !== "undefined" && __DEV__;
 export const API_URL = process.env.EXPO_PUBLIC_API_URL ??
   (platformOS === "web" ? "" : isDevBundle ? DEV_API_URL : PROD_API_URL);
 const API_BASE_URL = API_URL.replace(/\/+$/, "");
 
-const TOKEN_PAIR_KEY = "pullup.token_pair";
-const PLATFORM_HEADER = "X-Pull-Up-Platform";
+const TOKEN_PAIR_KEY = "rallyflare.token_pair";
+const PLATFORM_HEADER = "X-RallyFlare-Platform";
 const REQUEST_TIMEOUT_MS = 15_000;
 const LOGOUT_TIMEOUT_MS = 5_000;
 

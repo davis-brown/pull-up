@@ -60,7 +60,7 @@ func authCachePolicy(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Add("Vary", "Authorization")
 		w.Header().Add("Vary", "Cookie")
-		w.Header().Add("Vary", "X-Pull-Up-Platform")
+		w.Header().Add("Vary", "X-RallyFlare-Platform")
 		if r.Header.Get("Authorization") != "" ||
 			strings.HasPrefix(r.URL.Path, "/api/v1/auth/") ||
 			strings.HasPrefix(r.URL.Path, "/api/v1/internal/") {

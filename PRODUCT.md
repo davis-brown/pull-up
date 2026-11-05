@@ -17,7 +17,7 @@ Two groups, weighted equally, and each depends on the other:
 
 ## Product Purpose
 
-pull-up finds live pickup basketball: a map of courts showing who's playing right now. Court locations are crowd-sourced and seeded from OpenStreetMap. Live activity comes from geo-verified check-ins and crowd reports. Success means a player opens the map and can trust it enough to drive to a court.
+RallyFlare finds live pickup basketball: a map of courts showing who's playing right now. Court locations are crowd-sourced and seeded from OpenStreetMap. Live activity comes from geo-verified check-ins and crowd reports. Success means a player opens the map and can trust it enough to drive to a court.
 
 ## Positioning
 
@@ -41,12 +41,12 @@ The map shows a real run, not a guess. Check-ins are verified server-side (withi
 
 ## Brand Commitments
 
-- The name is **pull-up**, lowercase and hyphenated.
+- The name is **RallyFlare**: one word, capital R and F. Never "Rally Flare" or "rallyflare" in copy.
 - Onboarding voice is plain and direct, in hooper vernacular ("run", "who's playing right now", "got a ball").
 
 ## Evidence on Hand
 
-- None yet. pull-up is pre-launch or a personal project, so it has **no user counts, testimonials, ratings, press, or partner logos**. Future work must not invent any of these.
+- None yet. RallyFlare is pre-launch or a personal project, so it has **no user counts, testimonials, ratings, press, or partner logos**. Future work must not invent any of these.
 - What can be described truthfully is the product's mechanics (verification radius, expiry, anti-farming caps), as documented in `README.md`.
 
 ## Product Principles

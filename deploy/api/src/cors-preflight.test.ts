@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { PREFLIGHT_MAX_AGE, corsPreflightResponse, isCorsPreflight } from "./cors-preflight";
 
-const ORIGIN = "https://pull-up.davisbrown.dev";
+const ORIGIN = "https://rallyflare.davisbrown.dev";
 
 function preflight(headers: Record<string, string>): Request {
   return new Request("https://api.test/api/v1/courts/search", { method: "OPTIONS", headers });
@@ -52,7 +52,7 @@ describe("corsPreflightResponse", () => {
       preflight({
         Origin: ORIGIN,
         "Access-Control-Request-Method": "GET",
-        "Access-Control-Request-Headers": "X-Pull-Up-Platform",
+        "Access-Control-Request-Headers": "X-RallyFlare-Platform",
       }),
       ORIGIN,
     );

@@ -9,7 +9,7 @@ import {
 } from "./og";
 
 const cfg: OgConfig = {
-  IOS_APP_ID: "ABCDE12345.com.pullup.app",
+  IOS_APP_ID: "ABCDE12345.com.rallyflare.app",
   ANDROID_CERT_SHA256: "AA:BB:CC",
   APPLE_APP_STORE_ID: "1234567890",
   API_URL: "https://api.example.com",
@@ -20,7 +20,7 @@ describe("aasaBody", () => {
     const body = aasaBody(cfg) as {
       applinks: { details: Array<{ appIDs: string[]; components: Array<Record<string, string>> }> };
     };
-    expect(body.applinks.details[0].appIDs).toEqual(["ABCDE12345.com.pullup.app"]);
+    expect(body.applinks.details[0].appIDs).toEqual(["ABCDE12345.com.rallyflare.app"]);
     expect(body.applinks.details[0].components).toEqual([{ "/": "/court/*" }]);
   });
 });
@@ -32,7 +32,7 @@ describe("assetlinksBody", () => {
       target: { namespace: string; package_name: string; sha256_cert_fingerprints: string[] };
     }>;
     expect(body[0].relation).toContain("delegate_permission/common.handle_all_urls");
-    expect(body[0].target.package_name).toBe("com.pullup.app");
+    expect(body[0].target.package_name).toBe("com.rallyflare.app");
     expect(body[0].target.sha256_cert_fingerprints).toEqual(["AA:BB:CC"]);
   });
 });
@@ -52,13 +52,13 @@ describe("ogMetaTags", () => {
     name: "Rucker Park",
     description: "3 playing right now",
     imageUrl: "https://api.example.com/photos/k",
-    link: "https://pullup.app/court/x",
+    link: "https://rallyflare.app/court/x",
   });
   it("includes escaped title, description, image, url and twitter card", () => {
     expect(tags).toContain('property="og:title" content="Rucker Park"');
     expect(tags).toContain('property="og:description" content="3 playing right now"');
     expect(tags).toContain('property="og:image" content="https://api.example.com/photos/k"');
-    expect(tags).toContain('property="og:url" content="https://pullup.app/court/x"');
+    expect(tags).toContain('property="og:url" content="https://rallyflare.app/court/x"');
     expect(tags).toContain('name="twitter:card" content="summary_large_image"');
   });
   it("escapes double quotes in the name", () => {

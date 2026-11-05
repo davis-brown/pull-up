@@ -2,7 +2,7 @@ import { storeUrlForUserAgent } from "./app-store";
 
 describe("storeUrlForUserAgent", () => {
   const ios = "https://apps.apple.com/app/id123";
-  const android = "https://play.google.com/store/apps/details?id=com.pullup.app";
+  const android = "https://play.google.com/store/apps/details?id=com.rallyflare.app";
 
   it("sends Android browsers to Google Play", () => {
     expect(storeUrlForUserAgent("Mozilla/5.0 (Linux; Android 15)", ios, android)).toBe(android);

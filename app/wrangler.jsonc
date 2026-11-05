@@ -1,10 +1,10 @@
 // Cloudflare Worker fronting the Expo web build's static assets.
 // Build first (dist/ is the export output), then deploy with the repository's
 // pinned Wrangler from deploy/api. Browser API traffic stays on this origin and
-// reaches pull-up-api over the service binding below.
+// reaches rallyflare-api over the service binding below.
 {
   "$schema": "../deploy/api/node_modules/wrangler/config-schema.json",
-  "name": "pull-up-web",
+  "name": "rallyflare-web",
   "main": "worker.ts",
   // Reviewed against Workers runtime/types on 2026-07-15.
   "compatibility_date": "2026-07-15",
@@ -20,7 +20,7 @@
   "services": [
     {
       "binding": "API",
-      "service": "pull-up-api"
+      "service": "rallyflare-api"
     }
   ],
   // IOS_APP_ID and APPLE_APP_STORE_ID are optional dashboard vars. Invalid or

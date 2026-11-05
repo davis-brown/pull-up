@@ -10,10 +10,10 @@
 # value in the Keychain, so what gets approved, logged, and transcribed is
 # `scripts/dbq "<sql>"` and nothing else.
 #
-# PRODUCTION GUARD: --prod additionally requires PULL_UP_ALLOW_PROD=1. That
+# PRODUCTION GUARD: --prod additionally requires RALLYFLARE_ALLOW_PROD=1. That
 # is not security — anyone with a shell can set it — it is a speed bump with
 # a specific job: allowlist `Bash(scripts/dbq *)` in your agent permissions
-# and DO NOT allowlist the PULL_UP_ALLOW_PROD form. Routine queries then run
+# and DO NOT allowlist the RALLYFLARE_ALLOW_PROD form. Routine queries then run
 # unattended against dev, while anything touching production stops for a
 # human approval prompt.
 set -euo pipefail
@@ -29,13 +29,13 @@ if [ $# -lt 1 ] || [ -z "${1:-}" ]; then
   exit 2
 fi
 
-if [ "$target" = "prod" ] && [ "${PULL_UP_ALLOW_PROD:-}" != "1" ]; then
+if [ "$target" = "prod" ] && [ "${RALLYFLARE_ALLOW_PROD:-}" != "1" ]; then
   cat >&2 <<'EOF'
 refusing to touch production.
 
-  scripts/dbq --prod requires PULL_UP_ALLOW_PROD=1:
+  scripts/dbq --prod requires RALLYFLARE_ALLOW_PROD=1:
 
-    PULL_UP_ALLOW_PROD=1 scripts/dbq --prod "<sql>"
+    RALLYFLARE_ALLOW_PROD=1 scripts/dbq --prod "<sql>"
 
   Run it against dev first. If you meant production, re-run with the
   variable set — deliberately, and expect an approval prompt.
@@ -43,7 +43,7 @@ EOF
   exit 3
 fi
 
-keychain_name="pull-up-db-$target"
+keychain_name="rallyflare-db-$target"
 if ! security find-generic-password -s "$keychain_name" >/dev/null 2>&1; then
   echo "no Keychain entry for $keychain_name" >&2
   echo "store one with: scripts/secret set $keychain_name" >&2

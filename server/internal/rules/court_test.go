@@ -3,7 +3,7 @@ package rules_test
 import (
 	"testing"
 
-	"github.com/davisbrown/pull-up/server/internal/rules"
+	"github.com/davis-brown/rallyflare/server/internal/rules"
 )
 
 func ptr[T any](v T) *T { return &v }

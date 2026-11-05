@@ -1,7 +1,7 @@
 // When Apple (or Google) withholds an email, the server stores a synthetic
-// "<provider>-<subject>@users.pullup.local" address (handleOAuth). It is not
+// "<provider>-<subject>@users.rallyflare.local" address (handleOAuth). It is not
 // a real inbox, so it is never shown as the user's email.
-const PLACEHOLDER_DOMAIN = "@users.pullup.local";
+const PLACEHOLDER_DOMAIN = "@users.rallyflare.local";
 
 const providerNames: Record<string, string> = {
   apple: "Apple",

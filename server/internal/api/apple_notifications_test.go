@@ -15,7 +15,7 @@ import (
 
 	"github.com/golang-jwt/jwt/v5"
 
-	"github.com/davisbrown/pull-up/server/internal/config"
+	"github.com/davis-brown/rallyflare/server/internal/config"
 )
 
 func TestAppleNotifications(t *testing.T) {

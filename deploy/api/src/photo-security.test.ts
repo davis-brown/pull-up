@@ -64,7 +64,7 @@ describe("upload authorization", () => {
   it("prefers the signed Authorization header and rejects mixed credentials", () => {
     const signature = "ab".repeat(32);
     const headerRequest = new Request("https://api.example/photos/upload/key", {
-      headers: { Authorization: `PullUp-Upload 1900000000.${signature}` },
+      headers: { Authorization: `RallyFlare-Upload 1900000000.${signature}` },
     });
     expect(readUploadCredentials(headerRequest)).toEqual({
       expiresAt: "1900000000",

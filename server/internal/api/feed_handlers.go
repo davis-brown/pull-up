@@ -3,7 +3,7 @@ package api
 import (
 	"net/http"
 
-	"github.com/davisbrown/pull-up/server/internal/store/gen"
+	"github.com/davis-brown/rallyflare/server/internal/store/gen"
 )
 
 // GET /feed — the signed-in user's personalized feed: mutual-follow friends

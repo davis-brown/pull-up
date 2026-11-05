@@ -4,14 +4,14 @@
 
 Please report suspected vulnerabilities privately, not as a public issue.
 
-Use [GitHub's private vulnerability reporting](https://github.com/davis-brown/pull-up/security/advisories/new)
+Use [GitHub's private vulnerability reporting](https://github.com/davis-brown/rallyflare/security/advisories/new)
 (Security → Report a vulnerability). Expect an acknowledgement within a week.
 
 Useful things to include: what an attacker gains, the request or input that
 triggers it, and whether it reproduces against a local `make dev` stack or only
 against the deployed API.
 
-pull-up is a personal project with no paid bounty.
+RallyFlare is a personal project with no paid bounty.
 
 ## Scope
 
@@ -39,7 +39,7 @@ dependency ships.
   `expo-router` by 52 major versions, which is not a fix.
 
 Reports that only restate either of these are unlikely to lead to a change.
-A demonstrated exploit path through pull-up's own code is very much wanted.
+A demonstrated exploit path through RallyFlare's own code is very much wanted.
 
 ## Handling of secrets
 

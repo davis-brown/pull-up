@@ -1,9 +1,10 @@
-// pull-up design system: the single source of truth for color, spacing,
+// RallyFlare design system: the single source of truth for color, spacing,
 // radius, type, shadows, and fonts. Components read tokens from useTheme()
 // rather than hardcoding values.
 //
-// Electric violet (#5A3FF0) is the brand accent; electric lime (#C4F52E) is
-// reserved for the leveling system, and green exclusively for live activity.
+// Electric violet (#5A3FF0) is the brand accent and flare gold the secondary
+// accent; electric lime (#C4F52E) is reserved for the leveling system, and
+// green exclusively for live activity.
 import {
   createContext,
   createElement,
@@ -31,6 +32,9 @@ export interface ThemeColors {
   accentSurface: string;
   accentSoft: string;
   onAccent: string;
+  // Flare gold: secondary brand accent for standout moments (wordmark,
+  // first place). Text-safe on surface/background/accentSurface.
+  gold: string;
   // Reserved for the leveling system. Never a general CTA color — use
   // `accent` for that.
   xp: string;
@@ -71,6 +75,7 @@ const light: ThemeColors = {
   accentSurface: "#EEE9FF",
   accentSoft: "#B9A9FA",
   onAccent: "#FFFFFF",
+  gold: "#8A6200",
   xp: "#C4F52E",
   onXp: "#161326",
   chipBorder: "#DAD7E8",
@@ -104,6 +109,7 @@ const dark: ThemeColors = {
   accentSurface: "#2A2450",
   accentSoft: "#B9A9FA",
   onAccent: "#FFFFFF",
+  gold: "#F5C04A",
   xp: "#C4F52E",
   onXp: "#161326",
   chipBorder: "#3B3752",
@@ -261,7 +267,7 @@ export interface Theme {
 // on-device and applied app-wide via ThemePreferenceProvider.
 export type ThemePreference = "system" | "light" | "dark";
 
-const PREFERENCE_KEY = "pullup.theme";
+const PREFERENCE_KEY = "rallyflare.theme";
 
 interface PreferenceState {
   preference: ThemePreference;

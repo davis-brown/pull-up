@@ -11,7 +11,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/davisbrown/pull-up/server/internal/osm"
+	"github.com/davis-brown/rallyflare/server/internal/osm"
 )
 
 func TestParseOverpassAmenities(t *testing.T) {

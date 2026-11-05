@@ -9,7 +9,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/davisbrown/pull-up/server/internal/store/gen"
+	"github.com/davis-brown/rallyflare/server/internal/store/gen"
 )
 
 const (

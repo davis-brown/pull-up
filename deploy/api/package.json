@@ -1,5 +1,5 @@
 {
-  "name": "pull-up-api-deploy",
+  "name": "rallyflare-api-deploy",
   "private": true,
   "scripts": {
     "deploy": "wrangler deploy",

@@ -9,7 +9,7 @@ import { Platform } from "react-native";
 import { api } from "./api";
 import { storage } from "./storage";
 
-const PUSH_TOKEN_KEY_PREFIX = "pullup.push_token.";
+const PUSH_TOKEN_KEY_PREFIX = "rallyflare.push_token.";
 
 let activeUserId: string | null = null;
 let registrationGeneration = 0;

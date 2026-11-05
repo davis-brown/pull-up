@@ -15,8 +15,8 @@ import (
 
 	"github.com/jackc/pgx/v5"
 
-	"github.com/davisbrown/pull-up/server/internal/osm"
-	"github.com/davisbrown/pull-up/server/internal/store/gen"
+	"github.com/davis-brown/rallyflare/server/internal/osm"
+	"github.com/davis-brown/rallyflare/server/internal/store/gen"
 )
 
 // TileDeg is the tile grid size in degrees (~28 km of longitude at the

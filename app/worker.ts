@@ -120,7 +120,7 @@ async function proxyApi(request: Request, env: Env, url: URL): Promise<Response>
   if (clientIp) headers.set("X-Real-IP", clientIp);
   headers.set("X-Forwarded-Host", url.host);
   headers.set("X-Forwarded-Proto", url.protocol.slice(0, -1));
-  headers.set("X-Pull-Up-Platform", "web");
+  headers.set("X-RallyFlare-Platform", "web");
   return env.API.fetch(new Request(request, { headers }));
 }
 
@@ -227,7 +227,7 @@ async function getCourtPreview(
   origin: string,
 ): Promise<PreviewData> {
   const cache = caches.default;
-  const cacheKey = new Request(`${origin}/.well-known/pull-up-preview-cache/${courtId}`);
+  const cacheKey = new Request(`${origin}/.well-known/rallyflare-preview-cache/${courtId}`);
   try {
     const cached = await cache.match(cacheKey);
     if (cached) {

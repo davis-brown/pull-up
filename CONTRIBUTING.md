@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for taking a look. pull-up is a personal project, so please open an
+Thanks for taking a look. RallyFlare is a personal project, so please open an
 issue before starting anything substantial — it may already be planned, or
 deliberately out of scope.
 
@@ -60,8 +60,8 @@ exist.
 Local credentials live in the macOS Keychain:
 
 ```sh
-scripts/secret set   pull-up-db-dev   # prompts; the value is never echoed
-scripts/secret check pull-up-db-dev   # reports present/absent, nothing else
+scripts/secret set   rallyflare-db-dev   # prompts; the value is never echoed
+scripts/secret check rallyflare-db-dev   # reports present/absent, nothing else
 ```
 
 Query the database through the wrapper rather than passing `DATABASE_URL`
@@ -69,11 +69,11 @@ inline:
 
 ```sh
 scripts/dbq "select count(*) from courts"          # dev branch
-PULL_UP_ALLOW_PROD=1 scripts/dbq --prod "select 1" # production
+RALLYFLARE_ALLOW_PROD=1 scripts/dbq --prod "select 1" # production
 ```
 
 `scripts/dbq` defaults to the **dev** branch. Production needs both `--prod`
-and `PULL_UP_ALLOW_PROD=1`. That pairing is a deliberate speed bump rather
+and `RALLYFLARE_ALLOW_PROD=1`. That pairing is a deliberate speed bump rather
 than a security boundary: routine dev queries stay frictionless, while
 anything pointed at production takes a second, explicit step.
 

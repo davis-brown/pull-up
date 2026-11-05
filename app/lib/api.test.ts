@@ -72,7 +72,7 @@ beforeEach(async () => {
 describe("native session storage and refresh", () => {
   it("refreshes a stored pair once and writes the rotated pair", async () => {
     useStatefulStorage({
-      "pullup.token_pair": JSON.stringify({
+      "rallyflare.token_pair": JSON.stringify({
         accessToken: "expired-token",
         refreshToken: "valid-refresh-token",
       }),
@@ -85,7 +85,7 @@ describe("native session storage and refresh", () => {
 
     await expect(client.api("/me")).resolves.toEqual({ ok: true });
 
-    const pairWrites = mockSet.mock.calls.filter(([key]) => key === "pullup.token_pair");
+    const pairWrites = mockSet.mock.calls.filter(([key]) => key === "rallyflare.token_pair");
     expect(pairWrites.length).toBeGreaterThanOrEqual(1);
     expect(JSON.parse(pairWrites.at(-1)![1])).toEqual({
       accessToken: "new-access",
@@ -96,7 +96,7 @@ describe("native session storage and refresh", () => {
 
   it("collapses concurrent 401 responses into one refresh", async () => {
     useStatefulStorage({
-      "pullup.token_pair": JSON.stringify({
+      "rallyflare.token_pair": JSON.stringify({
         accessToken: "expired",
         refreshToken: "valid-refresh",
       }),
@@ -123,7 +123,7 @@ describe("native session storage and refresh", () => {
     "preserves the token pair when refresh returns %s",
     async (status) => {
       useStatefulStorage({
-        "pullup.token_pair": JSON.stringify({
+        "rallyflare.token_pair": JSON.stringify({
           accessToken: "expired",
           refreshToken: "keep-me",
         }),
@@ -133,14 +133,14 @@ describe("native session storage and refresh", () => {
         .mockResolvedValueOnce(fakeResponse(status, { error: "try later" }));
 
       await expect(client.api("/me")).rejects.toMatchObject({ status });
-      expect(stored["pullup.token_pair"]).toContain("keep-me");
-      expect(mockRemove).not.toHaveBeenCalledWith("pullup.token_pair");
+      expect(stored["rallyflare.token_pair"]).toContain("keep-me");
+      expect(mockRemove).not.toHaveBeenCalledWith("rallyflare.token_pair");
     },
   );
 
   it("preserves the token pair on a refresh transport failure", async () => {
     useStatefulStorage({
-      "pullup.token_pair": JSON.stringify({
+      "rallyflare.token_pair": JSON.stringify({
         accessToken: "expired",
         refreshToken: "keep-me",
       }),
@@ -150,12 +150,12 @@ describe("native session storage and refresh", () => {
       .mockRejectedValueOnce(new TypeError("network down"));
 
     await expect(client.api("/me")).rejects.toThrow("network down");
-    expect(stored["pullup.token_pair"]).toContain("keep-me");
+    expect(stored["rallyflare.token_pair"]).toContain("keep-me");
   });
 
   it("expires only a definitively rejected refresh session", async () => {
     useStatefulStorage({
-      "pullup.token_pair": JSON.stringify({
+      "rallyflare.token_pair": JSON.stringify({
         accessToken: "expired",
         refreshToken: "revoked",
       }),
@@ -168,12 +168,12 @@ describe("native session storage and refresh", () => {
 
     await expect(client.api("/me")).rejects.toBeInstanceOf(client.SessionChangedError);
     expect(expired).toHaveBeenCalledTimes(1);
-    expect(stored["pullup.token_pair"]).toBeUndefined();
+    expect(stored["rallyflare.token_pair"]).toBeUndefined();
   });
 
   it("does not let a refresh response restore tokens after logout", async () => {
     useStatefulStorage({
-      "pullup.token_pair": JSON.stringify({
+      "rallyflare.token_pair": JSON.stringify({
         accessToken: "expired",
         refreshToken: "valid-refresh",
       }),
@@ -198,7 +198,7 @@ describe("native session storage and refresh", () => {
 
     await expect(request).rejects.toBeInstanceOf(client.SessionChangedError);
     await logout;
-    expect(stored["pullup.token_pair"]).toBeUndefined();
+    expect(stored["rallyflare.token_pair"]).toBeUndefined();
     expect(mockSet.mock.calls.some(([, value]) => value.includes("stale-access"))).toBe(false);
   });
 });
@@ -211,7 +211,7 @@ describe("auth transitions and logout", () => {
 
     await expect(client.login("a@b.com", "password123")).resolves.toMatchObject({ id: "u1" });
 
-    expect(JSON.parse(stored["pullup.token_pair"])).toEqual({
+    expect(JSON.parse(stored["rallyflare.token_pair"])).toEqual({
       accessToken: "a",
       refreshToken: "r",
     });
@@ -234,7 +234,7 @@ describe("auth transitions and logout", () => {
 
     await expect(firstLogin).rejects.toBeInstanceOf(client.SessionChangedError);
     await expect(secondLogin).resolves.toMatchObject({ id: "u2" });
-    expect(JSON.parse(stored["pullup.token_pair"])).toEqual({
+    expect(JSON.parse(stored["rallyflare.token_pair"])).toEqual({
       accessToken: "second-a",
       refreshToken: "second-r",
     });
@@ -252,14 +252,14 @@ describe("auth transitions and logout", () => {
       verificationRequired: true,
       verificationId: "vid",
     });
-    expect(stored["pullup.token_pair"]).toBeUndefined();
+    expect(stored["rallyflare.token_pair"]).toBeUndefined();
 
     await expect(client.verifyEmail("vid", "042917")).resolves.toMatchObject({ id: "u1" });
     expect(JSON.parse((global.fetch as jest.Mock).mock.calls[1][1].body)).toEqual({
       verification_id: "vid",
       code: "042917",
     });
-    expect(JSON.parse(stored["pullup.token_pair"])).toEqual({
+    expect(JSON.parse(stored["rallyflare.token_pair"])).toEqual({
       accessToken: "verified-a",
       refreshToken: "verified-r",
     });
@@ -273,7 +273,7 @@ describe("auth transitions and logout", () => {
 
     await expect(client.logout({ pushToken: "ExpoToken[test]" })).resolves.toBeUndefined();
 
-    expect(stored["pullup.token_pair"]).toBeUndefined();
+    expect(stored["rallyflare.token_pair"]).toBeUndefined();
     const methods = (global.fetch as jest.Mock).mock.calls.slice(1).map(([, options]) => options.method);
     expect(methods).toEqual(expect.arrayContaining(["DELETE", "POST"]));
   });
@@ -305,7 +305,7 @@ describe("web cookie contract", () => {
     expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({});
     for (const [, options] of fetchMock.mock.calls) {
       expect(options.credentials).toBe("include");
-      expect(options.headers["X-Pull-Up-Platform"]).toBe("web");
+      expect(options.headers["X-RallyFlare-Platform"]).toBe("web");
     }
     expect(fetchMock.mock.calls[2][1].headers.Authorization).toBe("Bearer memory-access");
   });

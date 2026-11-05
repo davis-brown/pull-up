@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/davisbrown/pull-up/server/internal/rules"
+	"github.com/davis-brown/rallyflare/server/internal/rules"
 )
 
 // -- badges -----------------------------------------------------------------
