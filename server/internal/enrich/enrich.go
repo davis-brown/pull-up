@@ -23,13 +23,13 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/davisbrown/pull-up/server/internal/geocode"
-	"github.com/davisbrown/pull-up/server/internal/osm"
-	"github.com/davisbrown/pull-up/server/internal/store/gen"
+	"github.com/davis-brown/rallyflare/server/internal/geocode"
+	"github.com/davis-brown/rallyflare/server/internal/osm"
+	"github.com/davis-brown/rallyflare/server/internal/store/gen"
 )
 
 const (
-	userAgent      = "pull-up/0.1 (basketball court finder; github.com/davis-brown/pull-up)"
+	userAgent      = "RallyFlare/0.1 (basketball court finder; github.com/davis-brown/rallyflare)"
 	courtesyDelay  = 1200 * time.Millisecond
 	requestTimeout = 15 * time.Second
 	maxPhotos      = 6

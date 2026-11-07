@@ -3,7 +3,7 @@ package api
 import (
 	"context"
 
-	"github.com/davisbrown/pull-up/server/internal/push"
+	"github.com/davis-brown/rallyflare/server/internal/push"
 )
 
 // sendPush is push.Send plus cleanup: tokens Expo reports as

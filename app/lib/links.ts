@@ -3,7 +3,7 @@
 // exercise it in the node environment.
 
 // Production web origin; override with EXPO_PUBLIC_WEB_URL at build time.
-export const DEFAULT_WEB_URL = "https://pull-up.davisbrown.dev";
+export const DEFAULT_WEB_URL = "https://rallyflare.davisbrown.dev";
 
 function baseUrl(): string {
   const configured = process.env.EXPO_PUBLIC_WEB_URL;
@@ -43,7 +43,7 @@ export function parseRunParam(param: string | string[] | undefined): string | nu
 }
 
 export function courtShareMessage(name: string, link: string): string {
-  return `Check out ${name} on pull-up — ${link}`;
+  return `Check out ${name} on RallyFlare — ${link}`;
 }
 
 export function runShareMessage(name: string, whenLabel: string, link: string): string {

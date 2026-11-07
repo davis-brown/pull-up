@@ -89,5 +89,5 @@ it("scopes mode and consent by user and disables monitoring without an identity"
   sessionExpired?.();
   await deactivateGeofencing();
   await expect(getGeofenceMode()).resolves.toBe("off");
-  expect(values.get("pullup.geofence_user")).toBeUndefined();
+  expect(values.get("rallyflare.geofence_user")).toBeUndefined();
 });

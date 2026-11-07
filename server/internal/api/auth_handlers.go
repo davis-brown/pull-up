@@ -12,9 +12,9 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/davisbrown/pull-up/server/internal/auth"
-	"github.com/davisbrown/pull-up/server/internal/rules"
-	"github.com/davisbrown/pull-up/server/internal/store/gen"
+	"github.com/davis-brown/rallyflare/server/internal/auth"
+	"github.com/davis-brown/rallyflare/server/internal/rules"
+	"github.com/davis-brown/rallyflare/server/internal/store/gen"
 )
 
 type credentialsRequest struct {
@@ -31,13 +31,13 @@ type tokenResponse struct {
 }
 
 const (
-	emailVerificationCodeHeader   = "X-Pull-Up-Email-Verification-Code"
-	emailVerificationExpiryHeader = "X-Pull-Up-Email-Verification-Expires"
-	emailVerificationToHeader     = "X-Pull-Up-Email-Verification-To"
+	emailVerificationCodeHeader   = "X-RallyFlare-Email-Verification-Code"
+	emailVerificationExpiryHeader = "X-RallyFlare-Email-Verification-Expires"
+	emailVerificationToHeader     = "X-RallyFlare-Email-Verification-To"
 	// Set to "existing-account" when someone registers an email that already
 	// has an account: the Worker tells the owner instead of sending a code.
-	emailKindHeader   = "X-Pull-Up-Email-Kind"
-	refreshCookieName = "pullup_refresh"
+	emailKindHeader   = "X-RallyFlare-Email-Kind"
+	refreshCookieName = "rallyflare_refresh"
 )
 
 func (s *Server) handleRegister(w http.ResponseWriter, r *http.Request) {
@@ -480,7 +480,7 @@ func (s *Server) internalError(w http.ResponseWriter, op string, err error) {
 }
 
 func isWebClient(r *http.Request) bool {
-	return r.Header.Get("X-Pull-Up-Platform") == "web"
+	return r.Header.Get("X-RallyFlare-Platform") == "web"
 }
 
 func refreshTokenFromRequest(r *http.Request, bodyToken string) string {

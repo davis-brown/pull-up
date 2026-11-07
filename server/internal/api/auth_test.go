@@ -8,7 +8,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/davisbrown/pull-up/server/internal/auth"
+	"github.com/davis-brown/rallyflare/server/internal/auth"
 )
 
 func TestAuthRegisterLoginFlow(t *testing.T) {
@@ -30,10 +30,10 @@ func TestAuthRegisterLoginFlow(t *testing.T) {
 	if resp.StatusCode != http.StatusAccepted {
 		t.Fatalf("duplicate register: status %d, want 202", resp.StatusCode)
 	}
-	if kind := resp.Header.Get("X-Pull-Up-Email-Kind"); kind != "existing-account" {
+	if kind := resp.Header.Get("X-RallyFlare-Email-Kind"); kind != "existing-account" {
 		t.Errorf("duplicate register email kind = %q, want existing-account", kind)
 	}
-	if code := resp.Header.Get("X-Pull-Up-Email-Verification-Code"); code != "" {
+	if code := resp.Header.Get("X-RallyFlare-Email-Verification-Code"); code != "" {
 		t.Error("duplicate register issued a verification code")
 	}
 	decoy := decodeJSON[map[string]any](t, resp)
@@ -120,7 +120,7 @@ func TestPasswordRegistrationRequiresEmailVerification(t *testing.T) {
 	if resp.StatusCode != http.StatusAccepted {
 		t.Fatalf("register: status %d: %s", resp.StatusCode, readBody(t, resp))
 	}
-	if token := resp.Header.Get("X-Pull-Up-Email-Verification-Token"); token != "" {
+	if token := resp.Header.Get("X-RallyFlare-Email-Verification-Token"); token != "" {
 		t.Fatal("untrusted registration response exposed a verification token header")
 	}
 	body := readBody(t, resp)
@@ -140,8 +140,8 @@ func TestPasswordRegistrationRequiresEmailVerification(t *testing.T) {
 	if resp.StatusCode != http.StatusForbidden {
 		t.Fatalf("unverified login: status %d, want 403", resp.StatusCode)
 	}
-	code := resp.Header.Get("X-Pull-Up-Email-Verification-Code")
-	if to := resp.Header.Get("X-Pull-Up-Email-Verification-To"); to != email {
+	code := resp.Header.Get("X-RallyFlare-Email-Verification-Code")
+	if to := resp.Header.Get("X-RallyFlare-Email-Verification-To"); to != email {
 		t.Fatalf("login code recipient = %q, want %q", to, email)
 	}
 	verificationID := decodeJSON[struct {
@@ -188,13 +188,13 @@ func TestPasswordRegistrationRequiresEmailVerification(t *testing.T) {
 
 	// An untrusted resend is a non-mutating, non-enumerating no-op.
 	resp = doJSON(t, ts, http.MethodPost, "/auth/email-verification/request", "", map[string]string{"verification_id": verificationID})
-	if resp.StatusCode != http.StatusAccepted || resp.Header.Get("X-Pull-Up-Email-Verification-Code") != "" {
-		t.Fatalf("untrusted resend: status=%d code=%q", resp.StatusCode, resp.Header.Get("X-Pull-Up-Email-Verification-Code"))
+	if resp.StatusCode != http.StatusAccepted || resp.Header.Get("X-RallyFlare-Email-Verification-Code") != "" {
+		t.Fatalf("untrusted resend: status=%d code=%q", resp.StatusCode, resp.Header.Get("X-RallyFlare-Email-Verification-Code"))
 	}
 	resp.Body.Close()
 	resp = doJSONHeaders(t, ts, http.MethodPost, "/auth/email-verification/request", "",
 		map[string]string{"verification_id": verificationID}, map[string]string{"X-Internal-Task": "test-internal-secret"})
-	code = resp.Header.Get("X-Pull-Up-Email-Verification-Code")
+	code = resp.Header.Get("X-RallyFlare-Email-Verification-Code")
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusAccepted || len(code) != 6 {
 		t.Fatalf("trusted resend: status %d, code %q", resp.StatusCode, code)
@@ -219,10 +219,10 @@ func TestWebAuthUsesSameOriginHttpOnlyRefreshCookie(t *testing.T) {
 	ts, _ := newTestServer(t)
 	registerUser(t, ts, "web-cookie@test.local", "Web Cookie")
 	webHeaders := map[string]string{
-		"Origin":             "http://app.test",
-		"X-Forwarded-Host":   "app.test",
-		"X-Forwarded-Proto":  "http",
-		"X-Pull-Up-Platform": "web",
+		"Origin":                "http://app.test",
+		"X-Forwarded-Host":      "app.test",
+		"X-Forwarded-Proto":     "http",
+		"X-RallyFlare-Platform": "web",
 	}
 
 	resp := doJSONHeaders(t, ts, http.MethodPost, "/auth/login", "", map[string]string{
@@ -232,7 +232,7 @@ func TestWebAuthUsesSameOriginHttpOnlyRefreshCookie(t *testing.T) {
 		t.Fatalf("web login: status %d: %s", resp.StatusCode, readBody(t, resp))
 	}
 	cookies := resp.Cookies()
-	if len(cookies) != 1 || cookies[0].Name != "pullup_refresh" || !cookies[0].HttpOnly ||
+	if len(cookies) != 1 || cookies[0].Name != "rallyflare_refresh" || !cookies[0].HttpOnly ||
 		cookies[0].SameSite != http.SameSiteStrictMode {
 		t.Fatalf("web login cookie = %+v", cookies)
 	}
@@ -269,10 +269,10 @@ func TestWebAuthUsesSameOriginHttpOnlyRefreshCookie(t *testing.T) {
 	resp.Body.Close()
 
 	badOrigin := map[string]string{
-		"Origin":             "https://attacker.test",
-		"X-Forwarded-Host":   "app.test",
-		"X-Forwarded-Proto":  "https",
-		"X-Pull-Up-Platform": "web",
+		"Origin":                "https://attacker.test",
+		"X-Forwarded-Host":      "app.test",
+		"X-Forwarded-Proto":     "https",
+		"X-RallyFlare-Platform": "web",
 	}
 	resp = doJSONHeaders(t, ts, http.MethodPost, "/auth/login", "", map[string]string{
 		"email": "web-cookie@test.local", "password": "password123",

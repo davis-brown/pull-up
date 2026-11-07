@@ -18,7 +18,7 @@ import (
 
 const (
 	defaultBaseURL = "https://nominatim.openstreetmap.org"
-	userAgent      = "pull-up/0.1 (basketball court finder; github.com/davis-brown/pull-up)"
+	userAgent      = "RallyFlare/0.1 (basketball court finder; github.com/davis-brown/rallyflare)"
 	maxBody        = 4 << 20
 	maxCacheItems  = 256
 )

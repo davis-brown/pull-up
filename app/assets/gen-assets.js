@@ -1,7 +1,7 @@
-// pull-up brand asset generator — titanium/electric design language.
-// Renders a metallic electric-blue basketball ("the alloy ball") with dark
-// seams on gunmetal, via supersampled SDF rasterization, and encodes PNGs
-// with no dependencies beyond node:zlib.
+// RallyFlare brand asset generator. Renders the mark (a violet ball with a
+// gold flare) via supersampled SDF rasterization, and encodes PNGs with no
+// dependencies beyond node:zlib.
+// Usage: node assets/gen-assets.js assets
 const zlib = require("zlib");
 const fs = require("fs");
 const path = require("path");
@@ -56,17 +56,29 @@ const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
 // smooth edge: coverage 1 inside, 0 outside, feathered over `aa`
 const edge = (d, aa) => clamp01(0.5 - d / aa);
 
-// Theme tokens (mirrors lib/theme.ts dark metal + electric accent)
-const METAL_TOP = hex("#272D37");
-const METAL_BOTTOM = hex("#12151A");
-const BALL_TOP = hex("#5B8CFF");
-const BALL_BOTTOM = hex("#2453D6");
-const SEAM = hex("#0C0E12");
+// Theme tokens (mirrors lib/theme.ts: dark background, electric violet
+// accent, flare gold secondary accent).
+const BG_TOP = hex("#241F45");
+const BG_BOTTOM = hex("#120F22");
+const BALL_TOP = hex("#7A5CFF");
+const BALL_BOTTOM = hex("#4A2CD8");
+const SEAM = hex("#161326");
+const GOLD_TOP = hex("#FFE08A");
+const GOLD_BOTTOM = hex("#F5A70F");
+const GOLD_CORE = hex("#FFF7DC");
 const WHITE = [255, 255, 255];
 
 // ---------- scene ----------
-// All geometry in unit coords (y down). Ball centered slightly above middle.
-const BALL = { cx: 0.5, cy: 0.48, r: 0.3 };
+// The mark: a violet ball with a gold four-point flare breaking its upper
+// right edge, separated by a knocked-out gap. Geometry is in "mark units"
+// centered on the origin (spans roughly -0.46..0.46); `place` maps a unit
+// pixel coordinate into mark units for a given center and scale.
+const BALL = { cx: -0.08, cy: 0.08, r: 0.38 };
+const STAR = { cx: BALL.cx + 0.75 * BALL.r, cy: BALL.cy - 0.75 * BALL.r, R: 0.25 };
+const STAR_P = 0.6; // superellipse exponent < 1 gives concave, pinched sides
+const GAP_SCALE = 1.2; // knockout around the flare: the flare scaled up
+
+const place = (x, y, at) => [(x - at.cx) / at.s, (y - at.cy) / at.s];
 
 // Signed distance to the seam pattern (classic basketball: vertical +
 // horizontal great circles and two side arcs), negative inside a seam stroke.
@@ -80,48 +92,79 @@ function seamDistance(x, y, ball, halfWidth) {
   return Math.min(dv, dh, dLeft, dRight) - halfWidth;
 }
 
-// Renders one pixel of the ball glyph. Returns [r,g,b,alpha01] with alpha 0
-// outside the ball. `carveSeams` makes seams transparent instead of painted.
-function ballPixel(x, y, ball, aa, { carveSeams = false, mono = false } = {}) {
-  const dBall = Math.hypot(x - ball.cx, y - ball.cy) - ball.r;
-  const cover = edge(dBall, aa);
-  if (cover <= 0) return null;
-
-  const seamHalf = 0.045 * ball.r;
-  const dSeam = seamDistance(x, y, ball, seamHalf);
-  const seamCover = edge(dSeam, aa);
-
-  if (mono) {
-    // White silhouette with seams knocked out (Android monochrome layer).
-    return [255, 255, 255, cover * (1 - seamCover)];
-  }
-  if (carveSeams && seamCover > 0.999) return null;
-
-  // Electric alloy: vertical gradient, darkened rim, soft specular.
-  const tGrad = clamp01((y - (ball.cy - ball.r)) / (2 * ball.r));
-  let rgb = mix(BALL_TOP, BALL_BOTTOM, tGrad);
-  const rimT = clamp01((-dBall / ball.r) / 0.14); // 0 at edge → 1 inward
-  const rim = lerp(0.78, 1, rimT);
-  rgb = rgb.map((v) => v * rim);
-  const dSpec = Math.hypot(x - (ball.cx - 0.34 * ball.r), y - (ball.cy - 0.5 * ball.r));
-  const spec = 0.4 * clamp01(1 - dSpec / (0.75 * ball.r)) ** 2;
-  rgb = mix(rgb, WHITE, spec);
-  if (seamCover > 0) {
-    if (carveSeams) return [rgb[0], rgb[1], rgb[2], cover * (1 - seamCover)];
-    rgb = mix(rgb, SEAM, seamCover * 0.92);
-  }
-  return [rgb[0], rgb[1], rgb[2], cover];
+// Approximate signed distance to the flare (first-order: f / |grad f|).
+// Not a true offset, so the knockout uses a scaled flare (R) instead of d - gap.
+function starDistance(x, y, R = STAR.R) {
+  const u = Math.max(Math.abs(x - STAR.cx) / R, 1e-6);
+  const v = Math.max(Math.abs(y - STAR.cy) / R, 1e-6);
+  const f = u ** STAR_P + v ** STAR_P - 1;
+  const gu = STAR_P * u ** (STAR_P - 1);
+  const gv = STAR_P * v ** (STAR_P - 1);
+  return (f / Math.hypot(gu, gv)) * R;
 }
 
-// Gunmetal backplate with a machined top-edge highlight and a faint
-// diagonal brushed sheen.
-function metalBackground(x, y) {
-  let rgb = mix(METAL_TOP, METAL_BOTTOM, clamp01(y));
-  const sheenBand = Math.abs((x + y) / 2 - 0.38);
-  rgb = mix(rgb, WHITE, 0.05 * clamp01(1 - sheenBand / 0.28) ** 2);
-  if (y < 0.008) rgb = mix(rgb, WHITE, 0.16 * (1 - y / 0.008));
-  return rgb;
+// "Over" compositing of straight-alpha [r,g,b,a] colors (null = empty).
+function over(top, bottom) {
+  if (!top || top[3] <= 0) return bottom;
+  if (!bottom || bottom[3] <= 0) return top;
+  const a = top[3] + bottom[3] * (1 - top[3]);
+  const ch = (i) => (top[i] * top[3] + bottom[i] * bottom[3] * (1 - top[3])) / a;
+  return [ch(0), ch(1), ch(2), a];
 }
+
+// One pixel of the mark in mark units. `aa` is the feather in mark units.
+// mono renders a white silhouette (Android monochrome layer).
+function markPixel(x, y, aa, { mono = false } = {}) {
+  const dStar = starDistance(x, y);
+  const starCover = edge(dStar, aa);
+  const gapCover = edge(starDistance(x, y, STAR.R * GAP_SCALE), aa);
+
+  let ball = null;
+  const dBall = Math.hypot(x - BALL.cx, y - BALL.cy) - BALL.r;
+  const ballCover = edge(dBall, aa) * (1 - gapCover);
+  if (ballCover > 0) {
+    const seamCover = edge(seamDistance(x, y, BALL, 0.045 * BALL.r), aa);
+    if (mono) {
+      ball = [255, 255, 255, ballCover * (1 - seamCover)];
+    } else {
+      // Vertical gradient, darkened rim, soft specular, painted seams.
+      let rgb = mix(BALL_TOP, BALL_BOTTOM, clamp01((y - (BALL.cy - BALL.r)) / (2 * BALL.r)));
+      const rim = lerp(0.8, 1, clamp01(-dBall / BALL.r / 0.14));
+      rgb = rgb.map((c) => c * rim);
+      const dSpec = Math.hypot(x - (BALL.cx - 0.34 * BALL.r), y - (BALL.cy - 0.5 * BALL.r));
+      rgb = mix(rgb, WHITE, 0.32 * clamp01(1 - dSpec / (0.75 * BALL.r)) ** 2);
+      rgb = mix(rgb, SEAM, seamCover * 0.92);
+      ball = [rgb[0], rgb[1], rgb[2], ballCover];
+    }
+  }
+
+  let star = null;
+  if (starCover > 0) {
+    if (mono) {
+      star = [255, 255, 255, starCover];
+    } else {
+      let rgb = mix(GOLD_TOP, GOLD_BOTTOM, clamp01((y - (STAR.cy - STAR.R)) / (2 * STAR.R)));
+      const core = Math.hypot(x - STAR.cx, y - STAR.cy) / (0.35 * STAR.R);
+      rgb = mix(rgb, GOLD_CORE, 0.85 * clamp01(1 - core) ** 2);
+      star = [rgb[0], rgb[1], rgb[2], starCover];
+    }
+  }
+  return over(star, ball);
+}
+
+// Deep indigo backplate with a faint gold bloom behind the flare.
+function background(x, y, at) {
+  let rgb = mix(BG_TOP, BG_BOTTOM, clamp01(y));
+  const [mx, my] = place(x, y, at);
+  const bloom = Math.exp(-Math.hypot(mx - STAR.cx, my - STAR.cy) / (0.9 * STAR.R));
+  rgb = mix(rgb, GOLD_BOTTOM, 0.22 * bloom);
+  return [rgb[0], rgb[1], rgb[2], 1];
+}
+
+const glyph = (at, opts) => (x, y, aa) => {
+  const [mx, my] = place(x, y, at);
+  return markPixel(mx, my, aa / at.s, opts);
+};
 
 // ---------- rasterizer ----------
 // scene(x, y, aa) -> [r,g,b,alpha01] | null, in unit coords
@@ -157,29 +200,19 @@ function render(size, scene, supersample = 3) {
 }
 
 // ---------- compositions ----------
+const ICON_AT = { cx: 0.5, cy: 0.5, s: 0.66 };
 const scenes = {
-  // App icon: full-bleed gunmetal + alloy ball (OS masks its own corners).
-  "icon.png": [1024, (x, y, aa) => {
-    const ball = ballPixel(x, y, BALL, aa);
-    if (ball && ball[3] > 0.999) return ball;
-    const bg = metalBackground(x, y);
-    if (!ball) return [bg[0], bg[1], bg[2], 1];
-    const t = ball[3];
-    return [lerp(bg[0], ball[0], t), lerp(bg[1], ball[1], t), lerp(bg[2], ball[2], t), 1];
-  }],
-  // Splash logo: glyph only on transparency (splash background color comes
-  // from config), ball a touch larger.
-  "splash-icon.png": [1024, (x, y, aa) => ballPixel(x, y, { cx: 0.5, cy: 0.5, r: 0.34 }, aa)],
-  // Favicon: glyph only, reads at 16px because seams are proportionally bold.
-  "favicon.png": [48, (x, y, aa) => ballPixel(x, y, { cx: 0.5, cy: 0.5, r: 0.46 }, aa)],
-  // Android adaptive: background layer (pure metal), foreground glyph within
-  // the 66% safe zone, monochrome silhouette.
-  "android-icon-background.png": [512, (x, y) => {
-    const bg = metalBackground(x, y);
-    return [bg[0], bg[1], bg[2], 1];
-  }],
-  "android-icon-foreground.png": [512, (x, y, aa) => ballPixel(x, y, { cx: 0.5, cy: 0.5, r: 0.21 }, aa)],
-  "android-icon-monochrome.png": [432, (x, y, aa) => ballPixel(x, y, { cx: 0.5, cy: 0.5, r: 0.3 }, aa, { mono: true })],
+  // App icon: full-bleed backplate + mark (OS masks its own corners).
+  "icon.png": [1024, (x, y, aa) => over(glyph(ICON_AT)(x, y, aa), background(x, y, ICON_AT))],
+  // Splash logo: mark only on transparency (background color comes from config).
+  "splash-icon.png": [1024, glyph({ cx: 0.5, cy: 0.5, s: 0.8 })],
+  // Favicon: mark only, nearly full-bleed so it reads at 16px.
+  "favicon.png": [48, glyph({ cx: 0.5, cy: 0.5, s: 1.0 })],
+  // Android adaptive: backplate layer, mark within the 66% safe zone,
+  // monochrome silhouette.
+  "android-icon-background.png": [512, (x, y) => background(x, y, { cx: 0.5, cy: 0.5, s: 0.6 })],
+  "android-icon-foreground.png": [512, glyph({ cx: 0.5, cy: 0.5, s: 0.6 })],
+  "android-icon-monochrome.png": [432, glyph({ cx: 0.5, cy: 0.5, s: 0.7 }, { mono: true })],
 };
 
 const outDir = process.argv[2];

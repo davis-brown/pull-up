@@ -21,9 +21,9 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/davisbrown/pull-up/server/internal/osm"
-	"github.com/davisbrown/pull-up/server/internal/store"
-	"github.com/davisbrown/pull-up/server/internal/store/gen"
+	"github.com/davis-brown/rallyflare/server/internal/osm"
+	"github.com/davis-brown/rallyflare/server/internal/store"
+	"github.com/davis-brown/rallyflare/server/internal/store/gen"
 )
 
 func main() {

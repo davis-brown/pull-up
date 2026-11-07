@@ -21,5 +21,5 @@ func signUpload(secret []byte, key string, exp int64) string {
 }
 
 func uploadAuthorization(secret []byte, key string, exp int64) string {
-	return fmt.Sprintf("PullUp-Upload %d.%s", exp, signUpload(secret, key, exp))
+	return fmt.Sprintf("RallyFlare-Upload %d.%s", exp, signUpload(secret, key, exp))
 }

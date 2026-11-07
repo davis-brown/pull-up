@@ -10,20 +10,20 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/davisbrown/pull-up/server/internal/store"
-	"github.com/davisbrown/pull-up/server/internal/store/gen"
+	"github.com/davis-brown/rallyflare/server/internal/store"
+	"github.com/davis-brown/rallyflare/server/internal/store/gen"
 )
 
 // These tests exercise the PostGIS queries against a real database, and are
 // skipped unless TEST_DATABASE_URL points at a Postgres with PostGIS:
 //
-//	TEST_DATABASE_URL=postgres://pullup:pullup@localhost:5432/pullup_test?sslmode=disable go test ./internal/store/...
+//	TEST_DATABASE_URL=postgres://rallyflare:rallyflare@localhost:5432/rallyflare_test?sslmode=disable go test ./internal/store/...
 //
 // internal/api's tests truncate the same tables, and `go test ./...` runs
 // package binaries concurrently, so both take a Postgres advisory lock (see
 // testDBLockKey) around setup+truncate.
 
-const testDBLockKey = 0x7075_6c6c_7570 // "pullup" — arbitrary, just needs to match internal/api's
+const testDBLockKey = 0x7075_6c6c_7570 // ASCII "pullup" (the old name) — arbitrary, just needs to match internal/api's
 
 func acquireTestDBLock(t *testing.T, ctx context.Context, databaseURL string) {
 	t.Helper()

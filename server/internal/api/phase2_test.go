@@ -123,7 +123,7 @@ func TestPhotoUploadFlow(t *testing.T) {
 	if !strings.HasPrefix(created.UploadPath, "/photos/upload/courts/"+court.ID+"/") {
 		t.Errorf("upload_path = %q, want it scoped to the court's storage prefix", created.UploadPath)
 	}
-	if strings.Contains(created.UploadPath, "?") || !strings.HasPrefix(created.UploadAuthorization, "PullUp-Upload ") {
+	if strings.Contains(created.UploadPath, "?") || !strings.HasPrefix(created.UploadAuthorization, "RallyFlare-Upload ") {
 		t.Errorf("upload capability leaked into URL or header missing: path=%q authorization=%q",
 			created.UploadPath, created.UploadAuthorization)
 	}

@@ -11,8 +11,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
-	"github.com/davisbrown/pull-up/server/internal/rules"
-	"github.com/davisbrown/pull-up/server/internal/store/gen"
+	"github.com/davis-brown/rallyflare/server/internal/rules"
+	"github.com/davis-brown/rallyflare/server/internal/store/gen"
 )
 
 func (s *Server) handleGetProfile(w http.ResponseWriter, r *http.Request) {

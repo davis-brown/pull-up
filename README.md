@@ -1,4 +1,4 @@
-# pull-up 🏀
+# RallyFlare 🏀
 
 Find live pickup basketball. A map of courts showing who's playing right now.
 Court locations are crowd-sourced and seeded from OpenStreetMap; live activity
@@ -187,18 +187,18 @@ make smoke-worker
 # Asserts the deployed map actually renders. It drives the origin in headless
 # Chrome and fails unless vector tiles are fetched. Runs after every deploy,
 # and can be pointed anywhere:
-WEB_ORIGIN=https://pull-up.davisbrown.dev npm --prefix deploy/api run smoke:map
+WEB_ORIGIN=https://rallyflare.davisbrown.dev npm --prefix deploy/api run smoke:map
 
 # Server integration tests (store queries + full HTTP API) need a scratch
 # Postgres with PostGIS. `make test-int` brings up the compose database,
-# creates a throwaway `pullup_test` database, and runs the full suite against
+# creates a throwaway `rallyflare_test` database, and runs the full suite against
 # it (the harness applies migrations and truncates between cases). Requires
 # Docker:
 make test-int
 
 # Or point at any PostGIS instance yourself, e.g. a second database on an
 # already-running compose instance:
-TEST_DATABASE_URL=postgres://pullup:pullup@localhost:5432/pullup_test?sslmode=disable \
+TEST_DATABASE_URL=postgres://rallyflare:rallyflare@localhost:5432/rallyflare_test?sslmode=disable \
   make test
 ```
 
@@ -222,7 +222,7 @@ secrets must be distinct and at least 32 bytes.
 Maps need no API keys: tiles come from [OpenFreeMap](https://openfreemap.org).
 `EXPO_PUBLIC_API_URL` is the only app config you need to set; the rest are
 optional and fall back to sensible defaults: `EXPO_PUBLIC_WEB_URL` (deep-link
-origin, defaults to `https://pull-up.davisbrown.dev`),
+origin, defaults to `https://rallyflare.davisbrown.dev`),
 `EXPO_PUBLIC_SENTRY_DSN` (error reporting, disabled when unset), and
 `EXPO_PUBLIC_IOS_STORE_URL` / `EXPO_PUBLIC_ANDROID_STORE_URL` (the
 get-the-app banner, hidden when unset). See `app/.env.example`.
@@ -282,12 +282,12 @@ npx wrangler secret put DATABASE_URL   # Neon connection string (pooled)
 npx wrangler secret put JWT_SECRET     # openssl rand -hex 32
 npx wrangler secret put UPLOAD_SIGNING_SECRET  # a different openssl rand -hex 32
 npx wrangler secret put INTERNAL_TASK_SECRET  # auth for the drain cron
-npx wrangler email sending enable pull-up.davisbrown.dev   # one-time transactional email setup
+npx wrangler email sending enable rallyflare.davisbrown.dev   # one-time transactional email setup
 ```
 
 The API Worker sends 6-digit verification codes (and an "you already have an
 account" notice when someone registers a taken email) through its `EMAIL`
-binding from `verify@pull-up.davisbrown.dev`. `WEB_ORIGIN` is the sign-in link
+binding from `verify@rallyflare.davisbrown.dev`. `WEB_ORIGIN` is the sign-in link
 in that notice. If another sending domain or canonical web origin is used,
 set the `EMAIL_FROM` and `WEB_ORIGIN` Worker vars before deployment and
 regenerate `deploy/api/worker-configuration.d.ts` with `npm run types`.
@@ -300,7 +300,7 @@ OSM/enrichment work and physically removes revoked R2 objects.
 Then, from the repo root:
 
 ```sh
-make deploy-web WEB_ORIGIN=https://pull-up.davisbrown.dev
+make deploy-web WEB_ORIGIN=https://rallyflare.davisbrown.dev
 ```
 
 Or push to `main` with the `CLOUDFLARE_API_TOKEN`, `EXPO_PUBLIC_API_URL`, and
@@ -323,7 +323,7 @@ always on screen, and the credit is one tap away. Do not remove it.
 
 ## License
 
-The pull-up source code is released under the [MIT License](LICENSE).
+The RallyFlare source code is released under the [MIT License](LICENSE).
 
 That covers this repository's own code only. Court data carries the separate
 OpenStreetMap terms described above: the ODbL share-alike obligation on the

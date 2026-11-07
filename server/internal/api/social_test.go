@@ -8,7 +8,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/davisbrown/pull-up/server/internal/store/gen"
+	"github.com/davis-brown/rallyflare/server/internal/store/gen"
 )
 
 // mustUUID parses s as a UUID or fails the test.
@@ -122,7 +122,7 @@ func TestAvatarUploadAndClear(t *testing.T) {
 		t.Errorf("avatar_url = %q, want /photos/avatars/ prefix", body.AvatarURL)
 	}
 	if !strings.Contains(body.UploadPath, "avatars/") || strings.Contains(body.UploadPath, "?") ||
-		!strings.HasPrefix(body.UploadAuthorization, "PullUp-Upload ") {
+		!strings.HasPrefix(body.UploadAuthorization, "RallyFlare-Upload ") {
 		t.Errorf("avatar upload contract invalid: path=%q authorization=%q",
 			body.UploadPath, body.UploadAuthorization)
 	}

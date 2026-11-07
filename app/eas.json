@@ -17,8 +17,8 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://pull-up-api.davisbrown245.workers.dev",
-        "EXPO_PUBLIC_WEB_URL": "https://pull-up.davisbrown.dev",
+        "EXPO_PUBLIC_API_URL": "https://rallyflare-api.davisbrown245.workers.dev",
+        "EXPO_PUBLIC_WEB_URL": "https://rallyflare.davisbrown.dev",
         "EXPO_PUBLIC_SENTRY_DSN": "https://38788832af3499c169cc616fada49a7b@o4511762347786240.ingest.us.sentry.io/4511762353684480",
         "SENTRY_ORG": "pull-up-cl",
         "SENTRY_PROJECT": "pull-up"
@@ -27,8 +27,8 @@
     "production": {
       "autoIncrement": true,
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://pull-up-api.davisbrown245.workers.dev",
-        "EXPO_PUBLIC_WEB_URL": "https://pull-up.davisbrown.dev",
+        "EXPO_PUBLIC_API_URL": "https://rallyflare-api.davisbrown245.workers.dev",
+        "EXPO_PUBLIC_WEB_URL": "https://rallyflare.davisbrown.dev",
         "EXPO_PUBLIC_SENTRY_DSN": "https://38788832af3499c169cc616fada49a7b@o4511762347786240.ingest.us.sentry.io/4511762353684480",
         "SENTRY_ORG": "pull-up-cl",
         "SENTRY_PROJECT": "pull-up"

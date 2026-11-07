@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/davisbrown/pull-up/server/internal/store/gen"
+	"github.com/davis-brown/rallyflare/server/internal/store/gen"
 )
 
 func TestSessionAttendeeNamesRespectPrivacyAndBlocks(t *testing.T) {

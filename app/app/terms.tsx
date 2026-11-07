@@ -24,11 +24,11 @@ export default function TermsScreen() {
     >
       <Text style={[t.type.title, { color: t.colors.textPrimary }]}>Terms of Service</Text>
       <Text style={[t.type.caption, { color: t.colors.textMuted, marginTop: 4 }]}>
-        Effective October 26, 2026 · pull-up
+        Effective October 26, 2026 · RallyFlare
       </Text>
 
       <Section title="The service">
-        {"pull-up helps people find pickup basketball: a community map of courts, live check-ins, crowd reports, planned runs, and court chat. It's provided as-is; we may change or discontinue features at any time."}
+        {"RallyFlare helps people find pickup basketball: a community map of courts, live check-ins, crowd reports, planned runs, and court chat. It's provided as-is; we may change or discontinue features at any time."}
       </Section>
 
       <Section title="Your content and conduct">
@@ -36,7 +36,7 @@ export default function TermsScreen() {
       </Section>
 
       <Section title="Play at your own risk">
-        {"pull-up shows crowd-sourced information about public places. We don't verify courts, conditions, or the people at them. Showing up, playing, and anything that happens at a court is your own responsibility. Court data may be inaccurate or out of date."}
+        {"RallyFlare shows crowd-sourced information about public places. We don't verify courts, conditions, or the people at them. Showing up, playing, and anything that happens at a court is your own responsibility. Court data may be inaccurate or out of date."}
       </Section>
 
       <Section title="Location features">

@@ -218,7 +218,7 @@ export default function MapScreen() {
           visible={showLocationPrimer}
           icon="location-outline"
           title="See courts near you"
-          body="pull-up uses your location to center the map on nearby courts and to verify check-ins. It's only read when you're using the app."
+          body="RallyFlare uses your location to center the map on nearby courts and to verify check-ins. It's only read when you're using the app."
           allowLabel="Allow location"
           onAllow={() => answerLocationPrimer(true)}
           onDismiss={() => answerLocationPrimer(false)}
@@ -463,7 +463,7 @@ export default function MapScreen() {
         visible={showLocationPrimer}
         icon="location-outline"
         title="See courts near you"
-        body="pull-up uses your location to center the map on nearby courts and to verify check-ins. It's only read when you're using the app."
+        body="RallyFlare uses your location to center the map on nearby courts and to verify check-ins. It's only read when you're using the app."
         allowLabel="Allow location"
         onAllow={() => answerLocationPrimer(true)}
         onDismiss={() => answerLocationPrimer(false)}

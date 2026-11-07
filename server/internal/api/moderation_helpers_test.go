@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/davisbrown/pull-up/server/internal/config"
-	"github.com/davisbrown/pull-up/server/internal/moderation"
+	"github.com/davis-brown/rallyflare/server/internal/config"
+	"github.com/davis-brown/rallyflare/server/internal/moderation"
 )
 
 // Posts require a safe verdict; outages must not silently disable screening.

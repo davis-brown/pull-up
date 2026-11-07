@@ -11,8 +11,8 @@ import (
 
 	"github.com/google/uuid"
 
-	"github.com/davisbrown/pull-up/server/internal/config"
-	"github.com/davisbrown/pull-up/server/internal/store/gen"
+	"github.com/davis-brown/rallyflare/server/internal/config"
+	"github.com/davis-brown/rallyflare/server/internal/store/gen"
 )
 
 func TestParseForecastIDs(t *testing.T) {

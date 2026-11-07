@@ -1,4 +1,4 @@
-module github.com/davisbrown/pull-up/server
+module github.com/davis-brown/rallyflare/server
 
 go 1.27.3
 

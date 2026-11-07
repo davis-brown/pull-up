@@ -29,7 +29,7 @@ func (i *Issuer) IssueAccessToken(userID uuid.UUID, now time.Time) (string, erro
 		Subject:   userID.String(),
 		IssuedAt:  jwt.NewNumericDate(now),
 		ExpiresAt: jwt.NewNumericDate(now.Add(i.accessTTL)),
-		Issuer:    "pull-up",
+		Issuer:    "rallyflare",
 	}
 	return jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString(i.secret)
 }
@@ -40,7 +40,7 @@ func (i *Issuer) VerifyAccessToken(token string) (uuid.UUID, error) {
 			return nil, ErrInvalidToken
 		}
 		return i.secret, nil
-	}, jwt.WithIssuer("pull-up"), jwt.WithExpirationRequired())
+	}, jwt.WithIssuer("rallyflare"), jwt.WithExpirationRequired())
 	if err != nil || !parsed.Valid {
 		return uuid.Nil, ErrInvalidToken
 	}

@@ -21,11 +21,11 @@ class AccountChangedError extends Error {
   }
 }
 
-const GEOFENCE_TASK = "pullup-court-geofence";
-const ACTIVE_USER_KEY = "pullup.geofence_user";
-const LEGACY_MODE_KEY = "pullup.geofence_mode";
-const MODE_KEY_PREFIX = "pullup.geofence_mode.";
-const CONSENT_KEY_PREFIX = "pullup.geofence_consent.";
+const GEOFENCE_TASK = "rallyflare-court-geofence";
+const ACTIVE_USER_KEY = "rallyflare.geofence_user";
+const LEGACY_MODE_KEY = "rallyflare.geofence_mode";
+const MODE_KEY_PREFIX = "rallyflare.geofence_mode.";
+const CONSENT_KEY_PREFIX = "rallyflare.geofence_consent.";
 const REGION_RADIUS_M = 150;
 const MAX_REGIONS = 15;
 

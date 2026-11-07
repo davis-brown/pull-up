@@ -15,7 +15,7 @@ export const ALLOWED_METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTION
 
 // Compared case-insensitively: Access-Control-Request-Headers is lowercased by
 // the browser, but the Go allowlist is written in canonical header case.
-export const ALLOWED_HEADERS = ["authorization", "content-type", "x-pull-up-platform"] as const;
+export const ALLOWED_HEADERS = ["authorization", "content-type", "x-rallyflare-platform"] as const;
 
 // Chrome caps preflight caching at 7200s and Safari at 600s, so this is the
 // highest value that actually buys anything. The old 600 meant an active
@@ -73,7 +73,7 @@ export function corsPreflightResponse(request: Request, allowedOrigin: string | 
   const headers = new Headers({
     "Access-Control-Allow-Origin": allowedOrigin,
     "Access-Control-Allow-Methods": ALLOWED_METHODS.join(", "),
-    "Access-Control-Allow-Headers": "Authorization, Content-Type, X-Pull-Up-Platform",
+    "Access-Control-Allow-Headers": "Authorization, Content-Type, X-RallyFlare-Platform",
     "Access-Control-Max-Age": String(PREFLIGHT_MAX_AGE),
     Vary: VARY,
   });

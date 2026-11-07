@@ -15,7 +15,7 @@ import { useTheme } from "@/lib/theme";
 const points: Array<{ icon: string; text: string }> = [
   {
     icon: "location-outline",
-    text: "pull-up uses your device's location in the background to detect when you arrive at or leave a basketball court.",
+    text: "RallyFlare uses your device's location in the background to detect when you arrive at or leave a basketball court.",
   },
   {
     icon: "basketball-outline",

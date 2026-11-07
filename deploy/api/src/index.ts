@@ -72,11 +72,11 @@ const PHOTO_READ_MAX_PER_WINDOW = 100;
 // responses per client is therefore the signal that actually limits blind
 // enumeration, without ever throttling real gallery browsing.
 const PHOTO_MISS_MAX_PER_WINDOW = 40;
-const EMAIL_CODE_HEADER = "X-Pull-Up-Email-Verification-Code";
-const EMAIL_EXPIRY_HEADER = "X-Pull-Up-Email-Verification-Expires";
-const EMAIL_TO_HEADER = "X-Pull-Up-Email-Verification-To";
-const EMAIL_KIND_HEADER = "X-Pull-Up-Email-Kind";
-const EMAIL_SENT_HEADER = "X-Pull-Up-Email-Sent";
+const EMAIL_CODE_HEADER = "X-RallyFlare-Email-Verification-Code";
+const EMAIL_EXPIRY_HEADER = "X-RallyFlare-Email-Verification-Expires";
+const EMAIL_TO_HEADER = "X-RallyFlare-Email-Verification-To";
+const EMAIL_KIND_HEADER = "X-RallyFlare-Email-Kind";
+const EMAIL_SENT_HEADER = "X-RallyFlare-Email-Sent";
 // Signing in to an unverified account sends a fresh code, so login is one.
 const EMAIL_PATHS = new Set([
   "/api/v1/auth/register",
@@ -222,7 +222,7 @@ function containerProxyRequest(request: Request, internalSecret?: string): Reque
   if (clientIp) headers.set("X-Real-IP", clientIp);
   headers.set("X-Forwarded-Host", url.host);
   headers.set("X-Forwarded-Proto", url.protocol.slice(0, -1));
-  if (request.headers.get("Origin")) headers.set("X-Pull-Up-Platform", "web");
+  if (request.headers.get("Origin")) headers.set("X-RallyFlare-Platform", "web");
   if (internalSecret) headers.set("X-Internal-Task", internalSecret);
   return new Request(request, { headers });
 }
@@ -279,7 +279,7 @@ async function deliverVerificationEmail(response: Response, env: RuntimeEnv): Pr
   try {
     await env.EMAIL.send({
       to: recipient,
-      from: { email: from, name: "pull-up" },
+      from: { email: from, name: "RallyFlare" },
       ...email,
     });
     return sanitizedEmailResponse(response);

@@ -10,8 +10,8 @@ import (
 	"github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
 
-	"github.com/davisbrown/pull-up/server/internal/store/gen"
-	"github.com/davisbrown/pull-up/server/migrations"
+	"github.com/davis-brown/rallyflare/server/internal/store/gen"
+	"github.com/davis-brown/rallyflare/server/migrations"
 )
 
 type Store struct {

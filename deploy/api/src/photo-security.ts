@@ -7,7 +7,7 @@ const PHOTO_KEY = new RegExp(`^(?:courts|avatars)/${UUID}/${UUID}\\.jpg$`);
 // shape matches both Commons pageids and Mapillary image ids and mirrors the
 // container's resolve-endpoint validation.
 const EXTERNAL_KEY = /^ext\/(?:commons|mapillary)\/[0-9]{1,20}$/;
-const AUTHORIZATION = /^PullUp-Upload ([1-9][0-9]{9})\.([0-9a-f]{64})$/i;
+const AUTHORIZATION = /^RallyFlare-Upload ([1-9][0-9]{9})\.([0-9a-f]{64})$/i;
 export interface UploadCredentials {
   expiresAt: string;
   signature: string;

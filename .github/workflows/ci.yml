@@ -20,13 +20,13 @@ jobs:
       postgres:
         image: postgis/postgis:16-3.4@sha256:44126d872ac91993766c341e369c539e8196614321765d36a6f1bab0419a5fa5
         env:
-          POSTGRES_USER: pullup
-          POSTGRES_PASSWORD: pullup
-          POSTGRES_DB: pullup_test
+          POSTGRES_USER: rallyflare
+          POSTGRES_PASSWORD: rallyflare
+          POSTGRES_DB: rallyflare_test
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U pullup"
+          --health-cmd "pg_isready -U rallyflare"
           --health-interval 5s
           --health-timeout 3s
           --health-retries 10
@@ -45,7 +45,7 @@ jobs:
       - name: go test (incl. PostGIS integration)
         run: go test ./...
         env:
-          TEST_DATABASE_URL: postgres://pullup:pullup@localhost:5432/pullup_test?sslmode=disable
+          TEST_DATABASE_URL: postgres://rallyflare:rallyflare@localhost:5432/rallyflare_test?sslmode=disable
 
   app-workers:
     runs-on: ubuntu-latest

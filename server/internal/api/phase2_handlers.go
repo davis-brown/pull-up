@@ -13,7 +13,7 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 
-	"github.com/davisbrown/pull-up/server/internal/store/gen"
+	"github.com/davis-brown/rallyflare/server/internal/store/gen"
 )
 
 const (
@@ -326,7 +326,7 @@ func (s *Server) handleOAuth(w http.ResponseWriter, r *http.Request) {
 	if email == "" {
 		// Apple can withhold email, and an unverified one is dropped by
 		// Verify; synthesize a stable placeholder.
-		email = fmt.Sprintf("%s-%s@users.pullup.local", identity.Provider, identity.Subject)
+		email = fmt.Sprintf("%s-%s@users.rallyflare.local", identity.Provider, identity.Subject)
 	}
 	created, err := queries.CreateOAuthUser(r.Context(), gen.CreateOAuthUserParams{
 		Email:        email,

@@ -6,7 +6,7 @@ body:
     attributes:
       value: |
         Security vulnerabilities do not belong here — please use
-        [private reporting](https://github.com/davis-brown/pull-up/security/advisories/new).
+        [private reporting](https://github.com/davis-brown/rallyflare/security/advisories/new).
   - type: textarea
     id: what
     attributes:

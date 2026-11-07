@@ -58,8 +58,8 @@ echo "== worker never returns the verification token =="
 # sanitizedEmailResponse() in deploy/api/src/index.ts drops these on every path,
 # so even an authenticated internal caller cannot read the token off the wire.
 for header in Token Expires To; do
-  if grep -qi "^X-Pull-Up-Email-Verification-$header:" "$HDRS"; then
-    echo "FAIL: worker leaked X-Pull-Up-Email-Verification-$header"; exit 1
+  if grep -qi "^X-RallyFlare-Email-Verification-$header:" "$HDRS"; then
+    echo "FAIL: worker leaked X-RallyFlare-Email-Verification-$header"; exit 1
   fi
 done
 echo "ok: no verification headers survive the worker, even with a valid secret"

@@ -632,7 +632,7 @@ function ProfileSettingsContent() {
           <ErrorText message={deleteError} />
           {user?.is_admin && <Text style={[t.type.caption, { color: t.colors.warning }]}>Assign another moderator before deleting your account to keep community review staffed.</Text>}
           <Pressable onPress={() => void Linking.openURL("https://account.apple.com/")} accessibilityRole="link" hitSlop={6}>
-            <Text style={[t.type.caption, { color: t.colors.accent }]}>Signed in with Apple before this version? You can also remove pull-up access in your Apple Account settings.</Text>
+            <Text style={[t.type.caption, { color: t.colors.accent }]}>Signed in with Apple before this version? You can also remove RallyFlare access in your Apple Account settings.</Text>
           </Pressable>
           <Button
             title="Yes, delete my account forever"
@@ -657,7 +657,7 @@ function ProfileSettingsContent() {
           { color: t.colors.textMuted, marginTop: t.spacing.xl },
         ]}
       >
-        Court data © OpenStreetMap contributors (ODbL) and pull-up users.{"\n"}
+        Court data © OpenStreetMap contributors (ODbL) and RallyFlare users.{"\n"}
         Map tiles by OpenFreeMap, © OpenStreetMap contributors.
       </Text>
     </ScrollView>

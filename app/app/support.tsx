@@ -32,7 +32,7 @@ export default function SupportScreen() {
     >
       <Text style={[t.type.title, { color: t.colors.textPrimary }]}>Support</Text>
       <Text style={[t.type.caption, { color: t.colors.textMuted, marginTop: 4 }]}>
-        pull-up · find live pickup basketball
+        RallyFlare · find live pickup basketball
       </Text>
 
       <Section title="Contact us">

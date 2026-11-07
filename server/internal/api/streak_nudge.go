@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/davisbrown/pull-up/server/internal/store/gen"
+	"github.com/davis-brown/rallyflare/server/internal/store/gen"
 )
 
 // The streak nudge is the app's only unprompted "come play" notification. It

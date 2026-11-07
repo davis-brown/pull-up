@@ -29,7 +29,7 @@ export function assetlinksBody(cfg: OgConfig): unknown {
       relation: ["delegate_permission/common.handle_all_urls"],
       target: {
         namespace: "android_app",
-        package_name: "com.pullup.app",
+        package_name: "com.rallyflare.app",
         sha256_cert_fingerprints: [cfg.ANDROID_CERT_SHA256],
       },
     },

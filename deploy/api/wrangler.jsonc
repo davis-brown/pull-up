@@ -3,7 +3,7 @@
 // which runs the image built from server/Dockerfile.
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "pull-up-api",
+  "name": "rallyflare-api",
   "main": "src/index.ts",
   // Reviewed against Workers runtime/types on 2026-07-15.
   "compatibility_date": "2026-07-15",
@@ -11,8 +11,8 @@
   "preview_urls": false,
   "keep_vars": true,
   "vars": {
-    "EMAIL_FROM": "verify@pull-up.davisbrown.dev",
-    "WEB_ORIGIN": "https://pull-up.davisbrown.dev",
+    "EMAIL_FROM": "verify@rallyflare.davisbrown.dev",
+    "WEB_ORIGIN": "https://rallyflare.davisbrown.dev",
     // Account id for the Workers AI REST call that backs text moderation.
     // Not a secret — it appears in dashboard URLs — and useless without
     // CLOUDFLARE_AI_TOKEN, which is.

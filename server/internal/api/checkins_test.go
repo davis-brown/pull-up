@@ -8,7 +8,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/davisbrown/pull-up/server/internal/store/gen"
+	"github.com/davis-brown/rallyflare/server/internal/store/gen"
 )
 
 func TestCheckInDistanceGuard(t *testing.T) {
